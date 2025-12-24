@@ -10,27 +10,34 @@ app = Sanic("ERP_System")
 app.config.TEMPLATING_PATH_TO_TEMPLATES = os.path.join(os.path.dirname(__file__), "templates")
 Extend(app)
 
-# --- Database Config ---
-DB_CONFIG = {
-    'user': 'postgres',
-    'password': 'Jay25092005',   # Your actual password
-    'database': 'tablesproj',    # Your database name
-    'host': 'localhost',
-    'port': '5432'
-}
+# --- DATABASE CONFIGURATION (CLOUD READY) ---
+# This variable comes from Render's Environment Settings
+CLOUD_DB_URL = os.environ.get("DB_URL")
 
-# --- Database Connection Management ---
 @app.before_server_start
 async def setup_db(app, loop):
     try:
-        app.ctx.pool = await asyncpg.create_pool(**DB_CONFIG)
-        print(f"✅ Successfully connected to database: {DB_CONFIG['database']}")
+        if CLOUD_DB_URL:
+            # CASE 1: We are on the Cloud (Render) -> Use the secure URL
+            app.ctx.pool = await asyncpg.create_pool(dsn=CLOUD_DB_URL)
+            print("✅ Connected to Cloud Database (Neon)")
+        else:
+            # CASE 2: We are on the Laptop (Localhost) -> Use local settings
+            app.ctx.pool = await asyncpg.create_pool(
+                user='postgres',
+                password='Jay25092005',   # Your local password
+                database='tablesproj',   # Your local database
+                host='localhost',
+                port='5432'
+            )
+            print("✅ Connected to Local Database")
     except Exception as e:
         print(f"❌ DATABASE CONNECTION FAILED: {e}")
 
 @app.after_server_stop
 async def close_db(app, loop):
-    await app.ctx.pool.close()
+    if hasattr(app.ctx, 'pool'):
+        await app.ctx.pool.close()
 
 # --- Helpers ---
 
@@ -49,7 +56,6 @@ def make_human_readable(text):
     return text.replace("_", " ").title()
 
 async def get_dropdown_options(conn, fk_column_name):
-    # (Same Helper as before - kept for completeness)
     try:
         base = fk_column_name[:-3]
         if len(base) > 4 and base[3] == '_':
@@ -131,7 +137,7 @@ async def show_table(request, table_name):
         for r in col_rows:
             columns.append({"raw": r['column_name'], "label": make_human_readable(r['column_name'])})
 
-        # 2. Get Primary Key (Crucial for Deleting!)
+        # 2. Get Primary Key
         pk_row = await conn.fetchrow("""
             SELECT kcu.column_name 
             FROM information_schema.key_column_usage kcu
@@ -152,7 +158,7 @@ async def show_table(request, table_name):
                 "columns": columns,
                 "rows": data_rows, 
                 "all_tables": allowed,
-                "pk_column": pk_column # Passing this to HTML so it knows what ID to delete
+                "pk_column": pk_column 
             }
         )
 
@@ -262,14 +268,12 @@ async def create_row(request, table_name):
         except Exception as e:
             return response.json({"error": str(e)}, status=500)
 
-# --- NEW DELETE API ---
 @app.delete("/api/<table_name>/<pk_val>")
 async def delete_row(request, table_name, pk_val):
     async with app.ctx.pool.acquire() as conn:
         allowed = await get_allowed_tables(conn)
         if table_name not in allowed: return response.json({"error": "Invalid table"}, status=400)
 
-        # 1. Find PK Column Name again
         pk_row = await conn.fetchrow("""
             SELECT kcu.column_name 
             FROM information_schema.key_column_usage kcu
@@ -283,26 +287,21 @@ async def delete_row(request, table_name, pk_val):
             
         pk_column = pk_row['column_name']
 
-        # 2. Check type (is PK an integer?)
         col_type = await conn.fetchval("""
             SELECT data_type FROM information_schema.columns 
             WHERE table_name = $1 AND column_name = $2
         """, table_name, pk_column)
         
-        # Safe Conversion
         try:
             if col_type in ('integer', 'bigint', 'smallint', 'numeric'):
                 pk_val = int(pk_val)
         except ValueError:
             return response.json({"error": "Invalid ID format"}, status=400)
 
-        # 3. DELETE
         try:
-            # Check if row exists first? No, DELETE returns count '0' if not found, which is fine.
             result = await conn.execute(f"DELETE FROM {table_name} WHERE {pk_column} = $1", pk_val)
             return response.json({"status": "deleted", "meta": result})
         except Exception as e:
-            # Usually Foreign Key violations (trying to delete a Company that has Employees)
             return response.json({"error": str(e)}, status=500)
 
 if __name__ == "__main__":
