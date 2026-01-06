@@ -214,21 +214,34 @@ async def show_add_form(request, table_name):
 
 # --- REPLACE THE save_data FUNCTION WITH THIS VERSION ---
 
-@app.post("/api/<table_name>", name="create_row")        # <--- Added name="create_row"
-@app.put("/api/<table_name>/<pk_val>", name="update_row") # <--- Added name="update_row"
+@app.post("/api/<table_name>", name="create_row")
+@app.put("/api/<table_name>/<pk_val>", name="update_row")
 @login_required
 async def save_data(request, table_name, pk_val=None):
     data = request.json
     async with app.ctx.pool.acquire() as conn:
-        # Get PK
-        pk_row = await conn.fetchrow("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'", table_name)
+        # Get PK Column Name
+        pk_row = await conn.fetchrow("""
+            SELECT kcu.column_name 
+            FROM information_schema.key_column_usage kcu
+            JOIN information_schema.table_constraints tc 
+              ON kcu.constraint_name = tc.constraint_name
+            WHERE kcu.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'
+        """, table_name)
         pk_column = pk_row['column_name']
         
-        schema_map = {r['column_name']: r for r in await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1", table_name)}
+        # Get Schema
+        schema_rows = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1", table_name)
+        schema_map = {r['column_name']: r for r in schema_rows}
         clean_data = {}
         
+        # 1. Clean User Input
         for k, v in data.items():
-            if v == "" or v is None or k == pk_column or k.endswith(('_created', '_modified', '_created_by', '_modified_by')): continue
+            if v == "" or v is None: continue 
+            if k == pk_column: continue 
+            # Skip system columns here (we handle them below)
+            if k.endswith(('_created', '_modified', '_created_by', '_modified_by')): continue
+
             target_type = schema_map.get(k, {}).get('data_type')
             if target_type == 'date' and isinstance(v, str):
                 try: clean_data[k] = datetime.strptime(v, '%Y-%m-%d').date()
@@ -237,15 +250,24 @@ async def save_data(request, table_name, pk_val=None):
                  if v.strip().isdigit(): clean_data[k] = int(v)
             else: clean_data[k] = v
 
+        # 2. AUTO-FILL SYSTEM COLUMNS (This was missing!)
+        for col_name in schema_map:
+            if col_name.endswith(('_created_by', '_modified_by')):
+                clean_data[col_name] = 'System'  # Or use the logged-in username if available
+
         if request.method == "POST":
             # INSERT
             if pk_column:
                 max_val = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
                 clean_data[pk_column] = (int(max_val) + 1) if max_val else 1
-            cols, vals = list(clean_data.keys()), list(clean_data.values())
+            
+            cols = list(clean_data.keys())
+            vals = list(clean_data.values())
+            
             await conn.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({', '.join([f'${i+1}' for i in range(len(vals))])})", *vals)
         else:
             # UPDATE
+            # Note: For updates, we usually don't want to overwrite 'created_by', but for now this is safe
             set_clauses = [f"{k} = ${i+2}" for i, k in enumerate(clean_data.keys())]
             vals = list(clean_data.values())
             await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {pk_column} = $1", int(pk_val), *vals)
