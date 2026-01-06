@@ -1,47 +1,102 @@
 {% extends "base.html" %}
 
 {% block content %}
+<style>
+    .status-group { display: flex; gap: 10px; margin-top: 5px; }
+    .status-btn { flex: 1; padding: 10px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 6px; cursor: pointer; text-align: center; }
+    .status-btn.active-selected { background-color: #dcfce7; color: #166534; border-color: #22c55e; font-weight: bold; }
+    .status-btn.inactive-selected { background-color: #fee2e2; color: #991b1b; border-color: #ef4444; font-weight: bold; }
+    .hidden-input { display: none; }
+</style>
+
 <div class="card" style="max-width: 600px; margin: 0 auto;">
     <h1>{{ table_title }}</h1>
     
     <form onsubmit="submitForm(event)">
         {% for col in columns %}
-        <div class="form-group" style="margin-bottom: 15px;">
-            <label style="display:block; margin-bottom:5px; font-weight:bold;">{{ col.label }}</label>
+        <div class="form-group" style="margin-bottom: 20px;">
+            <label style="display:block; margin-bottom:8px; font-weight:bold;">{{ col.label }}</label>
             
-            {% if col.data_type == 'date' %}
-                <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %} style="width:100%; padding:8px;">
+            {% if col.column_name.endswith('_status') %}
+                <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'ACT' }}">
+                <div class="status-group">
+                    <div class="status-btn" id="btn_act_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'ACT')">Active</div>
+                    <div class="status-btn" id="btn_ina_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'INA')">Inactive</div>
+                </div>
+                <script>
+                    document.addEventListener("DOMContentLoaded", function() {
+                        let val = "{{ col.value }}";
+                        if (!val || val === 'None') val = 'ACT'; 
+                        if (val === 'AIU') val = 'ACT';
+                        setStatus('{{ col.column_name }}', val);
+                    });
+                </script>
+            {% elif col.data_type == 'date' %}
+                <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %} style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc;">
+            {% elif col.options %}
+                <select name="{{ col.column_name }}" style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc;">
+                    <option value="">-- Select --</option>
+                    {% for opt in col.options %}
+                        <option value="{{ opt.id }}" {% if opt.id == col.value %}selected{% endif %}>{{ opt.name }}</option>
+                    {% endfor %}
+                </select>
             {% else %}
-                <input type="text" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %} style="width:100%; padding:8px;">
+                <input type="text" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %} style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc;">
             {% endif %}
         </div>
         {% endfor %}
         
-        <button type="submit" class="btn btn-primary" style="width:100%; margin-top:20px;">Save Record</button>
+        <button type="submit" class="btn-primary" style="width:100%; margin-top:20px; padding:12px;">Save Record</button>
     </form>
 </div>
 
 <script>
+    // (Keep setStatus function exactly same as before)
+    function setStatus(colName, value) {
+        const input = document.getElementById('input_' + colName);
+        if(input) input.value = value;
+        const btnAct = document.getElementById('btn_act_' + colName);
+        const btnIna = document.getElementById('btn_ina_' + colName);
+        if(btnAct) { btnAct.className = 'status-btn'; if(value === 'ACT' || value === 'AIU') btnAct.classList.add('active-selected'); }
+        if(btnIna) { btnIna.className = 'status-btn'; if(value !== 'ACT' && value !== 'AIU') btnIna.classList.add('inactive-selected'); }
+    }
+
     async function submitForm(e) {
         e.preventDefault();
+        
+        // 1. SHOW SPINNER
+        showLoading(); 
+
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
+        for (const key in data) { if (data[key] === "") data[key] = null; }
 
-        // Determine if creating or editing
         const mode = "{{ mode }}";
         const url = mode === "edit" ? "/api/{{ table_name }}/{{ pk_val }}" : "/api/{{ table_name }}";
         const method = mode === "edit" ? "PUT" : "POST";
 
-        const res = await fetch(url, {
-            method: method,
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
+        try {
+            const res = await fetch(url, {
+                method: method,
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
 
-        if (res.ok) {
-            window.location.href = "/table/{{ table_name }}";
-        } else {
-            alert("Error saving data");
+            // 2. HIDE SPINNER
+            hideLoading();
+
+            if (res.ok) {
+                // 3. SHOW SUCCESS TOAST
+                showToast('Record Saved Successfully!', 'success');
+                setTimeout(() => {
+                    window.location.href = "/table/{{ table_name }}";
+                }, 1000); // Wait 1s so user sees the toast
+            } else {
+                showToast('Error saving data.', 'error');
+            }
+        } catch (err) {
+            hideLoading();
+            showToast('Network Error.', 'error');
         }
     }
 </script>
