@@ -1,136 +1,48 @@
 {% extends "base.html" %}
 
 {% block content %}
-<style>
-    .form-card {
-        max-width: 800px;
-        margin: 0 auto;
-        max-height: none !important; 
-        height: auto !important;
-        overflow: visible !important;
-    }
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 20px;
-        padding: 20px 0;
-    }
-    .form-group {
-        display: flex;
-        flex-direction: column;
-    }
-    .form-label {
-        font-weight: 600;
-        margin-bottom: 8px;
-        color: #475569;
-        font-size: 0.9rem;
-        display: flex;
-        justify-content: space-between;
-    }
-    .required-star { color: #ef4444; margin-left: 4px; }
+<div class="card" style="max-width: 600px; margin: 0 auto;">
+    <h1>{{ table_title }}</h1>
     
-    /* Input & Select Styling */
-    .form-input, .form-select {
-        padding: 10px 12px;
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
-        font-size: 1rem;
-        color: #1e293b;
-        transition: border-color 0.2s;
-        background-color: white;
-        width: 100%;
-        box-sizing: border-box;
-    }
-    .form-input:focus, .form-select:focus {
-        outline: none;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-    }
-    
-    .form-actions {
-        margin-top: 20px;
-        padding-top: 20px;
-        border-top: 1px solid #e2e8f0;
-        display: flex;
-        gap: 15px;
-    }
-    .btn-cancel {
-        background: #94a3b8;
-        color: white;
-        text-decoration: none;
-        padding: 10px 16px;
-        border-radius: 6px;
-        font-weight: 500;
-    }
-    .btn-cancel:hover { background: #64748b; }
-    .btn-primary { padding: 10px 16px; }
-</style>
-
-<div class="card form-card">
-    <div class="card-header">
-        <h1>Add to: {{ table_title }}</h1>
-    </div>
-
-    <div style="padding: 20px;">
-        <form id="genericForm">
-            <div class="form-grid">
-                {% for col in columns %}
-                <div class="form-group">
-                    <label class="form-label">
-                        {{ col.label }}
-                        {% if col.required %}
-                            <span class="required-star">*</span>
-                        {% endif %}
-                    </label>
-                    
-                    {% if col.options %}
-                        <select name="{{ col.column_name }}" class="form-select">
-                            <option value="">-- Select {{ col.label }} --</option>
-                            {% for opt in col.options %}
-                                <option value="{{ opt.id }}">{{ opt.name }}</option>
-                            {% endfor %}
-                        </select>
-
-                    {% elif col.data_type == 'date' %}
-                        <input type="date" name="{{ col.column_name }}" class="form-input">
-
-                    {% elif 'integer' in col.data_type or 'bigint' in col.data_type or 'numeric' in col.data_type %}
-                        <input type="number" name="{{ col.column_name }}" class="form-input" 
-                               placeholder="{% if col.required and 'id' in col.column_name %}Enter ID{% endif %}">
-                    
-                    {% else %}
-                        <input type="text" name="{{ col.column_name }}" class="form-input" placeholder="Enter text">
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
+    <form onsubmit="submitForm(event)">
+        {% for col in columns %}
+        <div class="form-group" style="margin-bottom: 15px;">
+            <label style="display:block; margin-bottom:5px; font-weight:bold;">{{ col.label }}</label>
             
-            <div class="form-actions">
-                <button type="button" class="btn btn-primary" onclick="submitForm()">Save Record</button>
-                <a href="/table/{{ table_name }}" class="btn btn-cancel">Cancel</a>
-            </div>
-        </form>
-    </div>
+            {% if col.data_type == 'date' %}
+                <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %} style="width:100%; padding:8px;">
+            {% else %}
+                <input type="text" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %} style="width:100%; padding:8px;">
+            {% endif %}
+        </div>
+        {% endfor %}
+        
+        <button type="submit" class="btn btn-primary" style="width:100%; margin-top:20px;">Save Record</button>
+    </form>
 </div>
 
 <script>
-async function submitForm() {
-    const form = document.getElementById('genericForm');
-    const formData = new FormData(form);
-    const data = Object.fromEntries(formData.entries());
+    async function submitForm(e) {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
 
-    const response = await fetch('/api/{{ table_name }}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-    });
+        // Determine if creating or editing
+        const mode = "{{ mode }}";
+        const url = mode === "edit" ? "/api/{{ table_name }}/{{ pk_val }}" : "/api/{{ table_name }}";
+        const method = mode === "edit" ? "PUT" : "POST";
 
-    if (response.ok) {
-        window.location.href = "/table/{{ table_name }}";
-    } else {
-        const err = await response.json();
-        alert("Error: " + (err.error || "Failed to save data"));
+        const res = await fetch(url, {
+            method: method,
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+
+        if (res.ok) {
+            window.location.href = "/table/{{ table_name }}";
+        } else {
+            alert("Error saving data");
+        }
     }
-}
 </script>
 {% endblock %}
