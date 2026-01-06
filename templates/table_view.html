@@ -2,47 +2,62 @@
 
 {% block content %}
 <style>
-    .header-actions { display: flex; align-items: center; gap: 10px; }
-    
-    /* Search Bar Style */
-    .search-wrapper { position: relative; width: 300px; margin-right: 15px; }
-    .search-input {
-        width: 100%; padding: 10px 16px;
-        border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.9rem;
-        background-color: #f8fafc;
-        box-sizing: border-box;
+    /* Header Styles */
+    th { cursor: pointer; user-select: none; position: relative; }
+    th:hover { background-color: #f1f5f9; color: #3b82f6; }
+    th::after { content: ' ↕'; font-size: 0.8em; color: #94a3b8; margin-left: 5px; }
+    th.sort-asc::after { content: ' ▲'; color: #3b82f6; }
+    th.sort-desc::after { content: ' ▼'; color: #3b82f6; }
+
+    /* Filter Toolbar */
+    .filter-toolbar { display: flex; gap: 10px; align-items: center; }
+    .filter-select { 
+        padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; 
+        background-color: white; color: #334155; font-size: 0.9rem;
+        cursor: pointer;
     }
-    .search-input:focus { outline: none; border-color: #3b82f6; background-color: #fff; }
+    .filter-select:focus { outline: 2px solid #3b82f6; border-color: transparent; }
 </style>
 
 <div class="card">
-    <div class="card-header">
-        <h1>{{ table_title }}</h1>
-        <div class="header-actions">
-            <div class="search-wrapper">
-                <input type="text" id="tableSearch" class="search-input" onkeyup="filterTable()" placeholder="Search rows...">
-            </div>
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h1 style="margin:0;">{{ table_title }}</h1>
+        
+        <div class="header-actions filter-toolbar">
+            <select id="statusFilter" class="filter-select" onchange="applyFilters()">
+                <option value="all">Show All Status</option>
+                <option value="ACT">Active Only</option>
+                <option value="INA">Inactive Only</option>
+            </select>
 
-            <a href="/export/{{ table_name }}" class="btn btn-primary" style="background:#10b981;">Download CSV</a>
-            <a href="/new/{{ table_name }}" class="btn btn-primary">+ Add New Record</a>
+            <input type="text" id="tableSearch" onkeyup="applyFilters()" placeholder="Search text..." 
+                   style="padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; width: 200px;">
+            
+            <button onclick="exportTableToCSV('{{ table_name }}.csv')" class="btn-primary" style="background:#10b981;">
+                Export CSV
+            </button>
+            
+            <a href="/new/{{ table_name }}" class="btn-primary" onclick="showLoading()">+ Add New</a>
         </div>
     </div>
 
-    <div class="table-container">
-        <table id="dataTable">
+    <div class="table-container" style="overflow-x: auto;">
+        <table id="dataTable" style="width: 100%; border-collapse: collapse;">
             <thead>
                 <tr>
                     {% for col in columns %}
-                    <th>{{ col.label }}</th>
+                    <th onclick="sortTable({{ loop.index0 }}, this)" data-colname="{{ col.raw }}" style="text-align: left; padding: 12px; border-bottom: 2px solid #e2e8f0; color: #64748b;">
+                        {{ col.label }}
+                    </th>
                     {% endfor %}
-                    <th style="width: 100px;">Actions</th>
+                    <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; pointer-events: none;">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 {% for row in rows %}
                 <tr>
                     {% for col in columns %}
-                    <td>
+                    <td style="padding: 12px; border-bottom: 1px solid #f1f5f9;">
                         {% if row[col.raw] is not none %}
                             {{ row[col.raw] }}
                         {% else %}
@@ -50,15 +65,9 @@
                         {% endif %}
                     </td>
                     {% endfor %}
-                    
-                    <td style="display:flex; gap:10px;">
+                    <td style="padding: 12px; border-bottom: 1px solid #f1f5f9;">
                         {% if pk_column and row[pk_column] %}
-                        <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" title="Edit Row" style="text-decoration:none;">
-                            ✏️
-                        </a>
-                        <a href="/export/{{ table_name }}?id={{ row[pk_column] }}" title="Download Row" style="text-decoration:none;">
-                            ⬇️
-                        </a>
+                        <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" onclick="showLoading()" style="text-decoration:none; margin-right: 10px;">✏️</a>
                         {% endif %}
                     </td>
                 </tr>
@@ -69,31 +78,120 @@
 </div>
 
 <script>
-    // Search Filter Logic
-    function filterTable() {
-        const input = document.getElementById("tableSearch");
-        const filter = input.value.toLowerCase();
+    // --- 1. UNIFIED FILTER LOGIC (Search + Status) ---
+    function applyFilters() {
+        const searchText = document.getElementById("tableSearch").value.toLowerCase();
+        const statusFilter = document.getElementById("statusFilter").value; // 'all', 'ACT', 'INA'
         const table = document.getElementById("dataTable");
-        const tr = table.getElementsByTagName("tr");
+        const rows = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
+        
+        // Find which column index is "Status"
+        let statusColIndex = -1;
+        const headers = table.getElementsByTagName("th");
+        for (let i = 0; i < headers.length; i++) {
+            const headerText = headers[i].innerText.toLowerCase();
+            if (headerText.includes("status")) {
+                statusColIndex = i;
+                break;
+            }
+        }
 
-        for (let i = 1; i < tr.length; i++) {
-            let row = tr[i];
-            let cells = row.getElementsByTagName("td");
-            let matchFound = false;
-
-            // Search all cells except the last one (Actions)
-            for (let j = 0; j < cells.length - 1; j++) {
-                let cell = cells[j];
-                if (cell) {
-                    const textValue = cell.textContent || cell.innerText;
-                    if (textValue.toLowerCase().indexOf(filter) > -1) {
-                        matchFound = true;
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            const cells = row.getElementsByTagName("td");
+            
+            // Check 1: Does text match search?
+            let textMatch = false;
+            if (searchText === "") textMatch = true;
+            else {
+                for (let j = 0; j < cells.length - 1; j++) {
+                    if (cells[j].textContent.toLowerCase().includes(searchText)) {
+                        textMatch = true;
                         break;
                     }
                 }
             }
-            row.style.display = matchFound ? "" : "none";
+
+            // Check 2: Does status match filter?
+            let statusMatch = true;
+            if (statusColIndex !== -1 && statusFilter !== 'all') {
+                const statusText = cells[statusColIndex].textContent.trim();
+                // We check if the cell contains the code (ACT/INA)
+                if (statusText !== statusFilter) {
+                    statusMatch = false;
+                }
+            }
+
+            // Show row only if BOTH match
+            row.style.display = (textMatch && statusMatch) ? "" : "none";
         }
+    }
+
+    // --- 2. SORTING LOGIC (With Visuals) ---
+    function sortTable(n, headerClicked) {
+        const table = document.getElementById("dataTable");
+        let rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+        switching = true;
+        dir = "asc"; 
+        
+        // Reset arrows on other headers
+        const allHeaders = table.getElementsByTagName("th");
+        for(let h of allHeaders) { h.classList.remove('sort-asc', 'sort-desc'); }
+
+        while (switching) {
+            switching = false;
+            rows = table.rows;
+            for (i = 1; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                x = rows[i].getElementsByTagName("TD")[n];
+                y = rows[i + 1].getElementsByTagName("TD")[n];
+                
+                let xVal = x.innerHTML.toLowerCase();
+                let yVal = y.innerHTML.toLowerCase();
+                
+                if (!isNaN(parseFloat(xVal)) && isFinite(xVal)) {
+                    xVal = parseFloat(xVal); yVal = parseFloat(yVal);
+                }
+
+                if (dir == "asc") {
+                    if (xVal > yVal) { shouldSwitch = true; break; }
+                } else if (dir == "desc") {
+                    if (xVal < yVal) { shouldSwitch = true; break; }
+                }
+            }
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchcount++;      
+            } else {
+                if (switchcount == 0 && dir == "asc") {
+                    dir = "desc";
+                    switching = true;
+                }
+            }
+        }
+        // Add arrow to current header
+        headerClicked.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
+
+    // --- 3. EXPORT LOGIC ---
+    function exportTableToCSV(filename) {
+        const csv = [];
+        const rows = document.querySelectorAll("#dataTable tr");
+        for (let i = 0; i < rows.length; i++) {
+            const row = [], cols = rows[i].querySelectorAll("td, th");
+            if (rows[i].style.display === 'none') continue; // Skip hidden
+            for (let j = 0; j < cols.length - 1; j++) 
+                row.push('"' + cols[j].innerText + '"');
+            csv.push(row.join(","));        
+        }
+        const csvFile = new Blob([csv.join("\n")], {type: "text/csv"});
+        const downloadLink = document.createElement("a");
+        downloadLink.download = filename;
+        downloadLink.href = window.URL.createObjectURL(csvFile);
+        downloadLink.style.display = "none";
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
     }
 </script>
 {% endblock %}
