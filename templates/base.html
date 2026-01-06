@@ -1,248 +1,203 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="view-transition" content="same-origin" />
     <title>ERP Admin</title>
     <style>
-        /* --- ANIMATION KEYFRAMES --- */
-        @keyframes slideInLeft {
-            from { opacity: 0; transform: translateX(-20px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-        
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* --- FIX 2: PREVENT WHITE FLASH --- */
-        html {
-            /* This ensures the split-second 'empty' screen is dark blue, not white */
-            background-color: #0f172a;
+        /* --- 1. THEME VARIABLES (The Magic) --- */
+        :root {
+            /* Light Mode Defaults */
+            --bg-body: #f8fafc;
+            --bg-sidebar: #0f172a;
+            --bg-card: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --hover-bg: #f1f5f9;
         }
 
-        /* --- ENABLE NATIVE PAGE TRANSITIONS --- */
-        @view-transition {
-            navigation: auto;
+        [data-theme="dark"] {
+            /* Dark Mode Overrides */
+            --bg-body: #0f172a;       /* Dark Blue-Black Background */
+            --bg-sidebar: #020617;    /* Even Darker Sidebar */
+            --bg-card: #1e293b;       /* Dark Grey Cards */
+            --text-main: #f8fafc;     /* White Text */
+            --text-muted: #94a3b8;    /* Light Grey Text */
+            --border-color: #334155;  /* Dark Borders */
+            --hover-bg: #334155;      /* Dark Hover State */
         }
 
-        /* --- GENERAL LAYOUT --- */
+        /* --- 2. GLOBAL STYLES --- */
+        html { background-color: var(--bg-sidebar); }
         body { 
-            font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
-            display: flex; 
-            margin: 0; 
-            height: 100vh; 
-            background-color: #f8fafc; 
+            font-family: 'Inter', 'Segoe UI', Roboto, sans-serif; 
+            display: flex; margin: 0; height: 100vh; 
+            background-color: var(--bg-body); 
+            color: var(--text-main);
             overflow: hidden; 
+            transition: background-color 0.3s, color 0.3s;
         }
-        
+
         /* --- SIDEBAR --- */
         .sidebar { 
-            width: 260px; 
-            background: #0f172a; /* Darker, richer blue-black */
-            color: #94a3b8; 
-            display: flex; 
-            flex-direction: column; 
-            flex-shrink: 0; 
-            box-shadow: 4px 0 24px rgba(0,0,0,0.15); 
-            z-index: 10;
-            /* View Transition name keeps the sidebar steady during page loads */
-            view-transition-name: main-sidebar;
+            width: 260px; background: var(--bg-sidebar); color: #94a3b8; 
+            display: flex; flex-direction: column; flex-shrink: 0; 
+            box-shadow: 4px 0 24px rgba(0,0,0,0.2); z-index: 10; 
+            view-transition-name: main-sidebar; 
         }
+        .sidebar-header { padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .sidebar-header h2 { margin: 0; font-size: 1.1rem; color: #f1f5f9; letter-spacing: 1.5px; font-weight: 700; }
         
-        .sidebar-header { 
-            padding: 24px; 
-            background: rgba(255,255,255,0.03); 
-            border-bottom: 1px solid rgba(255,255,255,0.1); 
-        }
-        
-        .sidebar-header h2 { 
-            margin: 0; 
-            font-size: 1.1rem; 
-            color: #f1f5f9; 
-            letter-spacing: 1.5px; 
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-
-        .nav-links { 
-            overflow-y: auto; 
-            flex: 1; 
-            padding: 15px 10px; 
-        }
-        
+        .nav-links { overflow-y: auto; flex: 1; padding: 15px 10px; }
         .nav-links a { 
-            display: block; 
-            color: #94a3b8; 
-            text-decoration: none; 
-            padding: 12px 16px; 
-            margin-bottom: 4px;
-            font-size: 0.9rem; 
-            border-radius: 8px;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); 
+            display: block; color: #94a3b8; text-decoration: none; 
+            padding: 12px 16px; margin-bottom: 4px; font-size: 0.9rem; 
+            border-radius: 8px; transition: all 0.2s; 
         }
-        
-        .nav-links a:hover { 
-            background: rgba(255,255,255,0.08); 
-            color: #f8fafc; 
-            transform: translateX(4px); 
-        }
-        
-        .nav-links a.active { 
-            background: #3b82f6; 
-            color: white; 
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); 
-            font-weight: 600; 
-        }
+        .nav-links a:hover { background: rgba(255,255,255,0.08); color: #f8fafc; transform: translateX(4px); }
+        .nav-links a.active { background: #3b82f6; color: white; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4); font-weight: 600; }
 
         /* --- CONTENT AREA --- */
-        .content { 
-            flex: 1; 
-            padding: 30px; 
-            overflow-y: auto; 
-            display: flex; 
-            flex-direction: column; 
-            /* View Transition name allows content to fade separately from sidebar */
-            view-transition-name: main-content;
-        }
-        
-        /* --- CARD --- */
-        .card { 
-            background: white; 
-            border-radius: 12px; 
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
-            display: flex; 
-            flex-direction: column; 
-            max-height: 90vh; 
-            border: 1px solid #e2e8f0;
-            animation: fadeInUp 0.5s ease-out; /* Smooth entrance */
-        }
-        
-        .card-header { 
-            padding: 24px; 
-            border-bottom: 1px solid #e2e8f0; 
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center; 
-            background: white;
-            border-radius: 12px 12px 0 0;
-        }
-        
-        .card-header h1 { 
-            margin: 0; 
-            font-size: 1.5rem; 
-            color: #1e293b; 
-            font-weight: 700;
-            letter-spacing: -0.5px;
-        }
+        .content { flex: 1; padding: 30px; overflow-y: auto; display: flex; flex-direction: column; view-transition-name: main-content; }
 
-        /* --- TABLE --- */
-        .table-container { 
-            overflow: auto; 
-            flex: 1; 
-            border-radius: 0 0 12px 12px;
+        /* --- CARDS --- */
+        .card { 
+            background: var(--bg-card); border-radius: 12px; 
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); 
+            border: 1px solid var(--border-color);
+            margin-bottom: 20px; animation: fadeInUp 0.5s ease-out;
+            color: var(--text-main);
         }
-        
-        table { 
-            width: 100%; 
-            border-collapse: separate; 
-            border-spacing: 0; 
-            min-width: 800px; 
+        .card-header { 
+            padding: 24px; border-bottom: 1px solid var(--border-color); 
+            display: flex; justify-content: space-between; align-items: center; 
+            background: var(--bg-card); border-radius: 12px 12px 0 0; 
         }
+        .card-header h1 { margin: 0; font-size: 1.5rem; color: var(--text-main); font-weight: 700; }
+
+        /* --- TABLES --- */
+        .table-container { overflow: auto; border-radius: 0 0 12px 12px; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; }
         
         thead th { 
-            position: sticky; 
-            top: 0; 
-            background: #f1f5f9; 
-            color: #64748b; 
-            font-weight: 600; 
-            text-transform: uppercase; 
-            font-size: 0.75rem; 
-            letter-spacing: 0.05em;
-            padding: 16px; 
-            text-align: left; 
-            border-bottom: 1px solid #e2e8f0; 
-            z-index: 10;
-            white-space: nowrap;
-            backdrop-filter: blur(8px); 
+            position: sticky; top: 0; 
+            background: var(--bg-body); /* Adaptive Header Background */
+            color: var(--text-muted); 
+            font-weight: 600; text-transform: uppercase; font-size: 0.75rem; 
+            padding: 16px; text-align: left; border-bottom: 1px solid var(--border-color); 
+            z-index: 10; white-space: nowrap; 
         }
-        
         tbody td { 
-            padding: 14px 16px; 
-            border-bottom: 1px solid #f1f5f9; 
-            color: #334155; 
-            font-size: 0.9rem; 
-            white-space: nowrap;
-            transition: color 0.2s;
+            padding: 14px 16px; border-bottom: 1px solid var(--border-color); 
+            color: var(--text-main); font-size: 0.9rem; white-space: nowrap; 
         }
-        
-        tbody tr {
-            transition: background-color 0.2s ease;
-        }
-
-        tbody tr:hover { 
-            background-color: #f8fafc; 
-        }
-        
-        tbody tr:hover td {
-            color: #0f172a; 
-        }
+        tbody tr:hover { background-color: var(--hover-bg); }
 
         /* --- BUTTONS --- */
-        .btn { 
-            padding: 10px 20px; 
-            border-radius: 8px; 
-            text-decoration: none; 
-            font-weight: 600; 
-            font-size: 0.9rem; 
-            border: none; 
-            cursor: pointer; 
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .btn:active {
-            transform: scale(0.96); 
-        }
-
         .btn-primary { 
-            background: #3b82f6; 
-            color: white; 
-            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.4); 
+            background: #3b82f6; color: white; border: none; padding: 10px 20px; 
+            border-radius: 8px; text-decoration: none; font-weight: 600; cursor: pointer; 
+            display: inline-flex; align-items: center; 
         }
-        
-        .btn-primary:hover { 
-            background: #2563eb; 
-            box-shadow: 0 6px 8px -1px rgba(59, 130, 246, 0.5);
-            transform: translateY(-1px);
-        }
+        .btn-primary:hover { background: #2563eb; }
 
-        /* --- SCROLLBAR --- */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; border: 2px solid #fff; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        /* --- TOGGLE SWITCH --- */
+        .theme-toggle {
+            margin-top: auto; padding: 20px; border-top: 1px solid rgba(255,255,255,0.1);
+            display: flex; align-items: center; gap: 10px; cursor: pointer; color: #94a3b8;
+        }
+        .theme-toggle:hover { color: white; }
+
+        /* --- TOASTS --- */
+        #toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: white; color: #1e293b; padding: 15px 20px; border-radius: 8px; border-left: 5px solid #22c55e; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 10px; animation: slideIn 0.3s; min-width: 250px; }
+        .toast.error { border-left-color: #ef4444; }
+        
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(2px); z-index: 10000; display: none; justify-content: center; align-items: center; }
+        .spinner { width: 50px; height: 50px; border: 5px solid rgba(255,255,255,0.3); border-top: 5px solid #3b82f6; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
     <div class="sidebar">
         <div class="sidebar-header">
-            <h2>ERP ADMIN</h2>
+            <a href="/" style="text-decoration:none; color:inherit;"><h2>ERP ADMIN</h2></a>
         </div>
         <div class="nav-links">
-            {% for tbl in all_tables %}
+            <a href="/" class="{{ 'active' if not table_name else '' }}">Dashboard</a>
+            {% if all_tables %}
+                {% for tbl in all_tables %}
                 <a href="/table/{{ tbl }}" class="{{ 'active' if tbl == table_name else '' }}">
-                    {{ tbl.replace('phc_', '').replace('_t', '').upper() }}
+                    {{ tbl.replace('phc_', '').replace('_t', '').replace('_', ' ').title() }}
                 </a>
-            {% endfor %}
+                {% endfor %}
+            {% endif %}
+        </div>
+        
+        <div class="theme-toggle" onclick="toggleTheme()">
+            <span id="theme-icon">🌙</span>
+            <span id="theme-text">Dark Mode</span>
+        </div>
+
+        <div style="padding: 20px; padding-top: 0;">
+            <a href="/logout" style="color: #ef4444; text-decoration: none; display: block; padding: 10px 0;">Log Out</a>
         </div>
     </div>
 
     <div class="content">
         {% block content %}{% endblock %}
     </div>
+
+    <div id="toast-container"></div>
+    <div id="loading-overlay"><div class="spinner"></div></div>
+
+    <script>
+        // --- THEME LOGIC ---
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const target = current === 'dark' ? 'light' : 'dark';
+            
+            html.setAttribute('data-theme', target);
+            localStorage.setItem('theme', target);
+            updateThemeIcon(target);
+        }
+
+        function updateThemeIcon(theme) {
+            const icon = document.getElementById('theme-icon');
+            const text = document.getElementById('theme-text');
+            if (theme === 'dark') {
+                icon.innerText = '☀️';
+                text.innerText = 'Light Mode';
+            } else {
+                icon.innerText = '🌙';
+                text.innerText = 'Dark Mode';
+            }
+        }
+
+        // Apply saved theme on load
+        (function() {
+            const saved = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', saved);
+            // We need to wait for DOM to update icon, but attribute is set instantly
+            window.addEventListener('DOMContentLoaded', () => updateThemeIcon(saved));
+        })();
+
+        // --- UTILS ---
+        function showToast(message, type='success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `<span>${type === 'success' ? '✅' : '⚠️'}</span> <strong>${message}</strong>`;
+            container.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+        function showLoading() { document.getElementById('loading-overlay').style.display = 'flex'; }
+        function hideLoading() { document.getElementById('loading-overlay').style.display = 'none'; }
+    </script>
 </body>
 </html>
