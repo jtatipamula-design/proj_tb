@@ -2,70 +2,171 @@
 
 {% block content %}
 <style>
-    .status-group { display: flex; gap: 10px; margin-top: 5px; }
-    .status-btn { flex: 1; padding: 10px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 6px; cursor: pointer; text-align: center; }
-    .status-btn.active-selected { background-color: #dcfce7; color: #166534; border-color: #22c55e; font-weight: bold; }
-    .status-btn.inactive-selected { background-color: #fee2e2; color: #991b1b; border-color: #ef4444; font-weight: bold; }
+    /* --- CARD CONTAINER --- */
+    .form-card {
+        max-width: 800px;
+        margin: 0 auto;
+        background: var(--bg-card);
+        padding: 40px;
+        border-radius: 16px;
+        border: 1px solid var(--border-color);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        animation: fadeInUp 0.4s ease-out;
+    }
+
+    .form-header {
+        margin-bottom: 30px;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 20px;
+    }
+    .form-header h1 { margin: 0; font-size: 1.8rem; color: var(--text-main); font-weight: 700; }
+
+    /* --- GRID LAYOUT (The Anti-Squish) --- */
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Auto 2-columns */
+        gap: 25px;
+    }
+
+    /* --- INPUT GROUPS --- */
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    
+    label { font-weight: 600; font-size: 0.9rem; color: var(--text-muted); letter-spacing: 0.01em; }
+
+    /* --- INPUT STYLING --- */
+    input[type="text"], input[type="date"], input[type="number"], select {
+        padding: 12px 16px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        background-color: var(--bg-body);
+        color: var(--text-main);
+        font-size: 1rem;
+        transition: all 0.2s ease;
+        outline: none;
+        width: 100%; /* Fix width issues */
+        box-sizing: border-box; /* Ensure padding doesn't break width */
+    }
+
+    input:focus, select:focus {
+        border-color: #3b82f6;
+        background-color: var(--bg-card);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+    }
+
+    /* --- STATUS BUTTONS --- */
+    .status-group { display: flex; gap: 10px; height: 45px; } /* Match input height */
+    .status-btn {
+        flex: 1; display: flex; align-items: center; justify-content: center;
+        border: 1px solid var(--border-color);
+        background: var(--bg-body); color: var(--text-muted);
+        border-radius: 8px; cursor: pointer; font-weight: 500;
+        transition: all 0.2s;
+    }
+    .status-btn:hover { background: var(--hover-bg); }
+    
+    .status-btn.active-selected {
+        background-color: rgba(34, 197, 94, 0.15);
+        color: #15803d; border-color: #22c55e; font-weight: bold;
+    }
+    .status-btn.inactive-selected {
+        background-color: rgba(239, 68, 68, 0.15);
+        color: #b91c1c; border-color: #ef4444; font-weight: bold;
+    }
+    
+    /* Dark Mode specific text colors for buttons */
+    [data-theme="dark"] .status-btn.active-selected { color: #4ade80; background-color: rgba(34, 197, 94, 0.2); }
+    [data-theme="dark"] .status-btn.inactive-selected { color: #f87171; background-color: rgba(239, 68, 68, 0.2); }
+
     .hidden-input { display: none; }
+
+    /* --- SAVE BUTTON --- */
+    .form-actions {
+        margin-top: 30px;
+        grid-column: 1 / -1; /* Stretch across both columns */
+        display: flex; justify-content: flex-end;
+        border-top: 1px solid var(--border-color);
+        padding-top: 20px;
+    }
+    
+    .btn-save {
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        color: white; padding: 12px 35px; border: none; border-radius: 8px;
+        font-weight: 600; font-size: 1rem; cursor: pointer;
+        box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+        transition: transform 0.1s, box-shadow 0.2s;
+    }
+    .btn-save:hover { transform: translateY(-2px); box-shadow: 0 6px 10px -1px rgba(59, 130, 246, 0.4); }
+    .btn-save:active { transform: scale(0.98); }
 </style>
 
-<div class="card" style="max-width: 600px; margin: 0 auto;">
-    <h1>{{ table_title }}</h1>
+<div class="form-card">
+    <div class="form-header">
+        <h1>{{ table_title }}</h1>
+    </div>
     
     <form onsubmit="submitForm(event)">
-        {% for col in columns %}
-        <div class="form-group" style="margin-bottom: 20px;">
-            <label style="display:block; margin-bottom:8px; font-weight:bold;">{{ col.label }}</label>
+        <div class="form-grid">
+            {% for col in columns %}
+            <div class="form-group">
+                <label>{{ col.label }} {% if col.required %}<span style="color:#ef4444">*</span>{% endif %}</label>
+                
+                {# --- STATUS BUTTONS --- #}
+                {% if col.column_name.endswith('_status') %}
+                    <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'ACT' }}">
+                    <div class="status-group">
+                        <div class="status-btn" id="btn_act_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'ACT')">Active</div>
+                        <div class="status-btn" id="btn_ina_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'INA')">Inactive</div>
+                    </div>
+                    <script>
+                        document.addEventListener("DOMContentLoaded", function() {
+                            let val = "{{ col.value }}";
+                            if (!val || val === 'None' || val === 'AIU') val = 'ACT'; 
+                            setStatus('{{ col.column_name }}', val);
+                        });
+                    </script>
+
+                {# --- DATE PICKER --- #}
+                {% elif col.data_type == 'date' %}
+                    <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %}>
+
+                {# --- DROPDOWN (Foreign Keys) --- #}
+                {% elif col.options %}
+                    <select name="{{ col.column_name }}">
+                        <option value="">-- Select --</option>
+                        {% for opt in col.options %}
+                            <option value="{{ opt.id }}" {% if opt.id == col.value %}selected{% endif %}>{{ opt.name }}</option>
+                        {% endfor %}
+                    </select>
+
+                {# --- TEXT INPUT --- #}
+                {% else %}
+                    <input type="text" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %}>
+                {% endif %}
+            </div>
+            {% endfor %}
             
-            {% if col.column_name.endswith('_status') %}
-                <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'ACT' }}">
-                <div class="status-group">
-                    <div class="status-btn" id="btn_act_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'ACT')">Active</div>
-                    <div class="status-btn" id="btn_ina_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'INA')">Inactive</div>
-                </div>
-                <script>
-                    document.addEventListener("DOMContentLoaded", function() {
-                        let val = "{{ col.value }}";
-                        if (!val || val === 'None') val = 'ACT'; 
-                        if (val === 'AIU') val = 'ACT';
-                        setStatus('{{ col.column_name }}', val);
-                    });
-                </script>
-            {% elif col.data_type == 'date' %}
-                <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %} style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc;">
-            {% elif col.options %}
-                <select name="{{ col.column_name }}" style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc;">
-                    <option value="">-- Select --</option>
-                    {% for opt in col.options %}
-                        <option value="{{ opt.id }}" {% if opt.id == col.value %}selected{% endif %}>{{ opt.name }}</option>
-                    {% endfor %}
-                </select>
-            {% else %}
-                <input type="text" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %} style="width:100%; padding:10px; border-radius:6px; border:1px solid #ccc;">
-            {% endif %}
+            <div class="form-actions">
+                <a href="/table/{{ table_name }}" style="margin-right: 15px; padding: 12px 20px; color: var(--text-muted); text-decoration: none; font-weight: 500;">Cancel</a>
+                <button type="submit" class="btn-save">Save Record</button>
+            </div>
         </div>
-        {% endfor %}
-        
-        <button type="submit" class="btn-primary" style="width:100%; margin-top:20px; padding:12px;">Save Record</button>
     </form>
 </div>
 
 <script>
-    // (Keep setStatus function exactly same as before)
     function setStatus(colName, value) {
         const input = document.getElementById('input_' + colName);
         if(input) input.value = value;
         const btnAct = document.getElementById('btn_act_' + colName);
         const btnIna = document.getElementById('btn_ina_' + colName);
+
         if(btnAct) { btnAct.className = 'status-btn'; if(value === 'ACT' || value === 'AIU') btnAct.classList.add('active-selected'); }
         if(btnIna) { btnIna.className = 'status-btn'; if(value !== 'ACT' && value !== 'AIU') btnIna.classList.add('inactive-selected'); }
     }
 
     async function submitForm(e) {
         e.preventDefault();
-        
-        // 1. SHOW SPINNER
-        showLoading(); 
+        showLoading(); // Uses the spinner from base.html
 
         const formData = new FormData(e.target);
         const data = Object.fromEntries(formData.entries());
@@ -82,15 +183,11 @@
                 body: JSON.stringify(data)
             });
 
-            // 2. HIDE SPINNER
             hideLoading();
 
             if (res.ok) {
-                // 3. SHOW SUCCESS TOAST
                 showToast('Record Saved Successfully!', 'success');
-                setTimeout(() => {
-                    window.location.href = "/table/{{ table_name }}";
-                }, 1000); // Wait 1s so user sees the toast
+                setTimeout(() => { window.location.href = "/table/{{ table_name }}"; }, 1000);
             } else {
                 showToast('Error saving data.', 'error');
             }
