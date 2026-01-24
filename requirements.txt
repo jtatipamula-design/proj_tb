@@ -3,3 +3,4 @@ sanic-ext
 asyncpg
 jinja2
 bcrypt
+pydantic
