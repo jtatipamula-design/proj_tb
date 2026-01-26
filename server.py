@@ -275,14 +275,14 @@ async def show_add_form(request, table_name):
             "columns": columns, "all_tables": allowed, "mode": "create"
         })
 
-# --- API SAVE (With System Column Fix) ---
-# --- API SAVE (Fixed: Auto-fills Dates) ---
+# --- API SAVE (Fixed: Strict Type Casting & Date Auto-Fill) ---
 @app.post("/api/<table_name>", name="create_row")
 @app.put("/api/<table_name>/<pk_val>", name="update_row")
 @login_required
 async def save_data(request, table_name, pk_val=None):
     data = request.json
     async with app.ctx.pool.acquire() as conn:
+        # Get Primary Key Column Name
         pk_row = await conn.fetchrow("""
             SELECT kcu.column_name 
             FROM information_schema.key_column_usage kcu
@@ -292,6 +292,7 @@ async def save_data(request, table_name, pk_val=None):
         """, table_name)
         pk_column = pk_row['column_name']
         
+        # Get Table Schema (Column Names & Types)
         schema_rows = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1", table_name)
         schema_map = {r['column_name']: r for r in schema_rows}
         clean_data = {}
@@ -300,43 +301,62 @@ async def save_data(request, table_name, pk_val=None):
         for k, v in data.items():
             if v == "" or v is None: continue 
             if k == pk_column: continue 
-            # Skip system columns (we fill them manually below)
+            # Skip system columns (we will fill them manually below)
             if k.endswith(('_created', '_modified', '_created_by', '_modified_by')): continue
 
-            target_type = schema_map.get(k, {}).get('data_type')
-            if target_type == 'date' and isinstance(v, str):
+            target_type = schema_map.get(k, {}).get('data_type', '')
+            
+            # --- STRICT TYPE CASTING ---
+            # If DB expects Text/Varchar but we have a Number/Int, convert to String
+            if target_type in ('character varying', 'text', 'character', 'varchar') and not isinstance(v, str):
+                clean_data[k] = str(v)
+            
+            # If DB expects Date but we have String
+            elif target_type == 'date' and isinstance(v, str):
                 try: clean_data[k] = datetime.strptime(v, '%Y-%m-%d').date()
                 except: pass
-            elif target_type in ('integer', 'bigint', 'numeric') and isinstance(v, str):
+                
+            # If DB expects Integer but we have String
+            elif target_type in ('integer', 'bigint', 'numeric', 'smallint') and isinstance(v, str):
                  if v.strip().isdigit(): clean_data[k] = int(v)
+            
+            # Default: Keep as is
             else: clean_data[k] = v
 
-        # 2. Auto-fill System Columns (The Fix)
+        # 2. Auto-fill System Columns
         for col_name in schema_map:
-            # Audit Trails (Who did it?)
+            # Audit Trails
             if col_name.endswith(('_created_by', '_modified_by')):
-                clean_data[col_name] = 'System' # You could replace this with user_id if available
+                clean_data[col_name] = 'System' 
             
-            # Timestamps (When did it happen?)
+            # Timestamps
             if col_name.endswith('_created'):
-                if request.method == "POST": # Only set created date on INSERT
+                if request.method == "POST": # Only set created date on NEW records
                     clean_data[col_name] = datetime.now()
             
             if col_name.endswith('_modified'):
-                clean_data[col_name] = datetime.now() # Always update modified date
+                clean_data[col_name] = datetime.now() 
 
         if request.method == "POST":
-            # Auto-Increment ID if needed
+            # Auto-Increment ID manually (if not handled by SERIAL)
             if pk_column:
                 max_val = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
-                clean_data[pk_column] = (int(max_val) + 1) if max_val else 1
+                new_id = (int(max_val) + 1) if max_val else 1
+                
+                # Check if PK is Text/Varchar and cast if necessary
+                pk_type = schema_map.get(pk_column, {}).get('data_type', '')
+                if pk_type in ('character varying', 'text', 'varchar'):
+                    clean_data[pk_column] = str(new_id)
+                else:
+                    clean_data[pk_column] = new_id
             
             cols = list(clean_data.keys())
             vals = list(clean_data.values())
-            # Insert
+            
+            # Insert Query
             await conn.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({', '.join([f'${i+1}' for i in range(len(vals))])})", *vals)
         else:
-            # Update
+            # Update Query
             set_clauses = [f"{k} = ${i+2}" for i, k in enumerate(clean_data.keys())]
             vals = list(clean_data.values())
             await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {pk_column} = $1", int(pk_val), *vals)
@@ -345,3 +365,4 @@ async def save_data(request, table_name, pk_val=None):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True, single_process=True)
+
