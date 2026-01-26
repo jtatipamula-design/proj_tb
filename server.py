@@ -276,6 +276,7 @@ async def show_add_form(request, table_name):
         })
 
 # --- API SAVE (With System Column Fix) ---
+# --- API SAVE (Fixed: Auto-fills Dates) ---
 @app.post("/api/<table_name>", name="create_row")
 @app.put("/api/<table_name>/<pk_val>", name="update_row")
 @login_required
@@ -295,9 +296,11 @@ async def save_data(request, table_name, pk_val=None):
         schema_map = {r['column_name']: r for r in schema_rows}
         clean_data = {}
         
+        # 1. Process User Input
         for k, v in data.items():
             if v == "" or v is None: continue 
             if k == pk_column: continue 
+            # Skip system columns (we fill them manually below)
             if k.endswith(('_created', '_modified', '_created_by', '_modified_by')): continue
 
             target_type = schema_map.get(k, {}).get('data_type')
@@ -308,20 +311,32 @@ async def save_data(request, table_name, pk_val=None):
                  if v.strip().isdigit(): clean_data[k] = int(v)
             else: clean_data[k] = v
 
-        # Auto-fill System Columns
+        # 2. Auto-fill System Columns (The Fix)
         for col_name in schema_map:
+            # Audit Trails (Who did it?)
             if col_name.endswith(('_created_by', '_modified_by')):
-                clean_data[col_name] = 'System'
+                clean_data[col_name] = 'System' # You could replace this with user_id if available
+            
+            # Timestamps (When did it happen?)
+            if col_name.endswith('_created'):
+                if request.method == "POST": # Only set created date on INSERT
+                    clean_data[col_name] = datetime.now()
+            
+            if col_name.endswith('_modified'):
+                clean_data[col_name] = datetime.now() # Always update modified date
 
         if request.method == "POST":
+            # Auto-Increment ID if needed
             if pk_column:
                 max_val = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
                 clean_data[pk_column] = (int(max_val) + 1) if max_val else 1
             
             cols = list(clean_data.keys())
             vals = list(clean_data.values())
+            # Insert
             await conn.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({', '.join([f'${i+1}' for i in range(len(vals))])})", *vals)
         else:
+            # Update
             set_clauses = [f"{k} = ${i+2}" for i, k in enumerate(clean_data.keys())]
             vals = list(clean_data.values())
             await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {pk_column} = $1", int(pk_val), *vals)
