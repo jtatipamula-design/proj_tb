@@ -22,7 +22,7 @@ CLOUD_DB_URL = os.environ.get("DB_URL")
 async def setup_db(app, loop):
     try:
         if CLOUD_DB_URL:
-            app.ctx.pool = await asyncpg.create_pool(dsn=CLOUD_DB_URL,statement_cache_size=0)
+            app.ctx.pool = await asyncpg.create_pool(dsn=CLOUD_DB_URL, statement_cache_size=0)
         else:
             # Local fallback (update with your local creds if needed)
             app.ctx.pool = await asyncpg.create_pool(
@@ -365,5 +365,6 @@ async def save_data(request, table_name, pk_val=None):
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=True, single_process=True)
+
 
 
