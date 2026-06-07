@@ -21,94 +21,112 @@
     }
     .form-header h1 { margin: 0; font-size: 1.8rem; color: var(--text-main); font-weight: 700; }
 
-    /* --- GRID LAYOUT (The Anti-Squish) --- */
+    /* --- GRID LAYOUT --- */
     .form-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Auto 2-columns */
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
         gap: 25px;
     }
 
     /* --- INPUT GROUPS --- */
     .form-group { display: flex; flex-direction: column; gap: 8px; }
     
-    label { font-weight: 600; font-size: 0.9rem; color: var(--text-muted); letter-spacing: 0.01em; }
+    .form-group label {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-muted);
+    }
 
-    /* --- INPUT STYLING --- */
-    input[type="text"], input[type="date"], input[type="number"], select {
+    .form-group input[type="text"],
+    .form-group input[type="password"],
+    .form-group input[type="date"],
+    .form-group select {
         padding: 12px 16px;
+        border: 1px solid var(--border-color);
         border-radius: 8px;
-        border: 1px solid var(--border-color);
-        background-color: var(--bg-body);
-        color: var(--text-main);
         font-size: 1rem;
-        transition: all 0.2s ease;
-        outline: none;
-        width: 100%; /* Fix width issues */
-        box-sizing: border-box; /* Ensure padding doesn't break width */
-    }
-
-    input:focus, select:focus {
-        border-color: #3b82f6;
-        background-color: var(--bg-card);
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-    }
-
-    /* --- STATUS BUTTONS --- */
-    .status-group { display: flex; gap: 10px; height: 45px; } /* Match input height */
-    .status-btn {
-        flex: 1; display: flex; align-items: center; justify-content: center;
-        border: 1px solid var(--border-color);
-        background: var(--bg-body); color: var(--text-muted);
-        border-radius: 8px; cursor: pointer; font-weight: 500;
+        background: var(--bg-body);
+        color: var(--text-main);
         transition: all 0.2s;
     }
-    .status-btn:hover { background: var(--hover-bg); }
-    
-    .status-btn.active-selected {
-        background-color: rgba(34, 197, 94, 0.15);
-        color: #15803d; border-color: #22c55e; font-weight: bold;
+    .form-group input:focus, .form-group select:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
     }
-    .status-btn.inactive-selected {
-        background-color: rgba(239, 68, 68, 0.15);
-        color: #b91c1c; border-color: #ef4444; font-weight: bold;
-    }
-    
-    /* Dark Mode specific text colors for buttons */
-    [data-theme="dark"] .status-btn.active-selected { color: #4ade80; background-color: rgba(34, 197, 94, 0.2); }
-    [data-theme="dark"] .status-btn.inactive-selected { color: #f87171; background-color: rgba(239, 68, 68, 0.2); }
 
+    /* --- CUSTOM CHECKBOX SCROLL BOX --- */
+    .checkbox-scroll-box {
+        max-height: 220px;
+        overflow-y: auto;
+        border: 1px solid var(--border-color);
+        padding: 10px;
+        border-radius: 8px;
+        background: var(--bg-body);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.2s;
+        color: var(--text-main);
+        font-weight: 500;
+    }
+    .checkbox-item:hover {
+        background: var(--hover-bg);
+    }
+    .checkbox-item input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: #3b82f6;
+    }
+
+    /* --- STATUS TOGGLE BUTTONS --- */
+    .status-group { display: flex; gap: 10px; }
+    .status-btn {
+        flex: 1; padding: 12px; text-align: center; border-radius: 8px;
+        border: 1px solid var(--border-color); cursor: pointer;
+        font-weight: 600; color: var(--text-muted); transition: all 0.2s;
+        background: var(--bg-body);
+    }
+    .active-selected { background: #10b981; color: white; border-color: #10b981; }
+    .inactive-selected { background: #ef4444; color: white; border-color: #ef4444; }
     .hidden-input { display: none; }
 
-    /* --- SAVE BUTTON --- */
-    .form-actions {
+    /* --- SUBMIT BUTTON --- */
+    .btn-submit {
         margin-top: 30px;
-        grid-column: 1 / -1; /* Stretch across both columns */
-        display: flex; justify-content: flex-end;
-        border-top: 1px solid var(--border-color);
-        padding-top: 20px;
+        width: 100%;
+        padding: 14px;
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
     }
-    
-    .btn-save {
-        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-        color: white; padding: 12px 35px; border: none; border-radius: 8px;
-        font-weight: 600; font-size: 1rem; cursor: pointer;
-        box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
-        transition: transform 0.1s, box-shadow 0.2s;
-    }
-    .btn-save:hover { transform: translateY(-2px); box-shadow: 0 6px 10px -1px rgba(59, 130, 246, 0.4); }
-    .btn-save:active { transform: scale(0.98); }
+    .btn-submit:hover { background: #2563eb; }
 </style>
 
 <div class="form-card">
     <div class="form-header">
         <h1>{{ table_title }}</h1>
     </div>
-    
+
     <form onsubmit="submitForm(event)">
         <div class="form-grid">
             {% for col in columns %}
             <div class="form-group">
-                <label>{{ col.label }} {% if col.required %}<span style="color:#ef4444">*</span>{% endif %}</label>
+                <label>{{ col.label }} {% if col.required %}<span style="color: #ef4444;">*</span>{% endif %}</label>
                 
                 {# --- STATUS BUTTONS --- #}
                 {% if col.column_name.endswith('_status') %}
@@ -125,38 +143,54 @@
                         });
                     </script>
 
-                {# --- DATE PICKER --- #}
-                {% elif col.data_type == 'date' %}
-                    <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %}>
+                {# --- MULTI-SELECT CHECKBOXES (Virtual Arrays) --- #}
+                {% elif col.data_type == 'virtual_checkbox' %}
+                    <div class="checkbox-scroll-box">
+                        {% set selected_items = (col.value or "").split(',') %}
+                        {% for opt in col.options %}
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" 
+                                {% if opt.id|string in selected_items %}checked{% endif %}>
+                                <span>{{ opt.name }}</span>
+                            </label>
+                        {% endfor %}
+                    </div>
 
-                {# --- DROPDOWN (Foreign Keys) --- #}
+                {# --- STANDARD DROPDOWNS --- #}
                 {% elif col.options %}
-                    <select name="{{ col.column_name }}">
+                    <select name="{{ col.column_name }}" {% if col.required %}required{% endif %}>
                         <option value="">-- Select --</option>
                         {% for opt in col.options %}
-                            <option value="{{ opt.id }}" {% if opt.id == col.value %}selected{% endif %}>{{ opt.name }}</option>
+                            <option value="{{ opt.id }}" {% if col.value|string == opt.id|string %}selected{% endif %}>
+                                {{ opt.name }}
+                            </option>
                         {% endfor %}
                     </select>
 
-                {# --- TEXT INPUT --- #}
+                {# --- DATE PICKER --- #}
+                {% elif col.data_type == 'date' %}
+                    <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %}>
+                
+                {# --- PASSWORD INPUT (Prevents Double Hashing Bug) --- #}
+                {% elif 'pwd' in col.column_name or 'password' in col.column_name %}
+                    <input type="password" name="{{ col.column_name }}" placeholder="{% if mode == 'edit' %}Leave blank to keep unchanged{% else %}Enter password{% endif %}" {% if col.required and mode != 'edit' %}required{% endif %}>
+
+                {# --- STANDARD TEXT INPUT --- #}
                 {% else %}
-                    <input type="text" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %}>
+                    <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else '' }}" {% if col.required %}required{% endif %}>
                 {% endif %}
             </div>
             {% endfor %}
-            
-            <div class="form-actions">
-                <a href="/table/{{ table_name }}" style="margin-right: 15px; padding: 12px 20px; color: var(--text-muted); text-decoration: none; font-weight: 500;">Cancel</a>
-                <button type="submit" class="btn-save">Save Record</button>
-            </div>
         </div>
+        
+        <button type="submit" class="btn-submit">Save Record</button>
     </form>
 </div>
 
 <script>
+    // Handles visually toggling the Active/Inactive buttons
     function setStatus(colName, value) {
-        const input = document.getElementById('input_' + colName);
-        if(input) input.value = value;
+        document.getElementById('input_' + colName).value = value;
         const btnAct = document.getElementById('btn_act_' + colName);
         const btnIna = document.getElementById('btn_ina_' + colName);
 
@@ -164,13 +198,38 @@
         if(btnIna) { btnIna.className = 'status-btn'; if(value !== 'ACT' && value !== 'AIU') btnIna.classList.add('inactive-selected'); }
     }
 
+    // Handles packaging the data and sending it to Python
     async function submitForm(e) {
         e.preventDefault();
-        showLoading(); // Uses the spinner from base.html
+        if (typeof showLoading === 'function') showLoading();
 
         const formData = new FormData(e.target);
-        const data = Object.fromEntries(formData.entries());
-        for (const key in data) { if (data[key] === "") data[key] = null; }
+        const data = {};
+        
+        // Loop through all inputs
+        for (const [key, value] of formData.entries()) {
+            if (data[key] !== undefined) {
+                // MULTI-SELECT MAGIC: If the key already exists (like multiple checked boxes), 
+                // combine them with a comma!
+                data[key] += ',' + value;
+            } else {
+                data[key] = value;
+            }
+        }
+
+        // Failsafe for checkboxes: Force Python to clear them if none are checked
+        const allCheckboxGroups = ['pr_allowed_tables', 'pu_assigned_roles'];
+        allCheckboxGroups.forEach(groupName => {
+            const groupCheckboxes = document.querySelectorAll(`input[type="checkbox"][name="${groupName}"]`);
+            if (groupCheckboxes.length > 0 && data[groupName] === undefined) {
+                data[groupName] = "";
+            }
+        });
+
+        // Convert empty strings to null for clean database saving
+        for (const key in data) { 
+            if (data[key] === "") data[key] = null; 
+        }
 
         const mode = "{{ mode }}";
         const url = mode === "edit" ? "/api/{{ table_name }}/{{ pk_val }}" : "/api/{{ table_name }}";
@@ -183,17 +242,19 @@
                 body: JSON.stringify(data)
             });
 
-            hideLoading();
+            if (typeof hideLoading === 'function') hideLoading();
 
             if (res.ok) {
-                showToast('Record Saved Successfully!', 'success');
+                if (typeof showToast === 'function') showToast('Record Saved Successfully!', 'success');
                 setTimeout(() => { window.location.href = "/table/{{ table_name }}"; }, 1000);
             } else {
-                showToast('Error saving data.', 'error');
+                const err = await res.json();
+                alert("Error: " + (err.error || "Failed to save"));
             }
         } catch (err) {
-            hideLoading();
-            showToast('Network Error.', 'error');
+            if (typeof hideLoading === 'function') hideLoading();
+            alert("Network Error occurred.");
+            console.error(err);
         }
     }
 </script>
