@@ -435,27 +435,51 @@ async def save_data(request, table_name, pk_val=None):
         target_id = new_id if request.method == "POST" else int(pk_val)
         
         # --- VIRTUAL MAPPINGS SAVING ---
-        if table_name == 'phc_roles_t' and virtual_screens is not None:
+if table_name == 'phc_roles_t' and virtual_screens is not None:
             await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
             if virtual_screens:
+                # 1. Dynamically find the primary key column for the junction table
+                prs_pk_col = await conn.fetchval("""
+                    SELECT kcu.column_name FROM information_schema.key_column_usage kcu 
+                    JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name 
+                    WHERE kcu.table_name = 'phc_role_screen_assignment_t' AND tc.constraint_type = 'PRIMARY KEY'
+                """)
+                # 2. Find the current highest ID and add 1
+                max_prs = await conn.fetchval(f"SELECT MAX({prs_pk_col}) FROM phc_role_screen_assignment_t") if prs_pk_col else 0
+                next_prs = (int(max_prs) + 1) if max_prs else 1
+                
                 for s_id in virtual_screens.split(','):
                     if s_id.strip():
-                        await conn.execute("""
-                            INSERT INTO phc_role_screen_assignment_t 
-                            (prs_company_id, prs_role_id, prs_screen_id, prs_start_date, prs_status, prs_created_by, prs_modified_by, prs_created, prs_modified) 
-                            VALUES (1001, $1, $2, CURRENT_DATE, 'ACT', $3, $3, NOW(), NOW())
-                        """, target_id, int(s_id), str(current_user_id))
+                        if prs_pk_col:
+                            await conn.execute(f"""
+                                INSERT INTO phc_role_screen_assignment_t 
+                                ({prs_pk_col}, prs_company_id, prs_role_id, prs_screen_id, prs_start_date, prs_status, prs_created_by, prs_modified_by, prs_created, prs_modified) 
+                                VALUES ($1, 1001, $2, $3, CURRENT_DATE, 'ACT', $4, $4, NOW(), NOW())
+                            """, next_prs, target_id, int(s_id), str(current_user_id))
+                            next_prs += 1
 
         if table_name == 'phc_users_t' and virtual_roles is not None:
             await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
             if virtual_roles:
+                # 1. Dynamically find the primary key column for the junction table
+                pua_pk_col = await conn.fetchval("""
+                    SELECT kcu.column_name FROM information_schema.key_column_usage kcu 
+                    JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name 
+                    WHERE kcu.table_name = 'phc_user_roles_assignment_t' AND tc.constraint_type = 'PRIMARY KEY'
+                """)
+                # 2. Find the current highest ID and add 1
+                max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pk_col else 0
+                next_pua = (int(max_pua) + 1) if max_pua else 1
+                
                 for r_id in virtual_roles.split(','):
                     if r_id.strip():
-                        await conn.execute("""
-                            INSERT INTO phc_user_roles_assignment_t 
-                            (pua_company_id, pua_user_id, pua_role_id, pua_start_date, pua_status, pua_created_by, pua_modified_by, pua_created, pua_modified) 
-                            VALUES (1001, $1, $2, CURRENT_DATE, 'ACT', $3, $3, NOW(), NOW())
-                        """, target_id, int(r_id), str(current_user_id))
+                        if pua_pk_col:
+                            await conn.execute(f"""
+                                INSERT INTO phc_user_roles_assignment_t 
+                                ({pua_pk_col}, pua_company_id, pua_user_id, pua_role_id, pua_start_date, pua_status, pua_created_by, pua_modified_by, pua_created, pua_modified) 
+                                VALUES ($1, 1001, $2, $3, CURRENT_DATE, 'ACT', $4, $4, NOW(), NOW())
+                            """, next_pua, target_id, int(r_id), str(current_user_id))
+                            next_pua += 1
 
         return response.json({"status": "success"})
 
