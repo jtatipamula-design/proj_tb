@@ -2,196 +2,135 @@
 
 {% block content %}
 <style>
-    /* Header Styles */
-    th { cursor: pointer; user-select: none; position: relative; }
-    th:hover { background-color: #f1f5f9; color: #3b82f6; }
-    th::after { content: ' ↕'; font-size: 0.8em; color: #94a3b8; margin-left: 5px; }
-    th.sort-asc::after { content: ' ▲'; color: #3b82f6; }
-    th.sort-desc::after { content: ' ▼'; color: #3b82f6; }
-
-    /* Filter Toolbar */
-    .filter-toolbar { display: flex; gap: 10px; align-items: center; }
-    .filter-select { 
-        padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; 
-        background-color: white; color: #334155; font-size: 0.9rem;
-        cursor: pointer;
+    /* Header Layout */
+    .table-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
     }
-    .filter-select:focus { outline: 2px solid #3b82f6; border-color: transparent; }
+    .table-header h1 { margin: 0; color: var(--text-main); font-size: 1.8rem; }
+    
+    /* Controls (Search, Add, Export) */
+    .controls { display: flex; gap: 12px; align-items: center; }
+    .search-input {
+        padding: 10px 15px; border: 1px solid var(--border-color);
+        border-radius: 8px; background: var(--bg-body); color: var(--text-main);
+        min-width: 250px; transition: border-color 0.2s;
+    }
+    .search-input:focus { outline: none; border-color: #3b82f6; }
+
+    /* Action Buttons */
+    .btn-action {
+        padding: 10px 20px; border-radius: 8px; font-weight: 600; text-decoration: none; 
+        color: white; transition: background 0.2s; white-space: nowrap;
+    }
+    .btn-export { background: #10b981; } .btn-export:hover { background: #059669; }
+    .btn-add { background: #3b82f6; } .btn-add:hover { background: #2563eb; }
+    
+    .btn-edit { 
+        background: #f59e0b; color: white; padding: 6px 14px; 
+        border-radius: 6px; text-decoration: none; font-size: 0.85rem; font-weight: bold; 
+    }
+    .btn-edit:hover { background: #d97706; }
+
+    /* --- THE ANTI-SQUISH & STICKY TABLE LOGIC --- */
+    .table-wrapper {
+        background: var(--bg-card); border-radius: 12px;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        border: 1px solid var(--border-color);
+        overflow-x: auto; /* Enables horizontal scrolling for wide tables */
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    
+    table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+    th, td { padding: 14px 20px; text-align: left; border-bottom: 1px solid var(--border-color); color: var(--text-main); }
+    th { background: var(--hover-bg); font-weight: 600; position: sticky; top: 0; z-index: 10; cursor: pointer; user-select: none; }
+    th:hover { color: #3b82f6; }
+
+    /* 🔥 SENIOR UX: Sticky First Column for Edit Actions */
+    .sticky-col {
+        position: sticky; 
+        left: 0; 
+        background: var(--bg-card); 
+        z-index: 11; /* Stays above normal scrolling cells */
+        border-right: 2px solid var(--border-color); 
+        text-align: center;
+    }
+    th.sticky-col { 
+        background: var(--hover-bg); 
+        z-index: 12; /* Corner cell needs to stay above everything */
+    }
 </style>
 
-<div class="card">
-    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h1 style="margin:0;">{{ table_title }}</h1>
-        
-        <div class="header-actions filter-toolbar">
-            <select id="statusFilter" class="filter-select" onchange="applyFilters()">
-                <option value="all">Show All Status</option>
-                <option value="ACT">Active Only</option>
-                <option value="INA">Inactive Only</option>
-            </select>
-
-            <input type="text" id="tableSearch" onkeyup="applyFilters()" placeholder="Search text..." 
-                   style="padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; width: 200px;">
-            
-            <button onclick="exportTableToCSV('{{ table_name }}.csv')" class="btn-primary" style="background:#10b981;">
-                Export CSV
-            </button>
-            
-            <a href="/new/{{ table_name }}" class="btn-primary" onclick="showLoading()">+ Add New</a>
-        </div>
-    </div>
-
-    <div class="table-container" style="overflow-x: auto;">
-        <table id="dataTable" style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr>
-                    {% for col in columns %}
-                    <th onclick="sortTable({{ loop.index0 }}, this)" data-colname="{{ col.raw }}" style="text-align: left; padding: 12px; border-bottom: 2px solid #e2e8f0; color: #64748b;">
-                        {{ col.label }}
-                    </th>
-                    {% endfor %}
-                    <th style="padding: 12px; border-bottom: 2px solid #e2e8f0; pointer-events: none;">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in rows %}
-                <tr>
-                    {% for col in columns %}
-                    <td style="padding: 12px; border-bottom: 1px solid #f1f5f9;">
-                        {% if row[col.raw] is not none %}
-                            {{ row[col.raw] }}
-                        {% else %}
-                            <span style="color:#cbd5e1;">-</span>
-                        {% endif %}
-                    </td>
-                    {% endfor %}
-                    <td style="padding: 12px; border-bottom: 1px solid #f1f5f9;">
-                        {% if pk_column and row[pk_column] %}
-                        <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" onclick="showLoading()" style="text-decoration:none; margin-right: 10px;">✏️</a>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<div class="table-header">
+    <h1>{{ table_title }}</h1>
+    <div class="controls">
+        <input type="text" id="searchInput" class="search-input" placeholder="Search any column..." onkeyup="filterTable()">
+        <a href="/export/{{ table_name }}" class="btn-action btn-export">Export CSV</a>
+        <a href="/new/{{ table_name }}" class="btn-action btn-add">+ Add New</a>
     </div>
 </div>
 
+<div class="table-wrapper">
+    <table id="dataTable">
+        <thead>
+            <tr>
+                <!-- Edit Action moved to the First Column -->
+                <th class="sticky-col">Action</th>
+                {% for col in columns %}
+                <!-- FIXED: Used data-index attribute to pacify the VS Code JS Linter -->
+                <th data-index="{{ loop.index }}" onclick="sortTable(parseInt(this.dataset.index))">{{ col.label }} ↕</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <!-- Edit button locked securely to the left wall -->
+                <td class="sticky-col">
+                    <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" class="btn-edit">Edit</a>
+                </td>
+                {% for col in columns %}
+                <td>{{ row[col.raw] }}</td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
 <script>
-    // --- 1. UNIFIED FILTER LOGIC (Search + Status) ---
-    function applyFilters() {
-        const searchText = document.getElementById("tableSearch").value.toLowerCase();
-        const statusFilter = document.getElementById("statusFilter").value; // 'all', 'ACT', 'INA'
-        const table = document.getElementById("dataTable");
-        const rows = table.getElementsByTagName("tbody")[0].getElementsByTagName("tr");
-        
-        // Find which column index is "Status"
-        let statusColIndex = -1;
-        const headers = table.getElementsByTagName("th");
-        for (let i = 0; i < headers.length; i++) {
-            const headerText = headers[i].innerText.toLowerCase();
-            if (headerText.includes("status")) {
-                statusColIndex = i;
-                break;
-            }
-        }
+    // Real-time Search Filter
+    function filterTable() {
+        let filter = document.getElementById("searchInput").value.toLowerCase();
+        let rows = document.querySelectorAll("#dataTable tbody tr");
+        rows.forEach(row => {
+            let text = row.innerText.toLowerCase();
+            row.style.display = text.includes(filter) ? "" : "none";
+        });
+    }
 
-        for (let i = 0; i < rows.length; i++) {
-            const row = rows[i];
-            const cells = row.getElementsByTagName("td");
+    // Dynamic Column Sorting Logic
+    let sortDir = {};
+    function sortTable(n) {
+        let table = document.getElementById("dataTable");
+        let tbody = table.tBodies[0];
+        let rows = Array.from(tbody.querySelectorAll("tr"));
+        sortDir[n] = !sortDir[n]; // Toggle direction
+        let dir = sortDir[n] ? 1 : -1;
+
+        rows.sort((a, b) => {
+            let valA = a.cells[n].innerText.trim();
+            let valB = b.cells[n].innerText.trim();
+            let isNum = !isNaN(parseFloat(valA)) && isFinite(valA) && valA !== '';
             
-            // Check 1: Does text match search?
-            let textMatch = false;
-            if (searchText === "") textMatch = true;
-            else {
-                for (let j = 0; j < cells.length - 1; j++) {
-                    if (cells[j].textContent.toLowerCase().includes(searchText)) {
-                        textMatch = true;
-                        break;
-                    }
-                }
-            }
-
-            // Check 2: Does status match filter?
-            let statusMatch = true;
-            if (statusColIndex !== -1 && statusFilter !== 'all') {
-                const statusText = cells[statusColIndex].textContent.trim();
-                // We check if the cell contains the code (ACT/INA)
-                if (statusText !== statusFilter) {
-                    statusMatch = false;
-                }
-            }
-
-            // Show row only if BOTH match
-            row.style.display = (textMatch && statusMatch) ? "" : "none";
-        }
-    }
-
-    // --- 2. SORTING LOGIC (With Visuals) ---
-    function sortTable(n, headerClicked) {
-        const table = document.getElementById("dataTable");
-        let rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
-        switching = true;
-        dir = "asc"; 
+            if (isNum) return (parseFloat(valA) - parseFloat(valB)) * dir;
+            return valA.localeCompare(valB) * dir;
+        });
         
-        // Reset arrows on other headers
-        const allHeaders = table.getElementsByTagName("th");
-        for(let h of allHeaders) { h.classList.remove('sort-asc', 'sort-desc'); }
-
-        while (switching) {
-            switching = false;
-            rows = table.rows;
-            for (i = 1; i < (rows.length - 1); i++) {
-                shouldSwitch = false;
-                x = rows[i].getElementsByTagName("TD")[n];
-                y = rows[i + 1].getElementsByTagName("TD")[n];
-                
-                let xVal = x.innerHTML.toLowerCase();
-                let yVal = y.innerHTML.toLowerCase();
-                
-                if (!isNaN(parseFloat(xVal)) && isFinite(xVal)) {
-                    xVal = parseFloat(xVal); yVal = parseFloat(yVal);
-                }
-
-                if (dir == "asc") {
-                    if (xVal > yVal) { shouldSwitch = true; break; }
-                } else if (dir == "desc") {
-                    if (xVal < yVal) { shouldSwitch = true; break; }
-                }
-            }
-            if (shouldSwitch) {
-                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-                switching = true;
-                switchcount++;      
-            } else {
-                if (switchcount == 0 && dir == "asc") {
-                    dir = "desc";
-                    switching = true;
-                }
-            }
-        }
-        // Add arrow to current header
-        headerClicked.classList.add(dir === 'asc' ? 'sort-asc' : 'sort-desc');
-    }
-
-    // --- 3. EXPORT LOGIC ---
-    function exportTableToCSV(filename) {
-        const csv = [];
-        const rows = document.querySelectorAll("#dataTable tr");
-        for (let i = 0; i < rows.length; i++) {
-            const row = [], cols = rows[i].querySelectorAll("td, th");
-            if (rows[i].style.display === 'none') continue; // Skip hidden
-            for (let j = 0; j < cols.length - 1; j++) 
-                row.push('"' + cols[j].innerText + '"');
-            csv.push(row.join(","));        
-        }
-        const csvFile = new Blob([csv.join("\n")], {type: "text/csv"});
-        const downloadLink = document.createElement("a");
-        downloadLink.download = filename;
-        downloadLink.href = window.URL.createObjectURL(csvFile);
-        downloadLink.style.display = "none";
-        document.body.appendChild(downloadLink);
-        downloadLink.click();
+        rows.forEach(row => tbody.appendChild(row));
     }
 </script>
 {% endblock %}
