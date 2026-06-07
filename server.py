@@ -435,7 +435,7 @@ async def save_data(request, table_name, pk_val=None):
         target_id = new_id if request.method == "POST" else int(pk_val)
         
         # --- VIRTUAL MAPPINGS SAVING ---
-if table_name == 'phc_roles_t' and virtual_screens is not None:
+        if table_name == 'phc_roles_t' and virtual_screens is not None:
             await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
             if virtual_screens:
                 # 1. Dynamically find the primary key column for the junction table
