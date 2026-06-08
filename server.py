@@ -23,7 +23,7 @@ Extend(app)
 CLOUD_DB_URL = os.environ.get("DB_URL")
 
 # ==========================================
-# 🛡️ SECURITY MODULE 1: RATE LIMITER
+# SECURITY MODULE 1: RATE LIMITER
 # ==========================================
 RATE_LIMIT_WINDOW = 60  
 MAX_REQUESTS = 120      
@@ -39,7 +39,7 @@ async def rate_limiter(request):
     ip_tracker[ip].append(now)
 
 # ==========================================
-# 🛡️ SECURITY MODULE 2: SECURE HEADERS
+# SECURITY MODULE 2: SECURE HEADERS
 # ==========================================
 @app.on_response
 async def add_security_headers(request, resp):
@@ -50,7 +50,7 @@ async def add_security_headers(request, resp):
         resp.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
 
 # ==========================================
-# 🛡️ SECURITY MODULE 3: JWT & RBAC AUTH
+# SECURITY MODULE 3: JWT & RBAC AUTH
 # ==========================================
 def login_required(wrapped):
     @wraps(wrapped)
@@ -121,7 +121,7 @@ def make_human_readable(text):
     return text.replace("_", " ").title()
 
 # ==========================================
-# 🛡️ SECURITY MODULE 4: RELATIONAL RBAC ENGINE
+# SECURITY MODULE 4: RELATIONAL RBAC ENGINE
 # ==========================================
 async def get_allowed_tables(conn, user_id, user_type):
     rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'phc_%'")
