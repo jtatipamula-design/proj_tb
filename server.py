@@ -23,7 +23,7 @@ Extend(app)
 CLOUD_DB_URL = os.environ.get("DB_URL")
 
 # ==========================================
-# SECURITY MODULE 1: RATE LIMITER
+# 🛡️ SECURITY MODULE 1: RATE LIMITER
 # ==========================================
 RATE_LIMIT_WINDOW = 60  
 MAX_REQUESTS = 120      
@@ -39,7 +39,7 @@ async def rate_limiter(request):
     ip_tracker[ip].append(now)
 
 # ==========================================
-# SECURITY MODULE 2: SECURE HEADERS
+# 🛡️ SECURITY MODULE 2: SECURE HEADERS
 # ==========================================
 @app.on_response
 async def add_security_headers(request, resp):
@@ -50,7 +50,7 @@ async def add_security_headers(request, resp):
         resp.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
 
 # ==========================================
-# SECURITY MODULE 3: JWT & RBAC AUTH
+# 🛡️ SECURITY MODULE 3: JWT & RBAC AUTH
 # ==========================================
 def login_required(wrapped):
     @wraps(wrapped)
@@ -121,7 +121,7 @@ def make_human_readable(text):
     return text.replace("_", " ").title()
 
 # ==========================================
-# SECURITY MODULE 4: RELATIONAL RBAC ENGINE
+# 🛡️ SECURITY MODULE 4: RELATIONAL RBAC ENGINE
 # ==========================================
 async def get_allowed_tables(conn, user_id, user_type):
     rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'phc_%'")
@@ -147,37 +147,61 @@ async def get_allowed_tables(conn, user_id, user_type):
     return [t for t in all_tables if t in allowed_tables]
 
 
-# --- SMART DROPDOWN HELPER ---
-async def get_dropdown_options(conn, column_name):
+# ==========================================
+# 🧠 SMART DYNAMIC DATA RESOLVER ENGINE
+# ==========================================
+async def find_target_table(conn, column_name):
+    # Only try to resolve columns that end in ID (and ignore system modifiers)
     if not column_name.endswith('_id'): return None
     
+    rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'phc_%'")
+    all_tables = [r['table_name'] for r in rows]
+    
+    # 1. Base keyword map (handles weird pluralizations and abbreviations)
     keyword_map = {
         'company': 'phc_companies_t', 'dept': 'phc_dept_t', 'department': 'phc_dept_t', 
         'user': 'phc_users_t', 'emp': 'phc_emp_t', 'employee': 'phc_emp_t',
         'app': 'phc_apps_t', 'org': 'phc_orgs_t', 'organization': 'phc_orgs_t',
-        'role': 'phc_roles_t', 'screen': 'phc_screens_t'
+        'role': 'phc_roles_t', 'screen': 'phc_screens_t',
+        'location': 'phc_locations_t', 'service': 'phc_services_t',
+        'group': 'phc_user_groups_t', 'center': 'phc_cost_centers_t'
     }
     
-    target_table = None
+    # Check explicit map first
     for key, table in keyword_map.items():
-        if key in column_name: target_table = table; break
+        if key in column_name and table in all_tables:
+            return table
+            
+    # 2. Dynamic extraction (Fallback for new tables you build)
+    parts = column_name.split('_')
+    if len(parts) >= 3:
+        base_name = parts[-2]
+        potential_tables = [f"phc_{base_name}_t", f"phc_{base_name}s_t", f"phc_{base_name}es_t"]
+        for pt in potential_tables:
+            if pt in all_tables: return pt
+            
+    return None
+
+async def get_dropdown_options(conn, column_name):
+    target_table = await find_target_table(conn, column_name)
     if not target_table: return None
-    
-    exists = await conn.fetchval("SELECT to_regclass($1)", target_table)
-    if not exists: return None
     
     pk_row = await conn.fetchrow("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'", target_table)
     if not pk_row: return None
     pk_col = pk_row['column_name']
     
-    cols = await conn.fetch("SELECT column_name FROM information_schema.columns WHERE table_name = $1 AND data_type IN ('character varying', 'text') ORDER BY ordinal_position", target_table)
+    cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", target_table)
+    
+    # Intelligently find a Name/String field to display in the dropdown
     name_col = pk_col 
     for r in cols:
         if r['column_name'] != pk_col and not r['column_name'].endswith('_id') and not r['column_name'].endswith('_by'):
-            name_col = r['column_name']; break 
-            
-    rows = await conn.fetch(f"SELECT {pk_col} as id, {name_col} as name FROM {target_table} ORDER BY {name_col} ASC LIMIT 100")
+            if r['data_type'] in ('character varying', 'text', 'varchar'):
+                name_col = r['column_name']; break 
+                
+    rows = await conn.fetch(f"SELECT {pk_col} as id, {name_col} as name FROM {target_table} ORDER BY {name_col} ASC LIMIT 500")
     return [dict(row) for row in rows]
+
 
 # --- AUTH ROUTES ---
 @app.route("/login", methods=["GET", "POST"])
@@ -252,7 +276,25 @@ async def show_table(request, table_name):
         pk_column = pk_row['column_name'] if pk_row else None
         
         rows = await conn.fetch(f"SELECT * FROM {table_name} ORDER BY 1 DESC LIMIT 100")
-        return await render("table_view.html", context={"table_name": table_name, "table_title": make_human_readable(table_name), "columns": columns, "rows": rows, "all_tables": allowed, "pk_column": pk_column})
+        rows_dict = [dict(r) for r in rows]
+
+        # --- 🔥 DYNAMIC NAME RESOLUTION ENGINE (Table Display) 🔥 ---
+        for col in columns:
+            c_name = col['raw']
+            if c_name != pk_column and c_name.endswith('_id'):
+                options = await get_dropdown_options(conn, c_name)
+                if options:
+                    # Create a quick ID -> Name mapping dictionary
+                    lookup = {str(opt['id']): opt['name'] for opt in options}
+                    for row in rows_dict:
+                        val = row.get(c_name)
+                        if val is not None:
+                            str_val = str(val)
+                            if str_val in lookup:
+                                # Magically replace raw numbers with readable text!
+                                row[c_name] = f"{lookup[str_val]} (ID: {val})"
+        
+        return await render("table_view.html", context={"table_name": table_name, "table_title": make_human_readable(table_name), "columns": columns, "rows": rows_dict, "all_tables": allowed, "pk_column": pk_column})
 
 @app.route("/export/<table_name>")
 @login_required
@@ -272,8 +314,28 @@ async def export_csv(request, table_name):
 
         rows = await conn.fetch(query, *params)
         if not rows: return response.text("No data found")
-        output = io.StringIO(); writer = csv.writer(output); writer.writerow(rows[0].keys())
-        for row in rows: writer.writerow(row.values())
+        rows_dict = [dict(r) for r in rows]
+
+        # --- 🔥 DYNAMIC NAME RESOLUTION ENGINE (Export Display) 🔥 ---
+        col_rows = await conn.fetch("SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
+        pk_row = await conn.fetchrow("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'", table_name)
+        pk_column = pk_row['column_name'] if pk_row else None
+
+        for r in col_rows:
+            c_name = r['column_name']
+            if c_name != pk_column and c_name.endswith('_id'):
+                options = await get_dropdown_options(conn, c_name)
+                if options:
+                    lookup = {str(opt['id']): opt['name'] for opt in options}
+                    for row in rows_dict:
+                        val = row.get(c_name)
+                        if val is not None:
+                            str_val = str(val)
+                            if str_val in lookup:
+                                row[c_name] = f"{lookup[str_val]} (ID: {val})"
+
+        output = io.StringIO(); writer = csv.writer(output); writer.writerow(rows_dict[0].keys())
+        for row in rows_dict: writer.writerow(row.values())
         return response.text(output.getvalue(), headers={"Content-Disposition": f'attachment; filename="{table_name}_export.csv"', "Content-Type": "text/csv"})
 
 
@@ -297,6 +359,8 @@ async def show_edit_form(request, table_name, pk_val):
             if c_name == pk_column or c_name.endswith(('_created', '_modified', '_created_by', '_modified_by')): continue
             val = record[c_name]
             if isinstance(val, (date, datetime)): val = val.strftime('%Y-%m-%d')
+            
+            # --- Dynamically generates dropdowns for ALL foreign keys ---
             options = await get_dropdown_options(conn, c_name)
             is_req = (r['is_nullable'] == 'NO')
             columns.append({"column_name": c_name, "label": make_human_readable(c_name), "required": is_req, "value": val, "data_type": r['data_type'], "options": options})
@@ -337,6 +401,8 @@ async def show_add_form(request, table_name):
         for r in col_rows:
             c_name = r['column_name']
             if c_name == pk_column or c_name.endswith(('_created', '_modified', '_created_by', '_modified_by')): continue
+            
+            # --- Dynamically generates dropdowns for ALL foreign keys ---
             options = await get_dropdown_options(conn, c_name)
             is_req = (r['is_nullable'] == 'NO')
             columns.append({"column_name": c_name, "label": make_human_readable(c_name), "required": is_req, "value": "", "data_type": r['data_type'], "options": options})
@@ -438,13 +504,11 @@ async def save_data(request, table_name, pk_val=None):
         if table_name == 'phc_roles_t' and virtual_screens is not None:
             await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
             if virtual_screens:
-                # 1. Dynamically find the primary key column for the junction table
                 prs_pk_col = await conn.fetchval("""
                     SELECT kcu.column_name FROM information_schema.key_column_usage kcu 
                     JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name 
                     WHERE kcu.table_name = 'phc_role_screen_assignment_t' AND tc.constraint_type = 'PRIMARY KEY'
                 """)
-                # 2. Find the current highest ID and add 1
                 max_prs = await conn.fetchval(f"SELECT MAX({prs_pk_col}) FROM phc_role_screen_assignment_t") if prs_pk_col else 0
                 next_prs = (int(max_prs) + 1) if max_prs else 1
                 
@@ -461,13 +525,11 @@ async def save_data(request, table_name, pk_val=None):
         if table_name == 'phc_users_t' and virtual_roles is not None:
             await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
             if virtual_roles:
-                # 1. Dynamically find the primary key column for the junction table
                 pua_pk_col = await conn.fetchval("""
                     SELECT kcu.column_name FROM information_schema.key_column_usage kcu 
                     JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name 
                     WHERE kcu.table_name = 'phc_user_roles_assignment_t' AND tc.constraint_type = 'PRIMARY KEY'
                 """)
-                # 2. Find the current highest ID and add 1
                 max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pk_col else 0
                 next_pua = (int(max_pua) + 1) if max_pua else 1
                 
@@ -484,7 +546,6 @@ async def save_data(request, table_name, pk_val=None):
         return response.json({"status": "success"})
 
 if __name__ == "__main__":
-    # Render assigns the port dynamically using the PORT env variable
     port = int(os.environ.get("PORT", 8000))
     is_debug = os.environ.get("ENVIRONMENT") == "development"
     app.run(host="0.0.0.0", port=port, debug=is_debug, single_process=True)
