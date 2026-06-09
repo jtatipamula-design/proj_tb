@@ -2,133 +2,99 @@
 
 {% block content %}
 <style>
-    /* --- CARD CONTAINER --- */
-    .form-card {
-        max-width: 800px;
-        margin: 0 auto;
-        background: var(--bg-card);
-        padding: 40px;
-        border-radius: 16px;
-        border: 1px solid var(--border-color);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-        animation: fadeInUp 0.4s ease-out;
-    }
-
-    .form-header {
+    .page-header {
         margin-bottom: 30px;
-        border-bottom: 1px solid var(--border-color);
-        padding-bottom: 20px;
     }
-    .form-header h1 { margin: 0; font-size: 1.8rem; color: var(--text-main); font-weight: 700; }
+    .page-header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -1px; }
+    .page-header p { color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 0.8rem; margin-bottom: 5px; }
 
-    /* --- GRID LAYOUT --- */
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 25px;
-    }
-
-    /* --- INPUT GROUPS --- */
-    .form-group { display: flex; flex-direction: column; gap: 8px; }
-    
-    .form-group label {
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: var(--text-muted);
+    .form-container {
+        max-width: 900px;
+        background: var(--bg-card);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        padding: 40px;
+        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.3);
+        animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
+    @keyframes slideUp { 
+        from { opacity: 0; transform: translateY(20px); } 
+        to { opacity: 1; transform: translateY(0); } 
+    }
+
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 28px; }
+
+    .form-group { display: flex; flex-direction: column; gap: 10px; }
+    .form-group label { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* Premium Inputs */
     .form-group input[type="text"],
     .form-group input[type="password"],
     .form-group input[type="date"],
     .form-group select {
-        padding: 12px 16px;
+        padding: 16px 20px;
         border: 1px solid var(--border-color);
-        border-radius: 8px;
-        font-size: 1rem;
-        background: var(--bg-body);
-        color: var(--text-main);
+        border-radius: 12px;
+        font-size: 1rem; font-family: var(--font-main);
+        background: rgba(0,0,0,0.2); color: white;
         transition: all 0.2s;
     }
     .form-group input:focus, .form-group select:focus {
-        outline: none;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        outline: none; border-color: var(--accent-primary);
+        background: rgba(0,0,0,0.4);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
     }
 
-    /* --- CUSTOM CHECKBOX SCROLL BOX --- */
+    /* Checkbox Scroll Box */
     .checkbox-scroll-box {
-        max-height: 220px;
-        overflow-y: auto;
-        border: 1px solid var(--border-color);
-        padding: 10px;
-        border-radius: 8px;
-        background: var(--bg-body);
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
+        max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color);
+        padding: 12px; border-radius: 12px; background: rgba(0,0,0,0.2);
     }
     .checkbox-item {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 10px 12px;
-        border-radius: 6px;
-        cursor: pointer;
-        transition: background 0.2s;
-        color: var(--text-main);
-        font-weight: 500;
+        display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 8px;
+        cursor: pointer; transition: background 0.2s; font-weight: 600; font-size: 0.95rem;
     }
-    .checkbox-item:hover {
-        background: var(--hover-bg);
-    }
-    .checkbox-item input[type="checkbox"] {
-        width: 18px;
-        height: 18px;
-        cursor: pointer;
-        accent-color: #3b82f6;
-    }
+    .checkbox-item:hover { background: rgba(255,255,255,0.05); }
+    .checkbox-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent-primary); }
 
-    /* --- STATUS TOGGLE BUTTONS --- */
-    .status-group { display: flex; gap: 10px; }
+    /* Status Toggles */
+    .status-group { display: flex; gap: 12px; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 16px; border: 1px solid var(--border-color); }
     .status-btn {
-        flex: 1; padding: 12px; text-align: center; border-radius: 8px;
-        border: 1px solid var(--border-color); cursor: pointer;
-        font-weight: 600; color: var(--text-muted); transition: all 0.2s;
-        background: var(--bg-body);
+        flex: 1; padding: 12px; text-align: center; border-radius: 10px;
+        cursor: pointer; font-weight: 700; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;
+        color: var(--text-muted); transition: all 0.2s;
     }
-    .active-selected { background: #10b981; color: white; border-color: #10b981; }
-    .inactive-selected { background: #ef4444; color: white; border-color: #ef4444; }
+    .active-selected { background: rgba(16,185,129,0.15); color: #10B981; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .inactive-selected { background: rgba(239,68,68,0.15); color: #EF4444; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
     .hidden-input { display: none; }
 
-    /* --- SUBMIT BUTTON --- */
+    /* Submit Button (FAB Style within form) */
     .btn-submit {
-        margin-top: 30px;
-        width: 100%;
-        padding: 14px;
-        background: #3b82f6;
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-size: 1.1rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.2s;
+        margin-top: 40px; padding: 18px 32px;
+        background: var(--accent-primary); color: white; border: none; border-radius: 30px;
+        font-size: 1.1rem; font-weight: 700; font-family: var(--font-main); cursor: pointer;
+        box-shadow: 0 10px 25px -5px var(--accent-glow); transition: all 0.2s;
+        display: inline-flex; align-items: center; gap: 10px;
     }
-    .btn-submit:hover { background: #2563eb; }
+    .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 15px 30px -5px var(--accent-glow); }
 </style>
 
-<div class="form-card">
-    <div class="form-header">
-        <h1>{{ table_title }}</h1>
-    </div>
+<div class="page-header">
+    <p>Record Editor</p>
+    <h1>{{ table_title }}</h1>
+</div>
 
+<div class="form-container">
     <form onsubmit="submitForm(event)">
         <div class="form-grid">
             {% for col in columns %}
             <div class="form-group">
-                <label>{{ col.label }} {% if col.required %}<span style="color: #ef4444;">*</span>{% endif %}</label>
+                <label>{{ col.label }} {% if col.required %}<span style="color: var(--accent-danger);">*</span>{% endif %}</label>
                 
-                {# --- STATUS BUTTONS --- #}
+                {# Status Toggles #}
                 {% if col.column_name.endswith('_status') %}
                     <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'ACT' }}">
                     <div class="status-group">
@@ -143,7 +109,7 @@
                         });
                     </script>
 
-                {# --- MULTI-SELECT CHECKBOXES (Virtual Arrays) --- #}
+                {# Virtual Checkboxes #}
                 {% elif col.data_type == 'virtual_checkbox' %}
                     <div class="checkbox-scroll-box">
                         {% set selected_items = (col.value or "").split(',') %}
@@ -156,7 +122,7 @@
                         {% endfor %}
                     </div>
 
-                {# --- STANDARD DROPDOWNS --- #}
+                {# Standard Dropdowns #}
                 {% elif col.options %}
                     <select name="{{ col.column_name }}" {% if col.required %}required{% endif %}>
                         <option value="">-- Select --</option>
@@ -167,15 +133,15 @@
                         {% endfor %}
                     </select>
 
-                {# --- DATE PICKER --- #}
+                {# Date Picker #}
                 {% elif col.data_type == 'date' %}
                     <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %}>
                 
-                {# --- PASSWORD INPUT (Prevents Double Hashing Bug) --- #}
+                {# Password Input #}
                 {% elif 'pwd' in col.column_name or 'password' in col.column_name %}
-                    <input type="password" name="{{ col.column_name }}" placeholder="{% if mode == 'edit' %}Leave blank to keep unchanged{% else %}Enter password{% endif %}" {% if col.required and mode != 'edit' %}required{% endif %}>
+                    <input type="password" name="{{ col.column_name }}" autocomplete="new-password" placeholder="{% if mode == 'edit' %}Leave blank to keep unchanged{% else %}Enter password{% endif %}" {% if col.required and mode != 'edit' %}required{% endif %}>
 
-                {# --- STANDARD TEXT INPUT --- #}
+                {# Standard Text #}
                 {% else %}
                     <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else '' }}" {% if col.required %}required{% endif %}>
                 {% endif %}
@@ -183,78 +149,71 @@
             {% endfor %}
         </div>
         
-        <button type="submit" class="btn-submit">Save Record</button>
+        <div style="display: flex; justify-content: flex-end;">
+            <button type="submit" class="btn-submit">
+                <i data-lucide="save" style="width: 20px;"></i> Save Record
+            </button>
+        </div>
     </form>
 </div>
 
 <script>
-    // Handles visually toggling the Active/Inactive buttons
     function setStatus(colName, value) {
         document.getElementById('input_' + colName).value = value;
         const btnAct = document.getElementById('btn_act_' + colName);
         const btnIna = document.getElementById('btn_ina_' + colName);
-
         if(btnAct) { btnAct.className = 'status-btn'; if(value === 'ACT' || value === 'AIU') btnAct.classList.add('active-selected'); }
         if(btnIna) { btnIna.className = 'status-btn'; if(value !== 'ACT' && value !== 'AIU') btnIna.classList.add('inactive-selected'); }
     }
 
-    // Handles packaging the data and sending it to Python
     async function submitForm(e) {
         e.preventDefault();
-        if (typeof showLoading === 'function') showLoading();
+        const btn = e.target.querySelector('.btn-submit');
+        const originalBtnHTML = btn.innerHTML;
+        
+        // Transform the button into a loading state
+        btn.innerHTML = '<i data-lucide="loader-2" class="lucide-spin" style="width: 20px;"></i> Saving...';
+        lucide.createIcons();
 
         const formData = new FormData(e.target);
         const data = {};
-        
-        // Loop through all inputs
         for (const [key, value] of formData.entries()) {
-            if (data[key] !== undefined) {
-                // MULTI-SELECT MAGIC: If the key already exists (like multiple checked boxes), 
-                // combine them with a comma!
-                data[key] += ',' + value;
-            } else {
-                data[key] = value;
-            }
+            if (data[key] !== undefined) data[key] += ',' + value;
+            else data[key] = value;
         }
 
-        // Failsafe for checkboxes: Force Python to clear them if none are checked
         const allCheckboxGroups = ['pr_allowed_tables', 'pu_assigned_roles'];
         allCheckboxGroups.forEach(groupName => {
             const groupCheckboxes = document.querySelectorAll(`input[type="checkbox"][name="${groupName}"]`);
-            if (groupCheckboxes.length > 0 && data[groupName] === undefined) {
-                data[groupName] = "";
-            }
+            if (groupCheckboxes.length > 0 && data[groupName] === undefined) data[groupName] = "";
         });
 
-        // Convert empty strings to null for clean database saving
-        for (const key in data) { 
-            if (data[key] === "") data[key] = null; 
-        }
+        for (const key in data) if (data[key] === "") data[key] = null; 
 
         const mode = "{{ mode }}";
         const url = mode === "edit" ? "/api/{{ table_name }}/{{ pk_val }}" : "/api/{{ table_name }}";
         const method = mode === "edit" ? "PUT" : "POST";
 
         try {
-            const res = await fetch(url, {
-                method: method,
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
-            });
-
-            if (typeof hideLoading === 'function') hideLoading();
-
+            const res = await fetch(url, { method: method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
             if (res.ok) {
-                if (typeof showToast === 'function') showToast('Record Saved Successfully!', 'success');
-                setTimeout(() => { window.location.href = "/table/{{ table_name }}"; }, 1000);
+                // Success State!
+                btn.innerHTML = '<i data-lucide="check" style="width: 20px;"></i> Saved';
+                btn.style.background = "#10B981";
+                btn.style.boxShadow = "0 10px 25px -5px rgba(16,185,129,0.5)";
+                lucide.createIcons();
+                setTimeout(() => window.location.href = "/table/{{ table_name }}", 600);
             } else {
                 const err = await res.json();
                 alert("Error: " + (err.error || "Failed to save"));
+                btn.innerHTML = originalBtnHTML;
+                lucide.createIcons();
             }
-        } catch (err) {
-            if (typeof hideLoading === 'function') hideLoading();
-            alert("Network Error occurred.");
-            console.error(err);
+        } catch (err) { 
+            alert("Network Error occurred."); 
+            console.error(err); 
+            btn.innerHTML = originalBtnHTML;
+            lucide.createIcons();
         }
     }
 </script>
