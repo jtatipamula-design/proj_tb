@@ -130,17 +130,18 @@ async def get_allowed_tables(conn, user_id, user_type):
     if user_type == 'ADM': 
         return all_tables
 
+    # Added TRIM() to safely handle accidental spaces in the database records
     query = """
-        SELECT LOWER(s.psn_screen_code) as table_name
+        SELECT TRIM(LOWER(s.psn_screen_code)) as table_name
         FROM phc_user_roles_assignment_t ura
         JOIN phc_roles_t r ON ura.pua_role_id = r.prl_role_id
         JOIN phc_role_screen_assignment_t rsa ON r.prl_role_id = rsa.prs_role_id
         JOIN phc_screens_t s ON rsa.prs_screen_id = s.psn_screen_id
         WHERE ura.pua_user_id = $1
-          AND ura.pua_status = 'ACT'
-          AND r.prl_status = 'ACT'
-          AND rsa.prs_status = 'ACT'
-          AND s.psn_status = 'ACT'
+          AND TRIM(ura.pua_status) = 'ACT'
+          AND TRIM(r.prl_status) = 'ACT'
+          AND TRIM(rsa.prs_status) = 'ACT'
+          AND TRIM(s.psn_status) = 'ACT'
     """
     assigned_rows = await conn.fetch(query, int(user_id))
     allowed_tables = [r['table_name'] for r in assigned_rows]
@@ -253,13 +254,17 @@ async def logout(request):
 @login_required
 async def dashboard(request):
     async with app.ctx.pool.acquire() as conn:
-        stats = {
-            "emp_count": await conn.fetchval("SELECT COUNT(*) FROM phc_emp_t"),
-            "comp_count": await conn.fetchval("SELECT COUNT(*) FROM phc_companies_t WHERE pcp_status = 'ACT'"),
-            "dept_count": await conn.fetchval("SELECT COUNT(*) FROM phc_dept_t"),
-            "app_count": await conn.fetchval("SELECT COUNT(*) FROM phc_apps_t")
-        }
         allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
+        
+        # --- DASHBOARD DATA SECURITY ---
+        # Only fetch the stats if the user has RBAC permissions to view those tables.
+        # Otherwise, display a lock icon.
+        stats = {
+            "emp_count": await conn.fetchval("SELECT COUNT(*) FROM phc_emp_t") if 'phc_emp_t' in allowed else "🔒",
+            "comp_count": await conn.fetchval("SELECT COUNT(*) FROM phc_companies_t WHERE pcp_status = 'ACT'") if 'phc_companies_t' in allowed else "🔒",
+            "dept_count": await conn.fetchval("SELECT COUNT(*) FROM phc_dept_t") if 'phc_dept_t' in allowed else "🔒",
+            "app_count": await conn.fetchval("SELECT COUNT(*) FROM phc_apps_t") if 'phc_apps_t' in allowed else "🔒"
+        }
     return await render("dashboard.html", context={"stats": stats, "all_tables": allowed, "username": request.ctx.username})
 
 @app.get("/table/<table_name>")
