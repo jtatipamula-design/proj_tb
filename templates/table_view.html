@@ -2,107 +2,153 @@
 
 {% block content %}
 <style>
-    /* Header Layout */
-    .table-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 20px;
+    .page-header {
+        display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 30px;
     }
-    .table-header h1 { margin: 0; color: var(--text-main); font-size: 1.8rem; }
+    .page-header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -1px; }
     
-    /* Controls (Search, Add, Export) */
-    .controls { display: flex; gap: 12px; align-items: center; }
-    .search-input {
-        padding: 10px 15px; border: 1px solid var(--border-color);
-        border-radius: 8px; background: var(--bg-body); color: var(--text-main);
-        min-width: 250px; transition: border-color 0.2s;
+    .search-box {
+        background: var(--bg-card); border: 1px solid var(--border-color);
+        padding: 12px 20px; border-radius: 12px; width: 300px;
+        color: white; font-family: var(--font-main); transition: border 0.2s;
     }
-    .search-input:focus { outline: none; border-color: #3b82f6; }
+    .search-box:focus { outline: none; border-color: var(--accent-primary); }
 
-    /* Action Buttons */
-    .btn-action {
-        padding: 10px 20px; border-radius: 8px; font-weight: 600; text-decoration: none; 
-        color: white; transition: background 0.2s; white-space: nowrap;
-    }
-    .btn-export { background: #10b981; } .btn-export:hover { background: #059669; }
-    .btn-add { background: #3b82f6; } .btn-add:hover { background: #2563eb; }
-    
-    .btn-edit { 
-        background: #f59e0b; color: white; padding: 6px 14px; 
-        border-radius: 6px; text-decoration: none; font-size: 0.85rem; font-weight: bold; 
-    }
-    .btn-edit:hover { background: #d97706; }
-
-    /* --- THE ANTI-SQUISH & STICKY TABLE LOGIC --- */
-    .table-wrapper {
-        background: var(--bg-card); border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    /* --- THE "ANTI-ERP" TABLE --- */
+    .table-container {
+        background: var(--bg-card);
+        backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
         border: 1px solid var(--border-color);
-        overflow-x: auto; /* Enables horizontal scrolling for wide tables */
-        max-height: 70vh;
-        overflow-y: auto;
+        border-radius: 20px;
+        overflow: hidden; /* Clips the table corners perfectly */
+        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.3);
     }
+    
+    .table-scroll { overflow-x: auto; max-height: 65vh; overflow-y: auto; }
     
     table { width: 100%; border-collapse: collapse; white-space: nowrap; }
-    th, td { padding: 14px 20px; text-align: left; border-bottom: 1px solid var(--border-color); color: var(--text-main); }
-    th { background: var(--hover-bg); font-weight: 600; position: sticky; top: 0; z-index: 10; cursor: pointer; user-select: none; }
-    th:hover { color: #3b82f6; }
+    
+    th {
+        background: rgba(0,0,0,0.2); color: var(--text-muted); font-size: 0.75rem;
+        text-transform: uppercase; letter-spacing: 1px; font-weight: 700;
+        padding: 16px 24px; text-align: left; position: sticky; top: 0; z-index: 10;
+        border-bottom: 1px solid var(--border-color); cursor: pointer;
+    }
 
-    /* 🔥 SENIOR UX: Sticky First Column for Edit Actions */
-    .sticky-col {
-        position: sticky; 
-        left: 0; 
-        background: var(--bg-card); 
-        z-index: 11; /* Stays above normal scrolling cells */
-        border-right: 2px solid var(--border-color); 
-        text-align: center;
+    /* Invisible Grids (Only faint horizontal lines) */
+    td {
+        padding: 18px 24px; font-size: 0.95rem; font-weight: 500;
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+        transition: background 0.2s;
     }
-    th.sticky-col { 
-        background: var(--hover-bg); 
-        z-index: 12; /* Corner cell needs to stay above everything */
+
+    /* Hover Lift Effect */
+    tr { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s, background 0.2s; }
+    tbody tr:hover {
+        background: rgba(255,255,255,0.02);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px -10px rgba(0,0,0,0.5);
+        position: relative; z-index: 5;
     }
+
+    /* Pill Badges */
+    .pill {
+        padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .pill-act { background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16,185,129,0.3); }
+    .pill-ina { background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239,68,68,0.3); }
+    .pill-def { background: rgba(255, 255, 255, 0.1); color: var(--text-muted); }
+
+    /* Action Link */
+    .action-link {
+        color: var(--accent-primary); text-decoration: none; font-weight: 700; font-size: 0.9rem;
+    }
+    .action-link:hover { text-decoration: underline; }
+
+    /* --- FLOATING ACTION BUTTON (FAB) --- */
+    .fab-container {
+        position: fixed; bottom: 40px; right: 40px; display: flex; gap: 15px; z-index: 90;
+    }
+    .fab {
+        height: 56px; padding: 0 24px; border-radius: 28px;
+        display: flex; align-items: center; justify-content: center; gap: 8px;
+        font-weight: 700; font-family: var(--font-main); font-size: 1rem;
+        color: white; text-decoration: none; border: none; cursor: pointer;
+        box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .fab-primary { background: var(--accent-primary); box-shadow: 0 10px 25px -5px var(--accent-glow); }
+    .fab-secondary { background: #10B981; }
+    .fab:hover { transform: translateY(-3px); box-shadow: 0 15px 30px -5px rgba(0,0,0,0.6); }
+
+    /* Skeleton Loader Class */
+    .skeleton-loading td { color: transparent; position: relative; }
+    .skeleton-loading td::after {
+        content: ''; position: absolute; top: 25%; left: 24px; right: 24px; height: 50%;
+        background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
+        background-size: 200% 100%; border-radius: 4px;
+        animation: shimmer 1.5s infinite;
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
 </style>
 
-<div class="table-header">
-    <h1>{{ table_title }}</h1>
-    <div class="controls">
-        <input type="text" id="searchInput" class="search-input" placeholder="Search any column..." onkeyup="filterTable()">
-        <a href="/export/{{ table_name }}" class="btn-action btn-export">Export CSV</a>
-        <a href="/new/{{ table_name }}" class="btn-action btn-add">+ Add New</a>
+<div class="page-header">
+    <div>
+        <p style="color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 0.8rem; margin-bottom: 5px;">Database Table</p>
+        <h1>{{ table_title }}</h1>
+    </div>
+    <input type="text" class="search-box" id="searchInput" placeholder="Search records..." onkeyup="filterTable()">
+</div>
+
+<div class="table-container">
+    <div class="table-scroll">
+        <table id="dataTable">
+            <thead>
+                <tr>
+                    <th>Action</th>
+                    {% for col in columns %}
+                    <th data-index="{{ loop.index }}" onclick="sortTable(parseInt(this.dataset.index))">{{ col.label }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td><a href="/edit/{{ table_name }}/{{ row[pk_column] }}" class="action-link">Edit</a></td>
+                    {% for col in columns %}
+                        <td>
+                            {% set val = row[col.raw] %}
+                            {# Smart Pill Logic #}
+                            {% if val == 'ACT' %}
+                                <span class="pill pill-act">Active</span>
+                            {% elif val == 'INA' %}
+                                <span class="pill pill-ina">Inactive</span>
+                            {% elif val == 'None' or val == None %}
+                                <span class="pill pill-def">Empty</span>
+                            {% else %}
+                                {{ val }}
+                            {% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
 </div>
 
-<div class="table-wrapper">
-    <table id="dataTable">
-        <thead>
-            <tr>
-                <!-- Edit Action moved to the First Column -->
-                <th class="sticky-col">Action</th>
-                {% for col in columns %}
-                <!-- FIXED: Used data-index attribute to pacify the VS Code JS Linter -->
-                <th data-index="{{ loop.index }}" onclick="sortTable(parseInt(this.dataset.index))">{{ col.label }} ↕</th>
-                {% endfor %}
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in rows %}
-            <tr>
-                <!-- Edit button locked securely to the left wall -->
-                <td class="sticky-col">
-                    <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" class="btn-edit">Edit</a>
-                </td>
-                {% for col in columns %}
-                <td>{{ row[col.raw] }}</td>
-                {% endfor %}
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<!-- FLOATING ACTION BUTTONS -->
+<div class="fab-container">
+    <a href="/export/{{ table_name }}" class="fab fab-secondary">
+        <i data-lucide="download"></i> Export
+    </a>
+    <a href="/new/{{ table_name }}" class="fab fab-primary">
+        <i data-lucide="plus"></i> Add Record
+    </a>
 </div>
 
 <script>
-    // Real-time Search Filter
     function filterTable() {
         let filter = document.getElementById("searchInput").value.toLowerCase();
         let rows = document.querySelectorAll("#dataTable tbody tr");
@@ -112,13 +158,12 @@
         });
     }
 
-    // Dynamic Column Sorting Logic
     let sortDir = {};
     function sortTable(n) {
         let table = document.getElementById("dataTable");
         let tbody = table.tBodies[0];
         let rows = Array.from(tbody.querySelectorAll("tr"));
-        sortDir[n] = !sortDir[n]; // Toggle direction
+        sortDir[n] = !sortDir[n];
         let dir = sortDir[n] ? 1 : -1;
 
         rows.sort((a, b) => {
@@ -129,7 +174,6 @@
             if (isNum) return (parseFloat(valA) - parseFloat(valB)) * dir;
             return valA.localeCompare(valB) * dir;
         });
-        
         rows.forEach(row => tbody.appendChild(row));
     }
 </script>
