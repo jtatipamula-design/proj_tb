@@ -2,61 +2,87 @@
 
 {% block content %}
 <style>
-    .welcome-section {
-        background: white; padding: 30px; border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); margin-bottom: 30px;
-    }
-    .welcome-section h1 { margin: 0; color: #1e293b; font-size: 1.8rem; }
-    .welcome-section p { color: #64748b; margin-top: 10px; }
+    .welcome-section { margin-bottom: 40px; animation: slideDown 0.5s ease-out; }
+    .welcome-section h1 { font-size: 2.5rem; font-weight: 800; letter-spacing: -1px; margin-bottom: 8px; }
+    .welcome-section p { color: var(--text-muted); font-size: 1.1rem; }
 
-    .stats-grid {
-        display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 20px;
+    /* --- BENTO BOX GRID --- */
+    .bento-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 24px;
     }
-    .stat-card {
-        background: white; padding: 25px; border-radius: 12px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 5px solid #3b82f6;
-        transition: transform 0.2s;
+
+    .bento-card {
+        background: var(--bg-card);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid var(--border-color);
+        border-radius: 24px;
+        padding: 30px;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 180px;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s;
     }
-    .stat-card:hover { transform: translateY(-5px); }
-    .stat-card h3 { margin: 0; color: #64748b; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; }
-    .stat-card .number { font-size: 2.5rem; font-weight: bold; color: #1e293b; margin: 10px 0; }
+
+    .bento-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px -10px rgba(0,0,0,0.3);
+    }
+
+    .card-title { font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; z-index: 2; }
+    .card-value { font-size: 3.5rem; font-weight: 800; color: white; line-height: 1; margin-top: 10px; z-index: 2; }
     
-    .quick-actions { margin-top: 40px; }
-    .btn-action {
-        display: inline-block; padding: 12px 24px; background: #3b82f6; color: white;
-        text-decoration: none; border-radius: 8px; font-weight: 500; margin-right: 15px;
+    /* Decorative SVG Sparklines in Background */
+    .sparkline {
+        position: absolute; bottom: 0; right: 0; left: 0;
+        width: 100%; height: 60%; opacity: 0.15; pointer-events: none;
     }
-    .btn-action:hover { background: #2563eb; }
+
+    /* Gradient Accents */
+    .card-emp { border-bottom: 4px solid #3B82F6; }
+    .card-comp { border-bottom: 4px solid #10B981; }
+    .card-dept { border-bottom: 4px solid #F59E0B; }
+    .card-app { border-bottom: 4px solid #8B5CF6; }
+
+    @keyframes slideDown {
+        from { opacity: 0; transform: translateY(-20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
 </style>
 
 <div class="welcome-section">
-    <h1>Hello, {{ username.title() }} 👋</h1>
-    <p>Welcome to your ERP Control Center. Here is what is happening today.</p>
+    <h1>Hello, {{ username.title() if username else 'Admin' }} 👋</h1>
+    <p>Welcome to your control center. Press <kbd style="background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">Cmd + K</kbd> to jump anywhere.</p>
 </div>
 
-<div class="stats-grid">
-    <div class="stat-card" style="border-color: #3b82f6;">
-        <h3>Total Employees</h3>
-        <div class="number">{{ stats.emp_count }}</div>
+<div class="bento-grid">
+    <div class="bento-card card-emp">
+        <div class="card-title">Total Employees</div>
+        <div class="card-value">{{ stats.emp_count }}</div>
+        <svg class="sparkline" viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M0,50 L0,30 C20,40 40,10 60,20 C80,30 90,10 100,5 L100,50 Z" fill="#3B82F6"/></svg>
     </div>
-    <div class="stat-card" style="border-color: #10b981;">
-        <h3>Active Companies</h3>
-        <div class="number">{{ stats.comp_count }}</div>
-    </div>
-    <div class="stat-card" style="border-color: #f59e0b;">
-        <h3>Departments</h3>
-        <div class="number">{{ stats.dept_count }}</div>
-    </div>
-    <div class="stat-card" style="border-color: #8b5cf6;">
-        <h3>System Apps</h3>
-        <div class="number">{{ stats.app_count }}</div>
-    </div>
-</div>
 
-<div class="quick-actions">
-    <h2>Quick Actions</h2>
-    <a href="/new/phc_emp_t" class="btn-action">+ Add New Employee</a>
-    <a href="/new/phc_companies_t" class="btn-action">+ Register Company</a>
+    <div class="bento-card card-comp">
+        <div class="card-title">Active Companies</div>
+        <div class="card-value">{{ stats.comp_count }}</div>
+        <svg class="sparkline" viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M0,50 L0,40 C30,45 50,15 70,25 C90,35 95,5 100,0 L100,50 Z" fill="#10B981"/></svg>
+    </div>
+
+    <div class="bento-card card-dept">
+        <div class="card-title">Departments</div>
+        <div class="card-value">{{ stats.dept_count }}</div>
+        <svg class="sparkline" viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M0,50 L0,20 C15,20 30,35 50,25 C70,15 85,30 100,10 L100,50 Z" fill="#F59E0B"/></svg>
+    </div>
+
+    <div class="bento-card card-app">
+        <div class="card-title">System Apps</div>
+        <div class="card-value">{{ stats.app_count }}</div>
+        <svg class="sparkline" viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M0,50 L0,15 C25,30 45,5 65,20 C85,35 95,15 100,10 L100,50 Z" fill="#8B5CF6"/></svg>
+    </div>
 </div>
 {% endblock %}
