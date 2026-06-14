@@ -7,6 +7,7 @@ import csv
 import io
 import time
 import jwt
+import uuid
 from collections import defaultdict
 from datetime import datetime, date, timedelta, timezone
 from functools import wraps
@@ -39,7 +40,7 @@ async def rate_limiter(request):
     ip_tracker[ip].append(now)
 
 # ==========================================
-# 🛡️ SECURITY MODULE 2: SECURE HEADERS
+# 🛡️ SECURITY MODULE 2: SECURE HEADERS & CSP
 # ==========================================
 @app.on_response
 async def add_security_headers(request, resp):
@@ -48,9 +49,17 @@ async def add_security_headers(request, resp):
         resp.headers['X-Content-Type-Options'] = 'nosniff'
         resp.headers['X-XSS-Protection'] = '1; mode=block'
         resp.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        # STRICT CONTENT SECURITY POLICY (CSP)
+        resp.headers['Content-Security-Policy'] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://unpkg.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data:;"
+        )
 
 # ==========================================
-# 🛡️ SECURITY MODULE 3: JWT & RBAC AUTH
+# 🛡️ SECURITY MODULE 3: JWT & CONCURRENT SESSIONS
 # ==========================================
 def login_required(wrapped):
     @wraps(wrapped)
@@ -59,9 +68,23 @@ def login_required(wrapped):
         if not token: return response.redirect("/login")
         try:
             payload = jwt.decode(token, app.config.SECRET, algorithms=["HS256"])
-            request.ctx.user_id = payload.get("user_id") 
-            request.ctx.user_type = payload.get("user_type") 
-            request.ctx.username = payload.get("username", "User")
+            user_id = payload.get("user_id") 
+            user_type = payload.get("user_type") 
+            username = payload.get("username", "User")
+            session_id = payload.get("session_id")
+
+            # STRICT CONCURRENT SESSION LIMIT CHECK
+            async with app.ctx.pool.acquire() as conn:
+                db_session = await conn.fetchval("SELECT pus_session_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
+                if db_session != session_id:
+                    # User logged in from another device/browser. Invalidate this session.
+                    resp = response.redirect("/login")
+                    resp.delete_cookie("auth_token")
+                    return resp
+
+            request.ctx.user_id = user_id
+            request.ctx.user_type = user_type
+            request.ctx.username = username
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
             return response.redirect("/login")
         return await wrapped(request, *args, **kwargs)
@@ -81,27 +104,24 @@ async def setup_db(app, loop):
             )
         
         async with app.ctx.pool.acquire() as conn:
-            # Ensure basic company exists
             if not await conn.fetchval("SELECT EXISTS(SELECT 1 FROM phc_companies_t WHERE pcp_company_id = 1001)"):
                 await conn.execute("INSERT INTO phc_companies_t (pcp_company_id, pcp_company_code, pcp_company_name, pcp_created, pcp_modified, pcp_created_by, pcp_modified_by, pcp_status) OVERRIDING SYSTEM VALUE VALUES (1001, 'SYS', 'System Admin Company', NOW(), NOW(), 'System', 'System', 'ACT')")
             
-            # Upgrade the users table to have user type if it's missing
             type_col_exists = await conn.fetchval("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='phc_users_t' AND column_name='pus_user_type')")
             if not type_col_exists:
                 await conn.execute("ALTER TABLE phc_users_t ADD COLUMN pus_user_type VARCHAR(3) DEFAULT 'STD'")
 
-            # Ensure the Admin user exists and has the 'ADM' type
+            # SESSION ID MIGRATION
+            session_col_exists = await conn.fetchval("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='phc_users_t' AND column_name='pus_session_id')")
+            if not session_col_exists:
+                await conn.execute("ALTER TABLE phc_users_t ADD COLUMN pus_session_id VARCHAR(255)")
+
             if not await conn.fetchval("SELECT EXISTS(SELECT 1 FROM phc_users_t WHERE pus_user_name = 'admin')"):
                 hashed = bcrypt.hashpw(b"admin123", bcrypt.gensalt()).decode('utf-8')
                 await conn.execute("INSERT INTO phc_users_t (pus_company_id, pus_user_name, pus_full_name, pus_pwd, pus_status, pus_created, pus_modified, pus_created_by, pus_modified_by, pus_start_date, pus_user_type) VALUES (1001, 'admin', 'System Admin', $1, 'ACT', NOW(), NOW(), 'System', 'System', NOW(), 'ADM')", hashed)
             else:
                 await conn.execute("UPDATE phc_users_t SET pus_user_type = 'ADM' WHERE pus_user_name = 'admin'")
 
-            # Clean up legacy columns from the old testing phase
-            try: await conn.execute("ALTER TABLE phc_users_t DROP COLUMN IF EXISTS pus_role")
-            except: pass
-            try: await conn.execute("ALTER TABLE phc_roles_t DROP COLUMN IF EXISTS pr_allowed_tables")
-            except: pass
     except Exception as e:
         print(f"❌ DATABASE CONNECTION FAILED: {e}")
 
@@ -130,18 +150,17 @@ async def get_allowed_tables(conn, user_id, user_type):
     if user_type == 'ADM': 
         return all_tables
 
-    # Added TRIM() to safely handle accidental spaces in the database records
     query = """
-        SELECT TRIM(LOWER(s.psn_screen_code)) as table_name
+        SELECT DISTINCT TRIM(LOWER(s.psn_screen_code)) as table_name
         FROM phc_user_roles_assignment_t ura
         JOIN phc_roles_t r ON ura.pua_role_id = r.prl_role_id
         JOIN phc_role_screen_assignment_t rsa ON r.prl_role_id = rsa.prs_role_id
         JOIN phc_screens_t s ON rsa.prs_screen_id = s.psn_screen_id
         WHERE ura.pua_user_id = $1
-          AND TRIM(ura.pua_status) = 'ACT'
-          AND TRIM(r.prl_status) = 'ACT'
-          AND TRIM(rsa.prs_status) = 'ACT'
-          AND TRIM(s.psn_status) = 'ACT'
+          AND TRIM(UPPER(ura.pua_status)) = 'ACT'
+          AND TRIM(UPPER(r.prl_status)) = 'ACT'
+          AND TRIM(UPPER(rsa.prs_status)) = 'ACT'
+          AND TRIM(UPPER(s.psn_status)) = 'ACT'
     """
     assigned_rows = await conn.fetch(query, int(user_id))
     allowed_tables = [r['table_name'] for r in assigned_rows]
@@ -149,16 +168,43 @@ async def get_allowed_tables(conn, user_id, user_type):
 
 
 # ==========================================
+# 🛡️ SECURITY MODULE 5: DATA MASKING ENGINE
+# ==========================================
+def mask_sensitive_data(col_name, val, user_type):
+    """Redacts sensitive PII and security fields for non-admin users."""
+    if val is None or user_type == 'ADM': 
+        return val
+        
+    k_lower = col_name.lower()
+    v_str = str(val)
+    
+    # 1. Mask Passwords (Full Mask)
+    if 'pwd' in k_lower or 'password' in k_lower:
+        return '********'
+        
+    # 2. Mask Emails (Partial Mask: j***@company.com)
+    if 'email' in k_lower and '@' in v_str:
+        parts = v_str.split('@')
+        return f"{parts[0][0]}***@{parts[1]}" if len(parts[0]) > 1 else f"***@{parts[1]}"
+        
+    # 3. Mask Phones (Partial Mask: ***-***-1234)
+    if 'phone' in k_lower and len(v_str) >= 4:
+        return f"***-***-{v_str[-4:]}"
+        
+    # 4. Mask Bank Account/Routing Numbers
+    if 'account_number' in k_lower and len(v_str) >= 4:
+        return f"****-****-{v_str[-4:]}"
+        
+    return val
+
+# ==========================================
 # 🧠 SMART DYNAMIC DATA RESOLVER ENGINE
 # ==========================================
 async def find_target_table(conn, column_name):
-    # Only try to resolve columns that end in ID (and ignore system modifiers)
     if not column_name.endswith('_id'): return None
-    
     rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'phc_%'")
     all_tables = [r['table_name'] for r in rows]
     
-    # 1. Base keyword map (handles weird pluralizations and abbreviations)
     keyword_map = {
         'company': 'phc_companies_t', 'dept': 'phc_dept_t', 'department': 'phc_dept_t', 
         'user': 'phc_users_t', 'emp': 'phc_emp_t', 'employee': 'phc_emp_t',
@@ -168,19 +214,14 @@ async def find_target_table(conn, column_name):
         'group': 'phc_user_groups_t', 'center': 'phc_cost_centers_t'
     }
     
-    # Check explicit map first
     for key, table in keyword_map.items():
-        if key in column_name and table in all_tables:
-            return table
+        if key in column_name and table in all_tables: return table
             
-    # 2. Dynamic extraction (Fallback for new tables you build)
     parts = column_name.split('_')
     if len(parts) >= 3:
         base_name = parts[-2]
-        potential_tables = [f"phc_{base_name}_t", f"phc_{base_name}s_t", f"phc_{base_name}es_t"]
-        for pt in potential_tables:
+        for pt in [f"phc_{base_name}_t", f"phc_{base_name}s_t", f"phc_{base_name}es_t"]:
             if pt in all_tables: return pt
-            
     return None
 
 async def get_dropdown_options(conn, column_name):
@@ -193,7 +234,6 @@ async def get_dropdown_options(conn, column_name):
     
     cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", target_table)
     
-    # Intelligently find a Name/String field to display in the dropdown
     name_col = pk_col 
     for r in cols:
         if r['column_name'] != pk_col and not r['column_name'].endswith('_id') and not r['column_name'].endswith('_by'):
@@ -213,7 +253,7 @@ async def handle_login(request):
     password = data.get("password", "")
     
     async with app.ctx.pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT pus_user_id, pus_pwd, pus_user_type, pus_user_name FROM phc_users_t WHERE pus_user_name = $1", username)
+        user = await conn.fetchrow("SELECT * FROM phc_users_t WHERE pus_user_name = $1", username)
         
         if user:
             stored_pwd = user['pus_pwd']
@@ -229,10 +269,15 @@ async def handle_login(request):
                     is_valid = True
                     
             if is_valid:
+                # Generate unique Session ID
+                session_id = str(uuid.uuid4())
+                await conn.execute("UPDATE phc_users_t SET pus_session_id = $1 WHERE pus_user_id = $2", session_id, user['pus_user_id'])
+
                 payload = {
                     "user_id": user['pus_user_id'], 
                     "user_type": user.get('pus_user_type') or 'STD', 
                     "username": user['pus_user_name'],
+                    "session_id": session_id, # Embed in JWT
                     "exp": datetime.now(timezone.utc) + timedelta(hours=12)
                 }
                 token = jwt.encode(payload, app.config.SECRET, algorithm="HS256")
@@ -255,10 +300,6 @@ async def logout(request):
 async def dashboard(request):
     async with app.ctx.pool.acquire() as conn:
         allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
-        
-        # --- DASHBOARD DATA SECURITY ---
-        # Only fetch the stats if the user has RBAC permissions to view those tables.
-        # Otherwise, display a lock icon.
         stats = {
             "emp_count": await conn.fetchval("SELECT COUNT(*) FROM phc_emp_t") if 'phc_emp_t' in allowed else "🔒",
             "comp_count": await conn.fetchval("SELECT COUNT(*) FROM phc_companies_t WHERE pcp_status = 'ACT'") if 'phc_companies_t' in allowed else "🔒",
@@ -283,21 +324,19 @@ async def show_table(request, table_name):
         rows = await conn.fetch(f"SELECT * FROM {table_name} ORDER BY 1 DESC LIMIT 100")
         rows_dict = [dict(r) for r in rows]
 
-        # --- 🔥 DYNAMIC NAME RESOLUTION ENGINE (Table Display) 🔥 ---
+        # Process Row Presentation
         for col in columns:
             c_name = col['raw']
-            if c_name != pk_column and c_name.endswith('_id'):
-                options = await get_dropdown_options(conn, c_name)
-                if options:
-                    # Create a quick ID -> Name mapping dictionary
-                    lookup = {str(opt['id']): opt['name'] for opt in options}
-                    for row in rows_dict:
-                        val = row.get(c_name)
-                        if val is not None:
-                            str_val = str(val)
-                            if str_val in lookup:
-                                # Magically replace raw numbers with readable text!
-                                row[c_name] = f"{lookup[str_val]} (ID: {val})"
+            options = await get_dropdown_options(conn, c_name)
+            lookup = {str(opt['id']): opt['name'] for opt in options} if options else None
+            
+            for row in rows_dict:
+                val = row.get(c_name)
+                # 1. Resolve Foreign Keys
+                if val is not None and lookup and str(val) in lookup:
+                    row[c_name] = f"{lookup[str(val)]} (ID: {val})"
+                # 2. Mask Sensitive Fields
+                row[c_name] = mask_sensitive_data(c_name, row.get(c_name), request.ctx.user_type)
         
         return await render("table_view.html", context={"table_name": table_name, "table_title": make_human_readable(table_name), "columns": columns, "rows": rows_dict, "all_tables": allowed, "pk_column": pk_column})
 
@@ -311,33 +350,31 @@ async def export_csv(request, table_name):
         
         query = f"SELECT * FROM {table_name}"
         params = []
-        if pk_id:
-            pk_row = await conn.fetchrow("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'", table_name)
-            if pk_row:
-                query += f" WHERE {pk_row['column_name']} = $1"
-                params.append(int(pk_id))
+        
+        pk_row = await conn.fetchrow("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'", table_name)
+        pk_column = pk_row['column_name'] if pk_row else None
+
+        if pk_id and pk_column:
+            query += f" WHERE {pk_column} = $1"
+            params.append(int(pk_id))
 
         rows = await conn.fetch(query, *params)
         if not rows: return response.text("No data found")
         rows_dict = [dict(r) for r in rows]
 
-        # --- 🔥 DYNAMIC NAME RESOLUTION ENGINE (Export Display) 🔥 ---
         col_rows = await conn.fetch("SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
-        pk_row = await conn.fetchrow("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'", table_name)
-        pk_column = pk_row['column_name'] if pk_row else None
 
+        # Apply Smart Lookups and Data Masking to Exports
         for r in col_rows:
             c_name = r['column_name']
-            if c_name != pk_column and c_name.endswith('_id'):
-                options = await get_dropdown_options(conn, c_name)
-                if options:
-                    lookup = {str(opt['id']): opt['name'] for opt in options}
-                    for row in rows_dict:
-                        val = row.get(c_name)
-                        if val is not None:
-                            str_val = str(val)
-                            if str_val in lookup:
-                                row[c_name] = f"{lookup[str_val]} (ID: {val})"
+            options = await get_dropdown_options(conn, c_name)
+            lookup = {str(opt['id']): opt['name'] for opt in options} if options else None
+
+            for row in rows_dict:
+                val = row.get(c_name)
+                if val is not None and lookup and str(val) in lookup:
+                    row[c_name] = f"{lookup[str(val)]} (ID: {val})"
+                row[c_name] = mask_sensitive_data(c_name, row.get(c_name), request.ctx.user_type)
 
         output = io.StringIO(); writer = csv.writer(output); writer.writerow(rows_dict[0].keys())
         for row in rows_dict: writer.writerow(row.values())
@@ -362,10 +399,11 @@ async def show_edit_form(request, table_name, pk_val):
         for r in col_rows:
             c_name = r['column_name']
             if c_name == pk_column or c_name.endswith(('_created', '_modified', '_created_by', '_modified_by')): continue
-            val = record[c_name]
-            if isinstance(val, (date, datetime)): val = val.strftime('%Y-%m-%d')
             
-            # --- Dynamically generates dropdowns for ALL foreign keys ---
+            # Mask Data in Edit Form if not Admin
+            val = mask_sensitive_data(c_name, record[c_name], request.ctx.user_type)
+
+            if isinstance(val, (date, datetime)): val = val.strftime('%Y-%m-%d')
             options = await get_dropdown_options(conn, c_name)
             is_req = (r['is_nullable'] == 'NO')
             columns.append({"column_name": c_name, "label": make_human_readable(c_name), "required": is_req, "value": val, "data_type": r['data_type'], "options": options})
@@ -374,19 +412,13 @@ async def show_edit_form(request, table_name, pk_val):
             screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
             assignments = await conn.fetch("SELECT prs_screen_id FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", int(pk_val))
             assigned_val = ",".join([str(a['prs_screen_id']) for a in assignments])
-            columns.append({
-                "column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False,
-                "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in screens]
-            })
+            columns.append({"column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False, "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in screens]})
 
         if table_name == 'phc_users_t':
             roles = await conn.fetch("SELECT prl_role_id as id, prl_role_name as name FROM phc_roles_t WHERE prl_status = 'ACT'")
             assignments = await conn.fetch("SELECT pua_role_id FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", int(pk_val))
             assigned_val = ",".join([str(a['pua_role_id']) for a in assignments])
-            columns.append({
-                "column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False,
-                "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in roles]
-            })
+            columns.append({"column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False, "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in roles]})
 
         return await render("form_view.html", context={"table_name": table_name, "table_title": f"Edit {make_human_readable(table_name)}", "columns": columns, "all_tables": allowed, "pk_val": pk_val, "mode": "edit"})
 
@@ -400,31 +432,22 @@ async def show_add_form(request, table_name):
         col_rows = await conn.fetch("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
         pk_row = await conn.fetchrow("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'", table_name)
         pk_column = pk_row['column_name'] if pk_row else None
-
         columns = []
 
         for r in col_rows:
             c_name = r['column_name']
             if c_name == pk_column or c_name.endswith(('_created', '_modified', '_created_by', '_modified_by')): continue
-            
-            # --- Dynamically generates dropdowns for ALL foreign keys ---
             options = await get_dropdown_options(conn, c_name)
             is_req = (r['is_nullable'] == 'NO')
             columns.append({"column_name": c_name, "label": make_human_readable(c_name), "required": is_req, "value": "", "data_type": r['data_type'], "options": options})
             
         if table_name == 'phc_roles_t':
             screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
-            columns.append({
-                "column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False,
-                "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in screens]
-            })
+            columns.append({"column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False, "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in screens]})
 
         if table_name == 'phc_users_t':
             roles = await conn.fetch("SELECT prl_role_id as id, prl_role_name as name FROM phc_roles_t WHERE prl_status = 'ACT'")
-            columns.append({
-                "column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False,
-                "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in roles]
-            })
+            columns.append({"column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False, "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in roles]})
 
         return await render("form_view.html", context={"table_name": table_name, "table_title": f"New {make_human_readable(table_name)}", "columns": columns, "all_tables": allowed, "mode": "create"})
 
@@ -456,6 +479,7 @@ async def save_data(request, table_name, pk_val=None):
             if k == pk_column: continue 
             if k.endswith(('_created', '_modified', '_created_by', '_modified_by')): continue
 
+            # Auto-Hash Passwords securely
             if k == 'pus_pwd':
                 salt = bcrypt.gensalt()
                 v = bcrypt.hashpw(v.encode('utf-8'), salt).decode('utf-8')
@@ -464,15 +488,13 @@ async def save_data(request, table_name, pk_val=None):
             target_type = col_info.get('data_type', '').lower()
             max_len = col_info.get('character_maximum_length')
             
+            # Robust Date Conversion
             if 'date' in target_type or 'timestamp' in target_type or (isinstance(v, str) and len(v) == 10 and v[4] == '-' and v[7] == '-'):
                 if isinstance(v, str) and v:
-                    try:
-                        v = datetime.strptime(v, '%Y-%m-%d')
+                    try: v = datetime.strptime(v, '%Y-%m-%d')
                     except ValueError:
-                        try:
-                            v = datetime.fromisoformat(v)
-                        except ValueError:
-                            pass 
+                        try: v = datetime.fromisoformat(v)
+                        except ValueError: pass 
 
             if isinstance(v, str) and max_len is not None:
                 if len(v) > max_len:
@@ -509,44 +531,24 @@ async def save_data(request, table_name, pk_val=None):
         if table_name == 'phc_roles_t' and virtual_screens is not None:
             await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
             if virtual_screens:
-                prs_pk_col = await conn.fetchval("""
-                    SELECT kcu.column_name FROM information_schema.key_column_usage kcu 
-                    JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name 
-                    WHERE kcu.table_name = 'phc_role_screen_assignment_t' AND tc.constraint_type = 'PRIMARY KEY'
-                """)
+                prs_pk_col = await conn.fetchval("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = 'phc_role_screen_assignment_t' AND tc.constraint_type = 'PRIMARY KEY'")
                 max_prs = await conn.fetchval(f"SELECT MAX({prs_pk_col}) FROM phc_role_screen_assignment_t") if prs_pk_col else 0
                 next_prs = (int(max_prs) + 1) if max_prs else 1
-                
                 for s_id in virtual_screens.split(','):
-                    if s_id.strip():
-                        if prs_pk_col:
-                            await conn.execute(f"""
-                                INSERT INTO phc_role_screen_assignment_t 
-                                ({prs_pk_col}, prs_company_id, prs_role_id, prs_screen_id, prs_start_date, prs_status, prs_created_by, prs_modified_by, prs_created, prs_modified) 
-                                VALUES ($1, 1001, $2, $3, CURRENT_DATE, 'ACT', $4, $4, NOW(), NOW())
-                            """, next_prs, target_id, int(s_id), str(current_user_id))
-                            next_prs += 1
+                    if s_id.strip() and prs_pk_col:
+                        await conn.execute(f"INSERT INTO phc_role_screen_assignment_t ({prs_pk_col}, prs_company_id, prs_role_id, prs_screen_id, prs_start_date, prs_status, prs_created_by, prs_modified_by, prs_created, prs_modified) VALUES ($1, 1001, $2, $3, CURRENT_DATE, 'ACT', $4, $4, NOW(), NOW())", next_prs, target_id, int(s_id), str(current_user_id))
+                        next_prs += 1
 
         if table_name == 'phc_users_t' and virtual_roles is not None:
             await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
             if virtual_roles:
-                pua_pk_col = await conn.fetchval("""
-                    SELECT kcu.column_name FROM information_schema.key_column_usage kcu 
-                    JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name 
-                    WHERE kcu.table_name = 'phc_user_roles_assignment_t' AND tc.constraint_type = 'PRIMARY KEY'
-                """)
+                pua_pk_col = await conn.fetchval("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = 'phc_user_roles_assignment_t' AND tc.constraint_type = 'PRIMARY KEY'")
                 max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pk_col else 0
                 next_pua = (int(max_pua) + 1) if max_pua else 1
-                
                 for r_id in virtual_roles.split(','):
-                    if r_id.strip():
-                        if pua_pk_col:
-                            await conn.execute(f"""
-                                INSERT INTO phc_user_roles_assignment_t 
-                                ({pua_pk_col}, pua_company_id, pua_user_id, pua_role_id, pua_start_date, pua_status, pua_created_by, pua_modified_by, pua_created, pua_modified) 
-                                VALUES ($1, 1001, $2, $3, CURRENT_DATE, 'ACT', $4, $4, NOW(), NOW())
-                            """, next_pua, target_id, int(r_id), str(current_user_id))
-                            next_pua += 1
+                    if r_id.strip() and pua_pk_col:
+                        await conn.execute(f"INSERT INTO phc_user_roles_assignment_t ({pua_pk_col}, pua_company_id, pua_user_id, pua_role_id, pua_start_date, pua_status, pua_created_by, pua_modified_by, pua_created, pua_modified) VALUES ($1, 1001, $2, $3, CURRENT_DATE, 'ACT', $4, $4, NOW(), NOW())", next_pua, target_id, int(r_id), str(current_user_id))
+                        next_pua += 1
 
         return response.json({"status": "success"})
 
