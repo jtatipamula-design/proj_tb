@@ -24,7 +24,7 @@ Extend(app)
 CLOUD_DB_URL = os.environ.get("DB_URL")
 
 # ==========================================
-# 🛡️ SECURITY MODULE 1: RATE LIMITER
+#  SECURITY MODULE 1: RATE LIMITER
 # ==========================================
 RATE_LIMIT_WINDOW = 60  
 MAX_REQUESTS = 120      
@@ -40,7 +40,7 @@ async def rate_limiter(request):
     ip_tracker[ip].append(now)
 
 # ==========================================
-# 🛡️ SECURITY MODULE 2: SECURE HEADERS & CSP
+# SECURITY MODULE 2: SECURE HEADERS & CSP
 # ==========================================
 @app.on_response
 async def add_security_headers(request, resp):
@@ -59,7 +59,7 @@ async def add_security_headers(request, resp):
         )
 
 # ==========================================
-# 🛡️ SECURITY MODULE 3: JWT & CONCURRENT SESSIONS
+#  SECURITY MODULE 3: JWT & CONCURRENT SESSIONS
 # ==========================================
 def login_required(wrapped):
     @wraps(wrapped)
@@ -141,7 +141,7 @@ def make_human_readable(text):
     return text.replace("_", " ").title()
 
 # ==========================================
-# 🛡️ SECURITY MODULE 4: RELATIONAL RBAC ENGINE
+#  SECURITY MODULE 4: RELATIONAL RBAC ENGINE
 # ==========================================
 async def get_allowed_tables(conn, user_id, user_type):
     rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%_t'")
@@ -168,7 +168,7 @@ async def get_allowed_tables(conn, user_id, user_type):
 
 
 # ==========================================
-# 🛡️ SECURITY MODULE 5: DATA MASKING ENGINE
+#  SECURITY MODULE 5: DATA MASKING ENGINE
 # ==========================================
 def mask_sensitive_data(col_name, val, user_type):
     """Redacts sensitive PII and security fields for non-admin users."""
@@ -198,7 +198,7 @@ def mask_sensitive_data(col_name, val, user_type):
     return val
 
 # ==========================================
-# 🧠 SMART DYNAMIC DATA RESOLVER ENGINE
+#  SMART DYNAMIC DATA RESOLVER ENGINE
 # ==========================================
 async def find_target_table(conn, column_name):
     if not column_name.endswith('_id'): return None
