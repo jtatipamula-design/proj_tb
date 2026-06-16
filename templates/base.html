@@ -174,11 +174,15 @@
                 <i data-lucide="layout-dashboard"></i> Dashboard
             </a>
             <div style="margin: 15px 0 5px 16px; font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Data Tables</div>
+            
             {% for tbl in all_tables %}
-            <a href="/table/{{ tbl }}" class="nav-item {% if table_name == tbl %}active{% endif %}" data-search="{{ tbl.replace('phc_', '').replace('_t', '').replace('_', ' ') }}">
-                <i data-lucide="database"></i> {{ tbl.replace('phc_', '').replace('_t', '').replace('_', ' ').title() }}
+            {# SMART PREFIX REMOVAL: Automatically splits by the first underscore and removes _t #}
+            {% set clean_name = tbl.split('_', 1)[-1].replace('_t', '').replace('_', ' ').title() %}
+            <a href="/table/{{ tbl }}" class="nav-item {% if table_name == tbl %}active{% endif %}" data-search="{{ clean_name.lower() }}">
+                <i data-lucide="database"></i> {{ clean_name }}
             </a>
             {% endfor %}
+            
         </div>
         <div class="user-profile">
             <div class="avatar">{{ username[0]|upper if username else 'U' }}</div>
