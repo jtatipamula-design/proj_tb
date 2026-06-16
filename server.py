@@ -144,7 +144,7 @@ def make_human_readable(text):
 # 🛡️ SECURITY MODULE 4: RELATIONAL RBAC ENGINE
 # ==========================================
 async def get_allowed_tables(conn, user_id, user_type):
-    rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'phc_%'")
+    rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%_t'")
     all_tables = [r['table_name'] for r in rows]
 
     if user_type == 'ADM': 
@@ -202,7 +202,7 @@ def mask_sensitive_data(col_name, val, user_type):
 # ==========================================
 async def find_target_table(conn, column_name):
     if not column_name.endswith('_id'): return None
-    rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'phc_%'")
+    rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%_t'")
     all_tables = [r['table_name'] for r in rows]
     
     keyword_map = {
