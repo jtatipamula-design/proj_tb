@@ -161,6 +161,24 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+        /* --- SIDEBAR SEARCH --- */
+        .sidebar-search-wrap {
+            position: relative;
+            margin: 0 4px 15px 4px;
+        }
+        .sidebar-search-wrap i {
+            position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+            color: var(--text-muted); width: 16px; height: 16px;
+        }
+        .sidebar-search-wrap input {
+            width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 10px 12px 10px 36px; color: white;
+            font-size: 0.85rem; font-family: var(--font-main); transition: all 0.2s;
+        }
+        .sidebar-search-wrap input:focus {
+            outline: none; border-color: var(--accent-primary); background: rgba(0,0,0,0.4);
+        }
     </style>
 </head>
 <body>
@@ -173,6 +191,12 @@
             <a href="/" class="nav-item {% if not table_name %}active{% endif %}">
                 <i data-lucide="layout-dashboard"></i> Dashboard
             </a>
+
+            <div class="sidebar-search-wrap" style="margin-top: 15px;">
+                <i data-lucide="search"></i>
+                <input type="text" id="sidebarSearch" placeholder="Find table..." onkeyup="filterSidebar()">
+            </div>
+
             <div style="margin: 15px 0 5px 16px; font-size: 0.75rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Data Tables</div>
             
             {% for tbl in all_tables %}
@@ -254,6 +278,33 @@
             });
             lucide.createIcons();
         }
+
+        // --- SIDEBAR SEARCH FILTER ---
+        function filterSidebar() {
+            let filter = document.getElementById("sidebarSearch").value.toLowerCase();
+            navItems.forEach(item => {
+                let text = item.getAttribute('data-search');
+                if (text.includes(filter)) {
+                    item.style.display = "flex";
+                } else {
+                    item.style.display = "none";
+                }
+            });
+        }
+
+        // --- SIDEBAR SCROLL MEMORY ---
+        const sidebarMenu = document.getElementById('sidebarMenu');
+        
+        document.addEventListener("DOMContentLoaded", () => {
+            // Restore scroll position when page loads
+            const scrollPos = sessionStorage.getItem('sidebarScrollPos');
+            if (scrollPos) sidebarMenu.scrollTop = parseInt(scrollPos, 10);
+        });
+
+        sidebarMenu.addEventListener('scroll', () => {
+            // Save scroll position every time they scroll
+            sessionStorage.setItem('sidebarScrollPos', sidebarMenu.scrollTop);
+        });
     </script>
 </body>
 </html>
