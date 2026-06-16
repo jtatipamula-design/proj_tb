@@ -474,6 +474,13 @@ async def save_data(request, table_name, pk_val=None):
         schema_map = {r['column_name']: r for r in schema_rows}
         clean_data = {}
         
+        # --- AUTO-POPULATE BLANK DATES ---
+        for r in schema_rows:
+            c_name = r['column_name']
+            if (data.get(c_name) in ["", None]) and ('date' in r['data_type'] or 'timestamp' in r['data_type']):
+                if 'end' not in c_name.lower():  # Protects against auto-filling termination dates
+                    data[c_name] = datetime.now().strftime('%Y-%m-%d')
+        
         for k, v in data.items():
             if v == "" or v is None: continue 
             if k == pk_column: continue 
