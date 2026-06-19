@@ -2,9 +2,7 @@
 
 {% block content %}
 <style>
-    .page-header {
-        display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 30px;
-    }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 30px; }
     .page-header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -1px; }
     
     .search-box {
@@ -14,84 +12,84 @@
     }
     .search-box:focus { outline: none; border-color: var(--accent-primary); }
 
-    /* --- THE "ANTI-ERP" TABLE --- */
     .table-container {
-        background: var(--bg-card);
-        backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-        border: 1px solid var(--border-color);
-        border-radius: 20px;
-        overflow: hidden; /* Clips the table corners perfectly */
-        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.3);
+        background: var(--bg-card); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+        border: 1px solid var(--border-color); border-radius: 20px; overflow: hidden; 
+        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.3); min-height: 400px;
     }
-    
     .table-scroll { overflow-x: auto; max-height: 65vh; overflow-y: auto; }
-    
     table { width: 100%; border-collapse: collapse; white-space: nowrap; }
-    
     th {
         background: rgba(0,0,0,0.2); color: var(--text-muted); font-size: 0.75rem;
         text-transform: uppercase; letter-spacing: 1px; font-weight: 700;
         padding: 16px 24px; text-align: left; position: sticky; top: 0; z-index: 10;
-        border-bottom: 1px solid var(--border-color); cursor: pointer;
+        border-bottom: 1px solid var(--border-color); cursor: pointer; user-select: none;
     }
-
-    /* Invisible Grids (Only faint horizontal lines) */
     td {
         padding: 18px 24px; font-size: 0.95rem; font-weight: 500;
-        border-bottom: 1px solid rgba(255,255,255,0.03);
-        transition: background 0.2s;
+        border-bottom: 1px solid rgba(255,255,255,0.03); transition: background 0.2s;
     }
-
-    /* Hover Lift Effect */
-    tr { transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s, background 0.2s; }
-    tbody tr:hover {
-        background: rgba(255,255,255,0.02);
-        transform: translateY(-2px);
-        box-shadow: 0 10px 20px -10px rgba(0,0,0,0.5);
-        position: relative; z-index: 5;
-    }
+    tr { transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s, background 0.2s; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); transform: translateY(-2px); box-shadow: 0 10px 20px -10px rgba(0,0,0,0.5); position: relative; z-index: 5; }
 
     /* Pill Badges */
-    .pill {
-        padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;
-        text-transform: uppercase; letter-spacing: 0.5px;
-    }
+    .pill { padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
     .pill-act { background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16,185,129,0.3); }
     .pill-ina { background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239,68,68,0.3); }
     .pill-def { background: rgba(255, 255, 255, 0.1); color: var(--text-muted); }
 
-    /* Action Link */
-    .action-link {
-        color: var(--accent-primary); text-decoration: none; font-weight: 700; font-size: 0.9rem;
+    /* --- FEATURE 4: THREE-DOT CONTEXT MENUS --- */
+    .action-menu-wrap { position: relative; display: inline-block; }
+    .action-btn { 
+        background: transparent; border: none; color: var(--text-muted); cursor: pointer; 
+        padding: 6px; border-radius: 8px; transition: all 0.2s; display: flex; align-items: center; justify-content: center;
     }
-    .action-link:hover { text-decoration: underline; }
+    .action-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+    .action-dropdown { 
+        position: absolute; left: 100%; top: 0; margin-left: 5px; background: #1E293B; border: 1px solid var(--border-color); 
+        border-radius: 12px; padding: 6px; width: 170px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); 
+        opacity: 0; visibility: hidden; transform: translateX(-10px); transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); z-index: 50; 
+    }
+    .action-menu-wrap.active .action-dropdown { opacity: 1; visibility: visible; transform: translateX(0); }
+    
+    .dropdown-item { 
+        display: flex; align-items: center; gap: 10px; padding: 10px 12px; color: var(--text-main); 
+        text-decoration: none; font-size: 0.85rem; font-weight: 600; border-radius: 8px; 
+        transition: background 0.2s; cursor: pointer; border: none; width: 100%; text-align: left; background: transparent; font-family: var(--font-main);
+    }
+    .dropdown-item:hover { background: rgba(255,255,255,0.05); }
+    .dropdown-item.danger { color: var(--accent-danger); }
+    .dropdown-item.danger:hover { background: rgba(239, 68, 68, 0.1); }
 
-    /* --- FLOATING ACTION BUTTON (FAB) --- */
-    .fab-container {
-        position: fixed; bottom: 40px; right: 40px; display: flex; gap: 15px; z-index: 90;
-    }
-    .fab {
-        height: 56px; padding: 0 24px; border-radius: 28px;
-        display: flex; align-items: center; justify-content: center; gap: 8px;
-        font-weight: 700; font-family: var(--font-main); font-size: 1rem;
-        color: white; text-decoration: none; border: none; cursor: pointer;
-        box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); transition: transform 0.2s, box-shadow 0.2s;
-    }
+    /* Modal Styling */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); z-index: 2000; display: none; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; }
+    .modal-overlay.active { display: flex; opacity: 1; }
+    .modal-card { background: var(--bg-card); border: 1px solid var(--border-color); padding: 40px; border-radius: 24px; max-width: 420px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); transform: scale(0.95); transition: transform 0.2s; }
+    .modal-overlay.active .modal-card { transform: scale(1); }
+    .modal-icon { width: 64px; height: 64px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); color: var(--accent-danger); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; }
+    .modal-card h3 { font-size: 1.4rem; font-weight: 800; margin-bottom: 10px; }
+    .modal-card p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 30px; line-height: 1.5; }
+    .modal-actions { display: flex; gap: 12px; }
+    .modal-actions button { flex: 1; padding: 14px; border-radius: 12px; font-weight: 700; font-family: var(--font-main); cursor: pointer; border: none; font-size: 1rem; transition: all 0.2s; }
+    .btn-cancel { background: rgba(255,255,255,0.1); color: white; }
+    .btn-cancel:hover { background: rgba(255,255,255,0.15); }
+    .btn-danger-confirm { background: var(--accent-danger); color: white; box-shadow: 0 10px 20px -5px rgba(239, 68, 68, 0.4); }
+    .btn-danger-confirm:hover { transform: translateY(-2px); box-shadow: 0 15px 25px -5px rgba(239, 68, 68, 0.5); }
+
+    /* FABs */
+    .fab-container { position: fixed; bottom: 40px; right: 40px; display: flex; gap: 15px; z-index: 90; }
+    .fab { height: 56px; padding: 0 24px; border-radius: 28px; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; font-family: var(--font-main); font-size: 1rem; color: white; text-decoration: none; border: none; cursor: pointer; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); transition: transform 0.2s, box-shadow 0.2s; }
     .fab-primary { background: var(--accent-primary); box-shadow: 0 10px 25px -5px var(--accent-glow); }
     .fab-secondary { background: #10B981; }
     .fab:hover { transform: translateY(-3px); box-shadow: 0 15px 30px -5px rgba(0,0,0,0.6); }
-
-    /* Skeleton Loader Class */
-    .skeleton-loading td { color: transparent; position: relative; }
-    .skeleton-loading td::after {
-        content: ''; position: absolute; top: 25%; left: 24px; right: 24px; height: 50%;
-        background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.05) 75%);
-        background-size: 200% 100%; border-radius: 4px;
-        animation: shimmer 1.5s infinite;
-    }
-    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-
 </style>
+
+<!-- FEATURE 3: CONTEXTUAL BREADCRUMBS -->
+<div class="breadcrumbs">
+    <a href="/">Nexus ERP</a> 
+    <i data-lucide="chevron-right" style="width: 14px;"></i> 
+    <span>{{ table_title }}</span>
+</div>
 
 <div class="page-header">
     <div>
@@ -106,29 +104,43 @@
         <table id="dataTable">
             <thead>
                 <tr>
-                    <th>Action</th>
+                    <th style="width: 60px; text-align: center;"></th>
                     {% for col in columns %}
-                    <th data-index="{{ loop.index }}" onclick="sortTable(parseInt(this.dataset.index))">{{ col.label }}</th>
+                    <th data-index="{{ loop.index }}" onclick="sortTable({{ loop.index }}, false)">
+                        {{ col.label }} <i class="sort-icon" data-lucide="arrow-up-down" style="width:12px; opacity:0.3; margin-left: 4px; vertical-align: middle;"></i>
+                    </th>
                     {% endfor %}
                 </tr>
             </thead>
             <tbody>
                 {% for row in rows %}
                 <tr>
-                    <td><a href="/edit/{{ table_name }}/{{ row[pk_column] }}" class="action-link">Edit</a></td>
+                    <td style="text-align: center;">
+                        <!-- FEATURE 4: THREE DOT CONTEXT MENU -->
+                        <div class="action-menu-wrap">
+                            <button class="action-btn" onclick="toggleMenu(event, this)">
+                                <i data-lucide="more-vertical" style="width: 18px;"></i>
+                            </button>
+                            <div class="action-dropdown">
+                                <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" class="dropdown-item">
+                                    <i data-lucide="edit-2" style="width: 16px;"></i> Edit Record
+                                </a>
+                                <button class="dropdown-item" onclick="simulateAction('Duplicate')">
+                                    <i data-lucide="copy" style="width: 16px;"></i> Duplicate
+                                </button>
+                                <button class="dropdown-item danger" onclick="requestDelete('{{ row[pk_column] }}')">
+                                    <i data-lucide="trash-2" style="width: 16px;"></i> Delete...
+                                </button>
+                            </div>
+                        </div>
+                    </td>
                     {% for col in columns %}
                         <td>
                             {% set val = row[col.raw] %}
-                            {# Smart Pill Logic #}
-                            {% if val == 'ACT' %}
-                                <span class="pill pill-act">Active</span>
-                            {% elif val == 'INA' %}
-                                <span class="pill pill-ina">Inactive</span>
-                            {% elif val == 'None' or val == None %}
-                                <span class="pill pill-def">Empty</span>
-                            {% else %}
-                                {{ val }}
-                            {% endif %}
+                            {% if val == 'ACT' %} <span class="pill pill-act">Active</span>
+                            {% elif val == 'INA' %} <span class="pill pill-ina">Inactive</span>
+                            {% elif val == 'None' or val == None %} <span class="pill pill-def">Empty</span>
+                            {% else %} {{ val }} {% endif %}
                         </td>
                     {% endfor %}
                 </tr>
@@ -138,7 +150,19 @@
     </div>
 </div>
 
-<!-- FLOATING ACTION BUTTONS -->
+<!-- Modal Overlay for Deletions -->
+<div class="modal-overlay" id="confirmModal">
+    <div class="modal-card">
+        <div class="modal-icon"><i data-lucide="alert-triangle" style="width: 32px; height: 32px;"></i></div>
+        <h3>Confirm Delete</h3>
+        <p>Are you sure you want to completely delete this record? This action cannot be undone.</p>
+        <div class="modal-actions">
+            <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+            <button class="btn-danger-confirm" onclick="executeDelete()">Delete Record</button>
+        </div>
+    </div>
+</div>
+
 <div class="fab-container">
     <a href="/export/{{ table_name }}" class="fab fab-secondary">
         <i data-lucide="download"></i> Export
@@ -149,8 +173,58 @@
 </div>
 
 <script>
-    function filterTable() {
-        let filter = document.getElementById("searchInput").value.toLowerCase();
+    // --- CONTEXT MENUS ---
+    function toggleMenu(e, btn) {
+        e.stopPropagation();
+        document.querySelectorAll('.action-menu-wrap').forEach(w => {
+            if (w !== btn.parentElement) w.classList.remove('active');
+        });
+        btn.parentElement.classList.toggle('active');
+    }
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.action-menu-wrap.active').forEach(w => w.classList.remove('active'));
+    });
+
+    // --- CUSTOM DELETION MODAL ---
+    function simulateAction(action) {
+        showToast(`${action} logic will connect to backend API here!`, 'success');
+    }
+    function requestDelete(id) {
+        document.getElementById('confirmModal').classList.add('active');
+    }
+    function closeModal() {
+        document.getElementById('confirmModal').classList.remove('active');
+    }
+    function executeDelete() {
+        closeModal();
+        showToast("Record successfully deleted (Simulated).", "success");
+    }
+
+    // --- FEATURE 7: SMART TABLE STATE MEMORY (Cookies) ---
+    const searchInput = document.getElementById("searchInput");
+    let sortDir = {};
+
+    document.addEventListener("DOMContentLoaded", () => {
+        // 1. Restore Search Filter
+        const savedSearch = sessionStorage.getItem('tableSearch_{{ table_name }}');
+        if (savedSearch) {
+            searchInput.value = savedSearch;
+            filterTable(false); // don't re-save immediately
+        }
+
+        // 2. Restore Sorting
+        const savedSort = sessionStorage.getItem('tableSort_{{ table_name }}');
+        if (savedSort) {
+            const { col, dir } = JSON.parse(savedSort);
+            sortDir[col] = !dir; // Setup toggle correctly
+            sortTable(col, true); // True means "don't toggle again, just apply"
+        }
+    });
+
+    function filterTable(saveState = true) {
+        let filter = searchInput.value.toLowerCase();
+        if (saveState) sessionStorage.setItem('tableSearch_{{ table_name }}', filter);
+
         let rows = document.querySelectorAll("#dataTable tbody tr");
         rows.forEach(row => {
             let text = row.innerText.toLowerCase();
@@ -158,19 +232,21 @@
         });
     }
 
-    let sortDir = {};
-    function sortTable(n) {
+    function sortTable(n, skipToggle) {
         let table = document.getElementById("dataTable");
         let tbody = table.tBodies[0];
         let rows = Array.from(tbody.querySelectorAll("tr"));
-        sortDir[n] = !sortDir[n];
+        
+        if (!skipToggle) sortDir[n] = !sortDir[n];
         let dir = sortDir[n] ? 1 : -1;
+
+        // Save State
+        sessionStorage.setItem('tableSort_{{ table_name }}', JSON.stringify({col: n, dir: sortDir[n]}));
 
         rows.sort((a, b) => {
             let valA = a.cells[n].innerText.trim();
             let valB = b.cells[n].innerText.trim();
             let isNum = !isNaN(parseFloat(valA)) && isFinite(valA) && valA !== '';
-            
             if (isNum) return (parseFloat(valA) - parseFloat(valB)) * dir;
             return valA.localeCompare(valB) * dir;
         });
