@@ -2,164 +2,106 @@
 
 {% block content %}
 <style>
-    .page-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 30px; }
-    .page-header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -1px; }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 32px; }
+    .page-header h1 { font-size: 28px; font-weight: 500; color: var(--color-glacier); letter-spacing: normal; line-height: 1.17; }
     
+    /* Search Input */
     .search-box {
-        background: var(--bg-card); border: 1px solid var(--border-color);
-        padding: 12px 20px; border-radius: 12px; width: 300px;
-        color: white; font-family: var(--font-main); transition: border 0.2s;
+        background: var(--color-midnight-ink); border: 1px solid var(--color-steel-border);
+        padding: 10px 12px; border-radius: 2px; width: 300px;
+        color: white; font-family: var(--font-ui); font-size: 14px;
+        box-shadow: var(--shadow-subtle-hairline); transition: all 0.2s;
     }
-    .search-box:focus { outline: none; border-color: var(--accent-primary); }
+    .search-box:focus { outline: none; border-color: var(--color-frost-link); }
 
+    /* AuthKit Table Plate */
     .table-container {
-        background: var(--bg-card); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-        border: 1px solid var(--border-color); border-radius: 20px; overflow: hidden; 
-        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.3); min-height: 400px;
+        background: var(--color-graphite-plate); border: 1px solid var(--color-steel-border);
+        border-radius: 10px; overflow: hidden; box-shadow: var(--shadow-subtle-4); min-height: 400px;
     }
     .table-scroll { overflow-x: auto; max-height: 65vh; overflow-y: auto; }
     table { width: 100%; border-collapse: collapse; white-space: nowrap; }
+    
     th {
-        background: rgba(0,0,0,0.2); color: var(--text-muted); font-size: 0.75rem;
-        text-transform: uppercase; letter-spacing: 1px; font-weight: 700;
-        padding: 16px 24px; text-align: left; position: sticky; top: 0; z-index: 10;
-        border-bottom: 1px solid var(--border-color); cursor: pointer; user-select: none;
+        background: var(--color-midnight-ink); color: var(--color-fog); font-size: 13px; font-family: var(--font-mono);
+        letter-spacing: 0.1em; font-weight: 400; padding: 14px 20px; text-align: left; position: sticky; top: 0; z-index: 10;
+        border-bottom: 1px solid var(--color-steel-border); cursor: pointer; user-select: none;
     }
     td {
-        padding: 18px 24px; font-size: 0.95rem; font-weight: 500;
-        border-bottom: 1px solid rgba(255,255,255,0.03); transition: background 0.2s;
+        padding: 16px 20px; font-size: 14px; font-weight: 400; color: var(--color-moonlight);
+        border-bottom: 1px solid var(--color-steel-border); transition: background 0.2s;
     }
-    tr { transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s, background 0.2s; }
-    tbody tr:hover { background: rgba(255,255,255,0.02); transform: translateY(-2px); box-shadow: 0 10px 20px -10px rgba(0,0,0,0.5); position: relative; z-index: 5; }
+    tbody tr:hover { background: rgba(186, 215, 247, 0.04); }
 
-    /* Pill Badges */
-    .pill { padding: 6px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
-    .pill-act { background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16,185,129,0.3); }
-    .pill-ina { background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239,68,68,0.3); }
-    .pill-def { background: rgba(255, 255, 255, 0.1); color: var(--text-muted); }
+    /* AuthKit Badges (6px radius) */
+    .pill { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; letter-spacing: 0.5px; border: 1px solid transparent; }
+    .pill-act { background: rgba(38, 150, 132, 0.15); color: var(--color-cipher-mint); border-color: rgba(38, 150, 132, 0.3); }
+    .pill-ina { background: rgba(228, 109, 76, 0.15); color: var(--color-ember); border-color: rgba(228, 109, 76, 0.3); }
+    .pill-def { background: var(--color-midnight-ink); color: var(--color-fog); border-color: var(--color-steel-border); }
 
-    /* --- FEATURE 4: THREE-DOT CONTEXT MENUS --- */
+    /* --- THREE-DOT CONTEXT MENUS --- */
     .action-menu-wrap { position: relative; display: inline-block; }
     .action-btn { 
-        background: transparent; border: none; color: var(--text-muted); cursor: pointer; 
-        padding: 6px; border-radius: 8px; transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+        background: transparent; border: none; color: var(--color-fog); cursor: pointer; 
+        padding: 6px; border-radius: 2px; transition: color 0.2s; display: flex; align-items: center; justify-content: center;
     }
-    .action-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+    .action-btn:hover { color: var(--color-glacier); }
     .action-dropdown { 
-        position: absolute; left: 100%; top: 0; margin-left: 5px; background: #1E293B; border: 1px solid var(--border-color); 
-        border-radius: 12px; padding: 6px; width: 170px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); 
-        opacity: 0; visibility: hidden; transform: translateX(-10px); transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); z-index: 50; 
+        position: absolute; left: 100%; top: 0; margin-left: 5px; background: var(--color-graphite-plate); border: 1px solid var(--color-steel-border); 
+        border-radius: 6px; padding: 6px; width: 170px; box-shadow: var(--shadow-subtle-4); 
+        opacity: 0; visibility: hidden; transform: translateX(-5px); transition: all 0.15s ease; z-index: 50; 
     }
     .action-menu-wrap.active .action-dropdown { opacity: 1; visibility: visible; transform: translateX(0); }
     
     .dropdown-item { 
-        display: flex; align-items: center; gap: 10px; padding: 10px 12px; color: var(--text-main); 
-        text-decoration: none; font-size: 0.85rem; font-weight: 600; border-radius: 8px; 
-        transition: background 0.2s; cursor: pointer; border: none; width: 100%; text-align: left; background: transparent; font-family: var(--font-main);
+        display: flex; align-items: center; gap: 10px; padding: 8px 12px; color: var(--color-moonlight); 
+        text-decoration: none; font-size: 13px; font-weight: 500; border-radius: 2px; 
+        transition: background 0.2s; cursor: pointer; border: none; width: 100%; text-align: left; background: transparent; font-family: var(--font-ui);
     }
-    .dropdown-item:hover { background: rgba(255,255,255,0.05); }
-    .dropdown-item.danger { color: var(--accent-danger); }
-    .dropdown-item.danger:hover { background: rgba(239, 68, 68, 0.1); }
+    .dropdown-item:hover { background: rgba(186, 215, 247, 0.06); color: var(--color-glacier); }
+    .dropdown-item.danger { color: var(--color-ember); }
+    .dropdown-item.danger:hover { background: rgba(228, 109, 76, 0.1); }
 
-    /* Modal Styling */
-    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); z-index: 2000; display: none; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; }
+    /* AuthKit Modal Styling */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(5, 6, 15, 0.8); backdrop-filter: blur(4px); z-index: 2000; display: none; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; }
     .modal-overlay.active { display: flex; opacity: 1; }
-    .modal-card { background: var(--bg-card); border: 1px solid var(--border-color); padding: 40px; border-radius: 24px; max-width: 420px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); transform: scale(0.95); transition: transform 0.2s; }
+    .modal-card { background: var(--color-graphite-plate); border: 1px solid var(--color-steel-border); padding: 32px; border-radius: 10px; max-width: 400px; text-align: center; box-shadow: var(--shadow-subtle-4); transform: scale(0.95); transition: transform 0.2s; }
     .modal-overlay.active .modal-card { transform: scale(1); }
-    .modal-icon { width: 64px; height: 64px; border-radius: 50%; background: rgba(239, 68, 68, 0.15); color: var(--accent-danger); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; }
-    .modal-card h3 { font-size: 1.4rem; font-weight: 800; margin-bottom: 10px; }
-    .modal-card p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 30px; line-height: 1.5; }
+    .modal-icon { width: 48px; height: 48px; border-radius: 6px; background: rgba(228, 109, 76, 0.15); color: var(--color-ember); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; border: 1px solid rgba(228, 109, 76, 0.3); }
+    .modal-card h3 { font-size: 18px; font-weight: 500; margin-bottom: 8px; color: var(--color-glacier); }
+    .modal-card p { color: var(--color-pebble); font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
     .modal-actions { display: flex; gap: 12px; }
-    .modal-actions button { flex: 1; padding: 14px; border-radius: 12px; font-weight: 700; font-family: var(--font-main); cursor: pointer; border: none; font-size: 1rem; transition: all 0.2s; }
-    .btn-cancel { background: rgba(255,255,255,0.1); color: white; }
-    .btn-cancel:hover { background: rgba(255,255,255,0.15); }
-    .btn-danger-confirm { background: var(--accent-danger); color: white; box-shadow: 0 10px 20px -5px rgba(239, 68, 68, 0.4); }
-    .btn-danger-confirm:hover { transform: translateY(-2px); box-shadow: 0 15px 25px -5px rgba(239, 68, 68, 0.5); }
+    .modal-actions button { flex: 1; padding: 10px; border-radius: 2px; font-weight: 500; font-family: var(--font-ui); cursor: pointer; border: 1px solid transparent; font-size: 14px; transition: all 0.2s; }
+    .btn-cancel { background: transparent; color: var(--color-moonlight); border-color: var(--color-steel-border); }
+    .btn-cancel:hover { background: rgba(186, 215, 247, 0.06); }
+    .btn-danger-confirm { background: var(--color-ember); color: white; }
 
-    /* --- MAC OS FLOATING DOCK --- */
+    /* --- MAC OS FLOATING DOCK (AuthKit Pill Style) --- */
     .floating-dock {
-        position: fixed;
-        bottom: 30px;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        align-items: flex-end;
-        gap: 12px;
-        padding: 12px 20px;
-        background: rgba(30, 41, 59, 0.7);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid rgba(255,255,255,0.1);
-        border-radius: 32px;
-        box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5);
-        z-index: 1000;
+        position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 8px; padding: 8px;
+        background: var(--color-graphite-plate); border: 1px solid var(--color-steel-border);
+        border-radius: 999px; box-shadow: var(--shadow-subtle-4); z-index: 1000;
     }
-
     .dock-item {
-        width: 48px;
-        height: 48px;
-        border-radius: 50%;
-        background: rgba(255,255,255,0.05);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--text-muted);
-        cursor: pointer;
-        border: 1px solid transparent;
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        position: relative;
-        text-decoration: none;
+        width: 40px; height: 40px; border-radius: 999px; background: transparent;
+        display: flex; align-items: center; justify-content: center; color: var(--color-moonlight);
+        cursor: pointer; border: none; transition: all 0.2s; position: relative; text-decoration: none;
     }
-
-    /* The Magnify Effect */
-    .floating-dock:hover .dock-item {
-        transform: scale(0.9);
-        opacity: 0.6;
-    }
-    
-    .floating-dock .dock-item:hover {
-        transform: scale(1.3) translateY(-10px);
-        opacity: 1;
-        background: var(--accent-primary);
-        color: white;
-        border-color: rgba(255,255,255,0.2);
-        box-shadow: 0 10px 20px -5px var(--accent-glow);
-        z-index: 10;
-    }
+    .dock-item:hover { background: rgba(186, 215, 247, 0.06); color: var(--color-glacier); transform: translateY(-2px); }
+    .dock-primary { background: var(--color-electric-iris); color: white; }
+    .dock-primary:hover { background: #7a52f5; color: white; }
 
     /* Tooltip */
     .dock-item::before {
-        content: attr(tooltip);
-        position: absolute;
-        top: -40px;
-        background: #0B0F19;
-        color: white;
-        font-family: var(--font-main);
-        font-size: 0.75rem;
-        font-weight: 600;
-        padding: 6px 12px;
-        border-radius: 8px;
-        border: 1px solid rgba(255,255,255,0.1);
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.2s, transform 0.2s;
-        transform: translateY(10px);
-        white-space: nowrap;
+        content: attr(tooltip); position: absolute; top: -36px;
+        background: var(--color-midnight-ink); color: var(--color-fog); border: 1px solid var(--color-steel-border);
+        font-family: var(--font-mono); font-size: 12px; padding: 4px 8px; border-radius: 4px;
+        opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; transform: translateY(5px); white-space: nowrap;
     }
-    
-    .dock-item:hover::before {
-        opacity: 1;
-        transform: translateY(0);
-    }
-    
-    @media print {
-        .floating-dock, .page-header, .breadcrumbs, .action-menu-wrap { display: none !important; }
-        .table-container { box-shadow: none; border: none; }
-        th, td { color: black !important; }
-    }
+    .dock-item:hover::before { opacity: 1; transform: translateY(0); }
 </style>
 
-<!-- CONTEXTUAL BREADCRUMBS -->
 <div class="breadcrumbs">
     <a href="/">Nexus ERP</a> 
     <i data-lucide="chevron-right" style="width: 14px;"></i> 
@@ -168,7 +110,7 @@
 
 <div class="page-header">
     <div>
-        <p style="color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 0.8rem; margin-bottom: 5px;">Database Table</p>
+        <p class="eyebrow-text">DATABASE TABLE</p>
         <h1>{{ table_title }}</h1>
     </div>
     <input type="text" class="search-box" id="searchInput" placeholder="Search records..." onkeyup="filterTable()">
@@ -191,20 +133,16 @@
                 {% for row in rows %}
                 <tr>
                     <td style="text-align: center;">
-                        <!-- THREE DOT CONTEXT MENU -->
                         <div class="action-menu-wrap">
                             <button class="action-btn" onclick="toggleMenu(event, this)">
-                                <i data-lucide="more-vertical" style="width: 18px;"></i>
+                                <i data-lucide="more-vertical" style="width: 16px;"></i>
                             </button>
                             <div class="action-dropdown">
                                 <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" class="dropdown-item">
-                                    <i data-lucide="edit-2" style="width: 16px;"></i> Edit Record
+                                    <i data-lucide="edit-2" style="width: 14px;"></i> Edit Record
                                 </a>
-                                <button class="dropdown-item" onclick="simulateAction('Duplicate')">
-                                    <i data-lucide="copy" style="width: 16px;"></i> Duplicate
-                                </button>
                                 <button class="dropdown-item danger" onclick="requestDelete('{{ row[pk_column] }}')">
-                                    <i data-lucide="trash-2" style="width: 16px;"></i> Delete...
+                                    <i data-lucide="trash-2" style="width: 14px;"></i> Delete...
                                 </button>
                             </div>
                         </div>
@@ -228,34 +166,30 @@
 <!-- Modal Overlay for Deletions -->
 <div class="modal-overlay" id="confirmModal">
     <div class="modal-card">
-        <div class="modal-icon"><i data-lucide="alert-triangle" style="width: 32px; height: 32px;"></i></div>
+        <div class="modal-icon"><i data-lucide="alert-triangle" style="width: 24px; height: 24px;"></i></div>
         <h3>Confirm Delete</h3>
-        <p>Are you sure you want to completely delete this record? This action cannot be undone.</p>
+        <p>Are you sure you want to permanently delete this record? This action cannot be undone.</p>
         <div class="modal-actions">
             <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-            <button class="btn-danger-confirm" onclick="executeDelete()">Delete Record</button>
+            <button class="btn-danger-confirm" onclick="executeDelete()">Delete</button>
         </div>
     </div>
 </div>
 
-<!-- MAC OS FLOATING DOCK (Replaces FABs) -->
+<!-- FLOATING DOCK -->
 <div class="floating-dock">
     <a href="/export/{{ table_name }}" class="dock-item" tooltip="Export CSV">
-        <i data-lucide="download"></i>
+        <i data-lucide="download" style="width:18px;"></i>
     </a>
-    <a href="/new/{{ table_name }}" class="dock-item" tooltip="Add Record">
-        <i data-lucide="plus"></i>
+    <a href="/new/{{ table_name }}" class="dock-item dock-primary" tooltip="Add Record">
+        <i data-lucide="plus" style="width:18px;"></i>
     </a>
     <button class="dock-item" tooltip="Refresh Table" onclick="window.location.reload();">
-        <i data-lucide="refresh-cw"></i>
-    </button>
-    <button class="dock-item" tooltip="Print View" onclick="window.print();">
-        <i data-lucide="printer"></i>
+        <i data-lucide="refresh-cw" style="width:18px;"></i>
     </button>
 </div>
 
 <script>
-    // --- CONTEXT MENUS ---
     function toggleMenu(e, btn) {
         e.stopPropagation();
         document.querySelectorAll('.action-menu-wrap').forEach(w => {
@@ -267,46 +201,27 @@
         document.querySelectorAll('.action-menu-wrap.active').forEach(w => w.classList.remove('active'));
     });
 
-    // --- CUSTOM DELETION MODAL ---
-    function simulateAction(action) {
-        showToast(`${action} logic will connect to backend API here!`, 'success');
-    }
-    function requestDelete(id) {
-        document.getElementById('confirmModal').classList.add('active');
-    }
-    function closeModal() {
-        document.getElementById('confirmModal').classList.remove('active');
-    }
-    function executeDelete() {
-        closeModal();
-        showToast("Record successfully deleted (Simulated).", "success");
-    }
+    function requestDelete(id) { document.getElementById('confirmModal').classList.add('active'); }
+    function closeModal() { document.getElementById('confirmModal').classList.remove('active'); }
+    function executeDelete() { closeModal(); showToast("Record successfully deleted (Simulated).", "success"); }
 
-    // --- SMART TABLE STATE MEMORY (Cookies) ---
     const searchInput = document.getElementById("searchInput");
     let sortDir = {};
 
     document.addEventListener("DOMContentLoaded", () => {
-        // 1. Restore Search Filter
         const savedSearch = sessionStorage.getItem('tableSearch_{{ table_name }}');
-        if (savedSearch) {
-            searchInput.value = savedSearch;
-            filterTable(false); // don't re-save immediately
-        }
-
-        // 2. Restore Sorting
+        if (savedSearch) { searchInput.value = savedSearch; filterTable(false); }
         const savedSort = sessionStorage.getItem('tableSort_{{ table_name }}');
         if (savedSort) {
             const { col, dir } = JSON.parse(savedSort);
-            sortDir[col] = !dir; // Setup toggle correctly
-            sortTable(col, true); // True means "don't toggle again, just apply"
+            sortDir[col] = !dir; 
+            sortTable(col, true); 
         }
     });
 
     function filterTable(saveState = true) {
         let filter = searchInput.value.toLowerCase();
         if (saveState) sessionStorage.setItem('tableSearch_{{ table_name }}', filter);
-
         let rows = document.querySelectorAll("#dataTable tbody tr");
         rows.forEach(row => {
             let text = row.innerText.toLowerCase();
@@ -318,13 +233,9 @@
         let table = document.getElementById("dataTable");
         let tbody = table.tBodies[0];
         let rows = Array.from(tbody.querySelectorAll("tr"));
-        
         if (!skipToggle) sortDir[n] = !sortDir[n];
         let dir = sortDir[n] ? 1 : -1;
-
-        // Save State
         sessionStorage.setItem('tableSort_{{ table_name }}', JSON.stringify({col: n, dir: sortDir[n]}));
-
         rows.sort((a, b) => {
             let valA = a.cells[n].innerText.trim();
             let valB = b.cells[n].innerText.trim();
