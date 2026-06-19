@@ -34,10 +34,61 @@
             justify-content: center;
             min-height: 100vh;
             overflow: hidden;
-            background-image: 
-                radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 30%),
-                radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.1), transparent 30%);
+            position: relative; /* Required for absolute background */
         }
+
+        /* --- DOTTED GLOW BACKGROUND EFFECT --- */
+        .dotted-glow-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            background-color: var(--bg-deep);
+        }
+
+        /* The Dotted Grid Overlay */
+        .dotted-pattern {
+            position: absolute;
+            inset: -50%; /* Make it larger to allow movement if needed */
+            background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+            background-size: 24px 24px;
+            /* Fades the grid out at the edges like a radial mask */
+            -webkit-mask-image: radial-gradient(ellipse at center, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 80%);
+            mask-image: radial-gradient(ellipse at center, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 80%);
+            z-index: 2;
+        }
+
+        /* Moving Glowing Orbs */
+        .glow-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(90px);
+            opacity: 0.4;
+            z-index: 1;
+            animation: floatGlow 20s infinite alternate ease-in-out;
+        }
+
+        .orb-1 {
+            width: 500px; height: 500px;
+            background: #3B82F6; /* Blue glow */
+            top: 10%; left: 15%;
+        }
+
+        .orb-2 {
+            width: 400px; height: 400px;
+            background: #8B5CF6; /* Purple glow */
+            bottom: 10%; right: 15%;
+            animation-delay: -10s;
+            animation-duration: 25s;
+        }
+
+        @keyframes floatGlow {
+            0% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(100px, -50px) scale(1.1); }
+            66% { transform: translate(-50px, 100px) scale(0.9); }
+            100% { transform: translate(0, 0) scale(1); }
+        }
+        /* ------------------------------------- */
 
         .login-card {
             background: var(--bg-card);
@@ -118,6 +169,13 @@
     </style>
 </head>
 <body>
+
+    <!-- DOTTED GLOW BACKGROUND INJECTED HERE -->
+    <div class="dotted-glow-bg">
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+        <div class="dotted-pattern"></div>
+    </div>
 
     <div class="login-card">
         <div class="logo-wrap">
