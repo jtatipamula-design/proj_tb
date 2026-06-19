@@ -76,15 +76,90 @@
     .btn-danger-confirm { background: var(--accent-danger); color: white; box-shadow: 0 10px 20px -5px rgba(239, 68, 68, 0.4); }
     .btn-danger-confirm:hover { transform: translateY(-2px); box-shadow: 0 15px 25px -5px rgba(239, 68, 68, 0.5); }
 
-    /* FABs */
-    .fab-container { position: fixed; bottom: 40px; right: 40px; display: flex; gap: 15px; z-index: 90; }
-    .fab { height: 56px; padding: 0 24px; border-radius: 28px; display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 700; font-family: var(--font-main); font-size: 1rem; color: white; text-decoration: none; border: none; cursor: pointer; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); transition: transform 0.2s, box-shadow 0.2s; }
-    .fab-primary { background: var(--accent-primary); box-shadow: 0 10px 25px -5px var(--accent-glow); }
-    .fab-secondary { background: #10B981; }
-    .fab:hover { transform: translateY(-3px); box-shadow: 0 15px 30px -5px rgba(0,0,0,0.6); }
+    /* --- MAC OS FLOATING DOCK --- */
+    .floating-dock {
+        position: fixed;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: flex-end;
+        gap: 12px;
+        padding: 12px 20px;
+        background: rgba(30, 41, 59, 0.7);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 32px;
+        box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5);
+        z-index: 1000;
+    }
+
+    .dock-item {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.05);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        cursor: pointer;
+        border: 1px solid transparent;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        position: relative;
+        text-decoration: none;
+    }
+
+    /* The Magnify Effect */
+    .floating-dock:hover .dock-item {
+        transform: scale(0.9);
+        opacity: 0.6;
+    }
+    
+    .floating-dock .dock-item:hover {
+        transform: scale(1.3) translateY(-10px);
+        opacity: 1;
+        background: var(--accent-primary);
+        color: white;
+        border-color: rgba(255,255,255,0.2);
+        box-shadow: 0 10px 20px -5px var(--accent-glow);
+        z-index: 10;
+    }
+
+    /* Tooltip */
+    .dock-item::before {
+        content: attr(tooltip);
+        position: absolute;
+        top: -40px;
+        background: #0B0F19;
+        color: white;
+        font-family: var(--font-main);
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 6px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.1);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s, transform 0.2s;
+        transform: translateY(10px);
+        white-space: nowrap;
+    }
+    
+    .dock-item:hover::before {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    
+    @media print {
+        .floating-dock, .page-header, .breadcrumbs, .action-menu-wrap { display: none !important; }
+        .table-container { box-shadow: none; border: none; }
+        th, td { color: black !important; }
+    }
 </style>
 
-<!-- FEATURE 3: CONTEXTUAL BREADCRUMBS -->
+<!-- CONTEXTUAL BREADCRUMBS -->
 <div class="breadcrumbs">
     <a href="/">Nexus ERP</a> 
     <i data-lucide="chevron-right" style="width: 14px;"></i> 
@@ -116,7 +191,7 @@
                 {% for row in rows %}
                 <tr>
                     <td style="text-align: center;">
-                        <!-- FEATURE 4: THREE DOT CONTEXT MENU -->
+                        <!-- THREE DOT CONTEXT MENU -->
                         <div class="action-menu-wrap">
                             <button class="action-btn" onclick="toggleMenu(event, this)">
                                 <i data-lucide="more-vertical" style="width: 18px;"></i>
@@ -163,13 +238,20 @@
     </div>
 </div>
 
-<div class="fab-container">
-    <a href="/export/{{ table_name }}" class="fab fab-secondary">
-        <i data-lucide="download"></i> Export
+<!-- MAC OS FLOATING DOCK (Replaces FABs) -->
+<div class="floating-dock">
+    <a href="/export/{{ table_name }}" class="dock-item" tooltip="Export CSV">
+        <i data-lucide="download"></i>
     </a>
-    <a href="/new/{{ table_name }}" class="fab fab-primary">
-        <i data-lucide="plus"></i> Add Record
+    <a href="/new/{{ table_name }}" class="dock-item" tooltip="Add Record">
+        <i data-lucide="plus"></i>
     </a>
+    <button class="dock-item" tooltip="Refresh Table" onclick="window.location.reload();">
+        <i data-lucide="refresh-cw"></i>
+    </button>
+    <button class="dock-item" tooltip="Print View" onclick="window.print();">
+        <i data-lucide="printer"></i>
+    </button>
 </div>
 
 <script>
@@ -200,7 +282,7 @@
         showToast("Record successfully deleted (Simulated).", "success");
     }
 
-    // --- FEATURE 7: SMART TABLE STATE MEMORY (Cookies) ---
+    // --- SMART TABLE STATE MEMORY (Cookies) ---
     const searchInput = document.getElementById("searchInput");
     let sortDir = {};
 
