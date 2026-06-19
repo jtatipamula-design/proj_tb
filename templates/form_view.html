@@ -2,85 +2,112 @@
 
 {% block content %}
 <style>
-    .page-header {
-        margin-bottom: 30px;
-    }
+    .page-header { margin-bottom: 30px; }
     .page-header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -1px; }
     .page-header p { color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; font-size: 0.8rem; margin-bottom: 5px; }
 
+    /* ACETERNITY UI FORM CONTAINER */
     .form-container {
-        max-width: 900px;
-        background: var(--bg-card);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
-        border: 1px solid var(--border-color);
-        border-radius: 20px;
+        max-width: 900px; 
+        background: #000000; /* Pure black like the Aceternity dark mode */
+        border: 1px solid rgba(255, 255, 255, 0.1); 
+        border-radius: 20px; 
         padding: 40px;
-        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.3);
+        /* Subtle shadow combo */
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 20px 40px -10px rgba(0,0,0,0.5); 
         animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
-
-    @keyframes slideUp { 
-        from { opacity: 0; transform: translateY(20px); } 
-        to { opacity: 1; transform: translateY(0); } 
-    }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
     .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 28px; }
+    
+    /* ACETERNITY LABEL & INPUT CONTAINER */
+    .form-group { display: flex; flex-direction: column; gap: 8px; }
+    .form-group label { font-size: 0.85rem; font-weight: 600; color: var(--text-main); }
 
-    .form-group { display: flex; flex-direction: column; gap: 10px; }
-    .form-group label { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
-
-    /* Premium Inputs */
-    .form-group input[type="text"],
-    .form-group input[type="password"],
-    .form-group input[type="date"],
-    .form-group select {
-        padding: 16px 20px;
-        border: 1px solid var(--border-color);
-        border-radius: 12px;
-        font-size: 1rem; font-family: var(--font-main);
-        background: rgba(0,0,0,0.2); color: white;
-        transition: all 0.2s;
+    .form-group input[type="text"], .form-group input[type="password"], .form-group input[type="date"], .form-group select {
+        padding: 12px 16px; 
+        border: none; 
+        border-radius: 8px;
+        font-size: 0.95rem; 
+        font-family: var(--font-main); 
+        background-color: #27272A; /* Zinc 800 */
+        color: white; 
+        /* The signature Aceternity Input Shadow */
+        box-shadow: inset 0px 0px 1px 1px rgba(255, 255, 255, 0.1);
+        transition: box-shadow 0.3s ease;
     }
+    
     .form-group input:focus, .form-group select:focus {
-        outline: none; border-color: var(--accent-primary);
-        background: rgba(0,0,0,0.4);
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        outline: none; 
+        box-shadow: inset 0px 0px 1px 1px rgba(255, 255, 255, 0.1), 0 0 0 2px rgba(59, 130, 246, 0.5); 
     }
 
-    /* Checkbox Scroll Box */
-    .checkbox-scroll-box {
-        max-height: 250px; overflow-y: auto; border: 1px solid var(--border-color);
-        padding: 12px; border-radius: 12px; background: rgba(0,0,0,0.2);
-    }
-    .checkbox-item {
-        display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 8px;
-        cursor: pointer; transition: background 0.2s; font-weight: 600; font-size: 0.95rem;
-    }
+    .checkbox-scroll-box { max-height: 250px; overflow-y: auto; padding: 12px; border-radius: 8px; background-color: #27272A; box-shadow: inset 0px 0px 1px 1px rgba(255, 255, 255, 0.1); }
+    .checkbox-item { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 6px; cursor: pointer; transition: background 0.2s; font-weight: 500; font-size: 0.95rem; }
     .checkbox-item:hover { background: rgba(255,255,255,0.05); }
     .checkbox-item input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent-primary); }
 
-    /* Status Toggles */
-    .status-group { display: flex; gap: 12px; background: rgba(0,0,0,0.2); padding: 6px; border-radius: 16px; border: 1px solid var(--border-color); }
+    .status-group { display: flex; gap: 12px; background-color: #27272A; padding: 6px; border-radius: 8px; box-shadow: inset 0px 0px 1px 1px rgba(255, 255, 255, 0.1); }
     .status-btn {
-        flex: 1; padding: 12px; text-align: center; border-radius: 10px;
-        cursor: pointer; font-weight: 700; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px;
+        flex: 1; padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem;
         color: var(--text-muted); transition: all 0.2s;
     }
-    .active-selected { background: rgba(16,185,129,0.15); color: #10B981; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-    .inactive-selected { background: rgba(239,68,68,0.15); color: #EF4444; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .active-selected { background: rgba(16,185,129,0.15); color: #10B981; }
+    .inactive-selected { background: rgba(239,68,68,0.15); color: #EF4444; }
     .hidden-input { display: none; }
 
-    /* Submit Button (FAB Style within form) */
-    .btn-submit {
-        margin-top: 40px; padding: 18px 32px;
-        background: var(--accent-primary); color: white; border: none; border-radius: 30px;
-        font-size: 1.1rem; font-weight: 700; font-family: var(--font-main); cursor: pointer;
-        box-shadow: 0 10px 25px -5px var(--accent-glow); transition: all 0.2s;
-        display: inline-flex; align-items: center; gap: 10px;
+    /* ACETERNITY DIVIDER LINE */
+    .form-divider {
+        height: 1px; width: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        margin: 32px 0;
     }
-    .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 15px 30px -5px var(--accent-glow); }
+
+    /* ACETERNITY BOTTOM-GRADIENT BUTTON */
+    .btn-submit {
+        position: relative;
+        display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+        width: 100%; padding: 12px;
+        border-radius: 8px;
+        /* Dark Gradient Background */
+        background: linear-gradient(to bottom right, #18181B, #27272A);
+        color: white; font-weight: 500; font-family: var(--font-main); font-size: 1rem;
+        border: none; cursor: pointer;
+        /* Aceternity Shadow trick */
+        box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1), inset 0 -1px 0 0 rgba(255, 255, 255, 0.05);
+        overflow: hidden;
+        transition: transform 0.2s;
+    }
+    .btn-submit:hover { transform: translateY(-1px); }
+
+    /* The glowing lines that fade in on hover */
+    .btn-bottom-gradient {
+        position: absolute; bottom: 0; left: 0; width: 100%; height: 1px;
+        background: linear-gradient(90deg, transparent, #06b6d4, transparent);
+        opacity: 0; transition: opacity 0.5s ease;
+    }
+    .btn-bottom-gradient-blur {
+        position: absolute; bottom: 0; left: 25%; width: 50%; height: 1px;
+        background: linear-gradient(90deg, transparent, #6366f1, transparent);
+        filter: blur(2px); opacity: 0; transition: opacity 0.5s ease;
+    }
+    
+    .btn-submit:hover .btn-bottom-gradient, 
+    .btn-submit:hover .btn-bottom-gradient-blur {
+        opacity: 1;
+    }
 </style>
+
+<!-- CONTEXTUAL BREADCRUMBS -->
+{% set clean_name = table_name.split('_', 1)[-1].replace('_t', '').replace('_', ' ').title() %}
+<div class="breadcrumbs">
+    <a href="/">Nexus ERP</a> 
+    <i data-lucide="chevron-right" style="width: 14px;"></i> 
+    <a href="/table/{{ table_name }}">{{ clean_name }}</a>
+    <i data-lucide="chevron-right" style="width: 14px;"></i> 
+    <span>{% if mode == 'edit' %}Edit Record ID {{ pk_val }}{% else %}New Record{% endif %}</span>
+</div>
 
 <div class="page-header">
     <p>Record Editor</p>
@@ -94,7 +121,6 @@
             <div class="form-group">
                 <label>{{ col.label }} {% if col.required %}<span style="color: var(--accent-danger);">*</span>{% endif %}</label>
                 
-                {# Status Toggles #}
                 {% if col.column_name.endswith('_status') %}
                     <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'ACT' }}">
                     <div class="status-group">
@@ -109,7 +135,6 @@
                         });
                     </script>
 
-                {# Virtual Checkboxes #}
                 {% elif col.data_type == 'virtual_checkbox' %}
                     <div class="checkbox-scroll-box">
                         {% set selected_items = (col.value or "").split(',') %}
@@ -122,7 +147,6 @@
                         {% endfor %}
                     </div>
 
-                {# Standard Dropdowns #}
                 {% elif col.options %}
                     <select name="{{ col.column_name }}" {% if col.required %}required{% endif %}>
                         <option value="">-- Select --</option>
@@ -133,25 +157,26 @@
                         {% endfor %}
                     </select>
 
-                {# Date Picker #}
                 {% elif col.data_type == 'date' %}
                     <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %}>
                 
-                {# Password Input #}
                 {% elif 'pwd' in col.column_name or 'password' in col.column_name %}
-                    <input type="password" name="{{ col.column_name }}" autocomplete="new-password" placeholder="{% if mode == 'edit' %}Leave blank to keep unchanged{% else %}Enter password{% endif %}" {% if col.required and mode != 'edit' %}required{% endif %}>
+                    <input type="password" name="{{ col.column_name }}" autocomplete="new-password" placeholder="{% if mode == 'edit' %}Leave blank to keep unchanged{% else %}••••••••{% endif %}" {% if col.required and mode != 'edit' %}required{% endif %}>
 
-                {# Standard Text #}
                 {% else %}
-                    <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else '' }}" {% if col.required %}required{% endif %}>
+                    <input type="text" name="{{ col.column_name }}" placeholder="Enter {{ col.label|lower }}" value="{{ col.value if col.value != None else '' }}" {% if col.required %}required{% endif %}>
                 {% endif %}
             </div>
             {% endfor %}
         </div>
         
-        <div style="display: flex; justify-content: flex-end;">
+        <div class="form-divider"></div>
+
+        <div>
             <button type="submit" class="btn-submit">
-                <i data-lucide="save" style="width: 20px;"></i> Save Record
+                <i data-lucide="save" style="width: 20px;"></i> Save Record &rarr;
+                <span class="btn-bottom-gradient"></span>
+                <span class="btn-bottom-gradient-blur"></span>
             </button>
         </div>
     </form>
@@ -170,9 +195,7 @@
         e.preventDefault();
         const btn = e.target.querySelector('.btn-submit');
         const originalBtnHTML = btn.innerHTML;
-        
-        // Transform the button into a loading state
-        btn.innerHTML = '<i data-lucide="loader-2" class="lucide-spin" style="width: 20px;"></i> Saving...';
+        btn.innerHTML = '<i data-lucide="loader-2" class="lucide-spin" style="width: 20px;"></i> Saving... <span class="btn-bottom-gradient"></span><span class="btn-bottom-gradient-blur"></span>';
         lucide.createIcons();
 
         const formData = new FormData(e.target);
@@ -182,10 +205,8 @@
             else data[key] = value;
         }
 
-        const allCheckboxGroups = ['pr_allowed_tables', 'pu_assigned_roles'];
-        allCheckboxGroups.forEach(groupName => {
-            const groupCheckboxes = document.querySelectorAll(`input[type="checkbox"][name="${groupName}"]`);
-            if (groupCheckboxes.length > 0 && data[groupName] === undefined) data[groupName] = "";
+        ['pr_allowed_tables', 'pu_assigned_roles'].forEach(groupName => {
+            if (document.querySelectorAll(`input[type="checkbox"][name="${groupName}"]`).length > 0 && data[groupName] === undefined) data[groupName] = "";
         });
 
         for (const key in data) if (data[key] === "") data[key] = null; 
@@ -197,20 +218,19 @@
         try {
             const res = await fetch(url, { method: method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
             if (res.ok) {
-                // Success State!
                 btn.innerHTML = '<i data-lucide="check" style="width: 20px;"></i> Saved';
-                btn.style.background = "#10B981";
-                btn.style.boxShadow = "0 10px 25px -5px rgba(16,185,129,0.5)";
                 lucide.createIcons();
+                
+                sessionStorage.setItem('pendingToast', JSON.stringify({msg: 'Record saved successfully!', type: 'success'}));
                 setTimeout(() => window.location.href = "/table/{{ table_name }}", 600);
             } else {
                 const err = await res.json();
-                alert("Error: " + (err.error || "Failed to save"));
+                showToast("Error: " + (err.error || "Failed to save"), "error");
                 btn.innerHTML = originalBtnHTML;
                 lucide.createIcons();
             }
         } catch (err) { 
-            alert("Network Error occurred."); 
+            showToast("Network Error occurred.", "error"); 
             console.error(err); 
             btn.innerHTML = originalBtnHTML;
             lucide.createIcons();
