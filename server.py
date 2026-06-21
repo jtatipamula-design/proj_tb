@@ -63,10 +63,8 @@ WHO_COLS = {'creation_date', 'created_by', 'last_update_date', 'last_updated_by'
 # ==========================================
 ip_tracker = defaultdict(list)
 
-
 @app.on_request
 async def rate_limiter(request):
-    """Limits requests to prevent brute force and DDoS attacks."""
     ip = request.remote_addr or request.ip
     now = time.time()
 
@@ -78,10 +76,8 @@ async def rate_limiter(request):
         return response.json({"error": "Rate limit exceeded. Please slow down."}, status=429)
     ip_tracker[ip].append(now)
 
-
 @app.on_response
 async def add_security_headers(request, resp):
-    """Injects robust HTTP security headers into every response."""
     if resp:
         resp.headers['X-Frame-Options'] = 'SAMEORIGIN'
         resp.headers['X-Content-Type-Options'] = 'nosniff'
@@ -95,9 +91,7 @@ async def add_security_headers(request, resp):
             "img-src 'self' data:;"
         )
 
-
 def login_required(wrapped):
-    """Decorator to enforce JWT authentication and session validation."""
     @wraps(wrapped)
     async def decorator(request, *args, **kwargs):
         token = request.cookies.get("auth_token")
@@ -138,7 +132,6 @@ def login_required(wrapped):
 # ==========================================
 @app.before_server_start
 async def setup_db(app_instance, loop):
-    """Initializes the database connection pool and runs migrations."""
     try:
         dsn = CLOUD_DB_URL or f"postgres://postgres:{os.environ.get('LOCAL_DB_PASSWORD')}@localhost/tablesproj"
         app_instance.ctx.pool = await asyncpg.create_pool(
@@ -161,7 +154,6 @@ async def close_db(app_instance, loop):
 
 
 async def _run_initial_migrations(conn):
-    """Handles schema generation, initial data seeding, and indexing."""
     if not await conn.fetchval("SELECT EXISTS(SELECT 1 FROM phc_companies_t WHERE pcp_company_id = 1001)"):
         await conn.execute("""
             INSERT INTO phc_companies_t 
@@ -200,13 +192,12 @@ async def _run_initial_migrations(conn):
 
 
 async def log_action(conn, user_id, action_desc):
-    """Records an audit log entry."""
     try:
         await conn.execute("""
             INSERT INTO phc_user_log_t 
             (pul_parent, pul_description, pul_created, pul_modified, pul_created_by, pul_modified_by) 
             VALUES ($1, $2, NOW(), NOW(), 'System', 'System')
-        """, int(user_id) if user_id else None, action_desc)
+        """, int(user_id) if user_id and str(user_id).isdigit() else None, action_desc)
     except Exception as e:
         print(f"Failed to write audit log: {e}")
 
@@ -222,7 +213,6 @@ def make_human_readable(text):
 #  DATA RESOLUTION & RBAC ENGINES
 # ==========================================
 async def get_allowed_tables(conn, user_id, user_type):
-    """Resolves UI tables the user is allowed to view/edit."""
     if SCHEMA_CACHE["tables"] is None:
         rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%_t'")
         SCHEMA_CACHE["tables"] = [r['table_name'] for r in rows]
@@ -250,7 +240,6 @@ async def get_allowed_tables(conn, user_id, user_type):
 
 
 def mask_sensitive_data(col_name, val, user_type):
-    """Redacts PII and sensitive data for non-admin users."""
     if val is None or user_type == 'ADM':
         return val
 
@@ -365,7 +354,6 @@ async def handle_login(request):
                     None, partial(bcrypt.checkpw, password.encode('utf-8'), stored_pwd.encode('utf-8'))
                 )
             except ValueError:
-                # Legacy plaintext password handler natively upgrades to secure bcrypt hashing
                 if password == stored_pwd:
                     is_valid = True
                     new_hashed_bytes = await loop.run_in_executor(None, partial(bcrypt.hashpw, password.encode('utf-8'), bcrypt.gensalt()))
@@ -427,7 +415,8 @@ async def show_table(request, table_name):
             return response.redirect("/")
 
         if table_name not in SCHEMA_CACHE["columns"]:
-            cols = await conn.fetch("SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
+            # FIX: Added data_type to the SELECT statement
+            cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
             SCHEMA_CACHE["columns"][table_name] = [dict(c) for c in cols]
 
         columns = [{"raw": r['column_name'], "label": make_human_readable(r['column_name'])} for r in SCHEMA_CACHE["columns"][table_name]]
@@ -467,19 +456,23 @@ async def export_csv(request, table_name):
         params = []
         pk_column = await get_pk_column(conn, table_name)
 
+        if table_name not in SCHEMA_CACHE["columns"]:
+            # FIX: Added data_type to the SELECT statement
+            cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
+            SCHEMA_CACHE["columns"][table_name] = [dict(c) for c in cols]
+
+        # FIX: Ensure we cast the PK safely based on the Schema data type
         if pk_id and pk_column:
             query += f" WHERE {pk_column} = $1"
-            params.append(int(pk_id))
+            pk_type = next((r['data_type'] for r in SCHEMA_CACHE["columns"][table_name] if r['column_name'] == pk_column), 'integer')
+            parsed_pk = pk_id if pk_type in ('character varying', 'text', 'varchar') else int(pk_id)
+            params.append(parsed_pk)
 
         rows = await conn.fetch(query, *params)
         if not rows:
             return response.text("No data found")
         
         rows_dict = [dict(r) for r in rows]
-
-        if table_name not in SCHEMA_CACHE["columns"]:
-            cols = await conn.fetch("SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
-            SCHEMA_CACHE["columns"][table_name] = [dict(c) for c in cols]
 
         for r in SCHEMA_CACHE["columns"][table_name]:
             c_name = r['column_name']
@@ -513,9 +506,13 @@ async def show_edit_form(request, table_name, pk_val):
             return response.redirect("/")
 
         pk_column = await get_pk_column(conn, table_name)
-        record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1", int(pk_val))
-
         col_rows = await conn.fetch("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
+        
+        # --- CRASH FIX: Cast PK appropriately instead of forcing int() ---
+        pk_type = next((r['data_type'] for r in col_rows if r['column_name'] == pk_column), 'integer')
+        parsed_pk = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
+        
+        record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1", parsed_pk)
         columns = []
 
         for r in col_rows:
@@ -538,13 +535,13 @@ async def show_edit_form(request, table_name, pk_val):
 
         if table_name == 'phc_roles_t':
             screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
-            assignments = await conn.fetch("SELECT prs_screen_id FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", int(pk_val))
+            assignments = await conn.fetch("SELECT prs_screen_id FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", parsed_pk)
             assigned_val = ",".join([str(a['prs_screen_id']) for a in assignments])
             columns.append({"column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False, "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in screens], "is_pk": False})
 
         if table_name == 'phc_users_t':
             roles = await conn.fetch("SELECT prl_role_id as id, prl_role_name as name FROM phc_roles_t WHERE prl_status = 'ACT'")
-            assignments = await conn.fetch("SELECT pua_role_id FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", int(pk_val))
+            assignments = await conn.fetch("SELECT pua_role_id FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", parsed_pk)
             assigned_val = ",".join([str(a['pua_role_id']) for a in assignments])
             columns.append({"column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False, "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in roles], "is_pk": False})
 
@@ -571,9 +568,15 @@ async def show_add_form(request, table_name):
             is_pk = (c_name == pk_column)
             options = await get_dropdown_options(conn, c_name) if not is_pk else None
             is_req = (r['is_nullable'] == 'NO') and not is_pk
+            
+            # --- FIX: Pre-fill frontend Date fields so required='NO' doesn't block submission ---
+            val = ""
+            if ('date' in r['data_type'] or 'timestamp' in r['data_type']) and 'end' not in c_name.lower() and not is_pk:
+                val = datetime.now().strftime('%Y-%m-%d')
+                
             columns.append({
                 "column_name": c_name, "label": make_human_readable(c_name), "required": is_req, 
-                "value": "", "data_type": r['data_type'], "options": options, "is_pk": is_pk
+                "value": val, "data_type": r['data_type'], "options": options, "is_pk": is_pk
             })
 
         if table_name == 'phc_roles_t':
@@ -680,7 +683,6 @@ async def save_data(request, table_name, pk_val=None):
 
         async with conn.transaction():
             if request.method == "POST":
-                # DBA Note: Migrate to SERIAL instead of MAX(id)+1 for concurrency
                 max_val = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
                 target_id = (int(max_val) + 1) if max_val else 1
                 pk_type = schema_map.get(pk_column, {}).get('data_type', '')
@@ -692,7 +694,10 @@ async def save_data(request, table_name, pk_val=None):
                 placeholders = ', '.join([f'${i+1}' for i in range(len(vals))])
                 await conn.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({placeholders})", *vals)
             else:
-                target_id = int(pk_val)
+                # --- CRASH FIX: Cast PK appropriately ---
+                pk_type = schema_map.get(pk_column, {}).get('data_type', '')
+                target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
+                
                 set_clauses = [f"{k} = ${i+2}" for i, k in enumerate(clean_data.keys())]
                 vals = list(clean_data.values())
                 if set_clauses:
