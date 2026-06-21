@@ -18,7 +18,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Sanic("ERP_System")
-app.config.SECRET = os.environ.get("SECRET_KEY", "DEFAULT_FALLBACK_SECRET")
+
+# SECURITY FIX (CRITICAL): Prevent deploying with default fallback secret
+env_secret = os.environ.get("SECRET_KEY")
+is_development = os.environ.get("ENVIRONMENT") == "development"
+
+if not env_secret and not is_development:
+    raise RuntimeError("CRITICAL SECURITY ERROR: SECRET_KEY environment variable is required in production.")
+
+app.config.SECRET = env_secret or "DEFAULT_FALLBACK_SECRET"
 app.config.TEMPLATING_PATH_TO_TEMPLATES = os.path.join(os.path.dirname(__file__), "templates")
 Extend(app)
 
@@ -36,12 +44,9 @@ async def rate_limiter(request):
     ip = request.remote_addr or request.ip
     now = time.time()
     
-    # FIX: Prevent Memory Leak. Periodically clear tracker if it gets too large.
-    # In a production setting, prefer a Redis-based rate limiter.
     if len(ip_tracker) > 10000:
         ip_tracker.clear()
 
-    # Filter out timestamps older than the window
     ip_tracker[ip] = [t for t in ip_tracker[ip] if now - t < RATE_LIMIT_WINDOW]
     if len(ip_tracker[ip]) >= MAX_REQUESTS:
         return response.json({"error": "Rate limit exceeded. Please slow down."}, status=429)
@@ -99,7 +104,6 @@ def login_required(wrapped):
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
             return response.redirect("/login")
         except asyncpg.PostgresError as e:
-            # FIX: Prevent crash if DB connection blips during validation
             print(f"DB Error during auth validation: {e}")
             return response.text("Internal Database Error", status=500)
             
@@ -120,7 +124,6 @@ async def setup_db(app, loop):
             )
         
         async with app.ctx.pool.acquire() as conn:
-            # FIX: Wrapped migration logic in a transaction
             async with conn.transaction():
                 if not await conn.fetchval("SELECT EXISTS(SELECT 1 FROM phc_companies_t WHERE pcp_company_id = 1001)"):
                     await conn.execute("INSERT INTO phc_companies_t (pcp_company_id, pcp_company_code, pcp_company_name, pcp_created, pcp_modified, pcp_created_by, pcp_modified_by, pcp_status) OVERRIDING SYSTEM VALUE VALUES (1001, 'SYS', 'System Admin Company', NOW(), NOW(), 'System', 'System', 'ACT')")
@@ -134,14 +137,12 @@ async def setup_db(app, loop):
                     await conn.execute("ALTER TABLE phc_users_t ADD COLUMN pus_session_id VARCHAR(255)")
 
                 if not await conn.fetchval("SELECT EXISTS(SELECT 1 FROM phc_users_t WHERE pus_user_name = 'admin')"):
-                    # Generate hash correctly blocking thread pool during startup (acceptable during startup phase)
                     hashed = bcrypt.hashpw(b"admin123", bcrypt.gensalt()).decode('utf-8')
                     await conn.execute("INSERT INTO phc_users_t (pus_company_id, pus_user_name, pus_full_name, pus_pwd, pus_status, pus_created, pus_modified, pus_created_by, pus_modified_by, pus_start_date, pus_user_type) VALUES (1001, 'admin', 'System Admin', $1, 'ACT', NOW(), NOW(), 'System', 'System', NOW(), 'ADM')", hashed)
                 else:
                     await conn.execute("UPDATE phc_users_t SET pus_user_type = 'ADM' WHERE pus_user_name = 'admin'")
 
     except Exception as e:
-        # FIX: Hard failure. Do not start the server if the DB is unreachable.
         print(f"❌ DATABASE CONNECTION FAILED: {e}")
         raise SystemExit("Fatal: Database initialization failed.")
 
@@ -157,7 +158,6 @@ async def log_action(conn, user_id, action_desc):
             int(user_id) if user_id else None, action_desc
         )
     except Exception as e: 
-        # FIX: Replaced bare except: pass with explicit logging.
         print(f"Failed to write audit log: {e}")
 
 def make_human_readable(text):
@@ -279,19 +279,18 @@ async def handle_login(request):
         if user:
             stored_pwd = user['pus_pwd']
             is_valid = False
-            
-            # FIX: Async Bottleneck. Run bcrypt functions in an executor to avoid blocking event loop.
             loop = asyncio.get_running_loop()
             
             try:
-                # Use partial to pass arguments to the executor securely
                 is_valid = await loop.run_in_executor(
                     None, partial(bcrypt.checkpw, password.encode('utf-8'), stored_pwd.encode('utf-8'))
                 )
             except ValueError:
-                # Legacy plaintext password handler (Requires upgrade ideally)
+                # SECURITY FIX (MEDIUM): Legacy plaintext password handler natively upgrades to secure bcrypt hashing upon login
                 if password == stored_pwd:
                     is_valid = True
+                    new_hashed_bytes = await loop.run_in_executor(None, partial(bcrypt.hashpw, password.encode('utf-8'), bcrypt.gensalt()))
+                    await conn.execute("UPDATE phc_users_t SET pus_pwd = $1 WHERE pus_user_id = $2", new_hashed_bytes.decode('utf-8'), user['pus_user_id'])
                     
             if is_valid:
                 session_id = str(uuid.uuid4())
@@ -306,7 +305,10 @@ async def handle_login(request):
                 }
                 token = jwt.encode(payload, app.config.SECRET, algorithm="HS256")
                 resp = response.json({"status": "success"})
-                resp.add_cookie("auth_token", token, httponly=True, samesite="Lax")
+                
+                # SECURITY FIX (HIGH): Use strict cookie attributes to defend against XSS, CSRF, and MITM
+                is_secure = os.environ.get("ENVIRONMENT") != "development"
+                resp.add_cookie("auth_token", token, httponly=True, samesite="Strict", secure=is_secure)
                 
                 await log_action(conn, user['pus_user_id'], f"User logged in")
                 return resp
@@ -346,7 +348,6 @@ async def show_table(request, table_name):
         pk_row = await conn.fetchrow("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'", table_name)
         pk_column = pk_row['column_name'] if pk_row else None
         
-        # FIX: Avoided basic string formatting risks by using strict validation against information schema (handled inherently above)
         rows = await conn.fetch(f"SELECT * FROM {table_name} ORDER BY 1 DESC LIMIT 100")
         rows_dict = [dict(r) for r in rows]
 
@@ -497,6 +498,19 @@ async def save_data(request, table_name, pk_val=None):
     current_user_id = request.ctx.user_id 
     user_type = request.ctx.user_type
     
+    # SECURITY FIX (HIGH): Privilege Escalation / Mass Assignment Guard
+    # Without this, any standard user with edit access to `phc_users_t` could silently elevate themselves
+    # by submitting {"pus_user_type": "ADM"} in the JSON payload via the frontend or directly via API.
+    if user_type != 'ADM':
+        # Block attempts to modify authorization/access levels
+        if 'pus_user_type' in data:
+            data.pop('pus_user_type', None)
+        
+        # Block attempts to reset other users' passwords
+        if table_name == 'phc_users_t' and request.method == "PUT" and str(pk_val) != str(current_user_id):
+            if 'pus_pwd' in data:
+                data.pop('pus_pwd', None)
+
     async with app.ctx.pool.acquire() as conn:
         allowed = await get_allowed_tables(conn, current_user_id, user_type)
         if table_name not in allowed: return response.json({"error": "Unauthorized API Access"}, status=403)
@@ -524,7 +538,6 @@ async def save_data(request, table_name, pk_val=None):
             if k.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or k.lower() in who_cols: continue
 
             if k == 'pus_pwd':
-                # FIX: Offload hashing to an executor so the event loop does not stall for 300ms
                 loop = asyncio.get_running_loop()
                 pwd_bytes = v.encode('utf-8')
                 hashed_bytes = await loop.run_in_executor(None, partial(bcrypt.hashpw, pwd_bytes, bcrypt.gensalt()))
@@ -560,11 +573,8 @@ async def save_data(request, table_name, pk_val=None):
             if c_lower.endswith('_modified') or c_lower == 'last_update_date': 
                 clean_data[col_name] = datetime.now() 
 
-        # FIX: Added `target_id` pre-initialization to prevent UnboundLocalError
         target_id = None 
 
-        # FIX: Crucial database data integrity step: wrap cascading mutations inside a transaction block. 
-        # Without this, if the virtual updates fail, the user loses roles/screens permanently.
         async with conn.transaction():
             if request.method == "POST":
                 if pk_column:
@@ -583,10 +593,9 @@ async def save_data(request, table_name, pk_val=None):
                 target_id = int(pk_val)
                 set_clauses = [f"{k} = ${i+2}" for i, k in enumerate(clean_data.keys())]
                 vals = list(clean_data.values())
-                if set_clauses: # Allow no-op updates to skip
+                if set_clauses: 
                     await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {pk_column} = $1", target_id, *vals)
 
-            # --- VIRTUAL MAPPINGS SAVING (Now safely within a transaction boundary) ---
             if table_name == 'phc_roles_t' and virtual_screens is not None:
                 await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
                 if virtual_screens:
