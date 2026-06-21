@@ -60,10 +60,13 @@
             transition: background-color 0.3s, color 0.3s;
         }
 
-        /* Animated Background */
+        /* ========================================= */
+        /* ANIMATED PASTEL GRADIENT BACKGROUND       */
+        /* ========================================= */
         .animated-bg {
             position: fixed; inset: 0; z-index: -10; 
             background: var(--color-midnight-ink); transition: background 0.3s;
+            overflow: hidden; /* Added to prevent scrollbars from blobs */
         }
         .bg-grid-overlay {
             position: absolute; inset: 0; z-index: 1;
@@ -75,6 +78,25 @@
             background-image: linear-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px),
                               linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
         }
+
+        /* --- THE MISSING BLOBS AND ANIMATIONS --- */
+        .gradient-blob {
+            position: absolute; filter: blur(120px); opacity: 0.35;
+            animation: floatBlob 20s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 50%;
+        }
+        .blob-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: #3B82F6; }
+        .blob-2 { bottom: -10%; right: -10%; width: 60vw; height: 60vw; background: #8B5CF6; animation-delay: -5s; animation-direction: alternate-reverse; }
+        .blob-3 { top: 40%; left: 30%; width: 40vw; height: 40vw; background: #10B981; animation-delay: -10s; }
+        .blob-4 { bottom: 10%; left: 10%; width: 45vw; height: 45vw; background: #F43F5E; animation-delay: -15s; opacity: 0.15; }
+        
+        @keyframes floatBlob {
+            0% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(5vw, -5vh) scale(1.1); }
+            66% { transform: translate(-5vw, 5vh) scale(0.9); }
+            100% { transform: translate(2vw, 2vh) scale(1); }
+        }
+        /* ========================================= */
 
         /* Sidebar Layout */
         .sidebar {
@@ -167,7 +189,14 @@
 </head>
 <body>
 
-    <div class="animated-bg"><div class="bg-grid-overlay"></div></div>
+    <!-- THE MISSING BLOBS ARE NOW HERE! -->
+    <div class="animated-bg">
+        <div class="bg-grid-overlay"></div>
+        <div class="gradient-blob blob-1"></div>
+        <div class="gradient-blob blob-2"></div>
+        <div class="gradient-blob blob-3"></div>
+        <div class="gradient-blob blob-4"></div>
+    </div>
 
     <aside class="sidebar" id="sidebar">
         <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle Sidebar">
