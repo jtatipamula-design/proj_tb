@@ -147,8 +147,11 @@ async def get_allowed_tables(conn, user_id, user_type):
     rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%_t'")
     all_tables = [r['table_name'] for r in rows]
 
+    # HIDE JUNCTION TABLES FROM UI: Users should manage these via "Roles" and "Users" forms using Virtual Checkboxes
+    ui_tables = [t for t in all_tables if not t.endswith('_assignment_t')]
+
     if user_type == 'ADM': 
-        return all_tables
+        return ui_tables
 
     query = """
         SELECT DISTINCT TRIM(LOWER(s.psn_screen_code)) as table_name
@@ -164,7 +167,7 @@ async def get_allowed_tables(conn, user_id, user_type):
     """
     assigned_rows = await conn.fetch(query, int(user_id))
     allowed_tables = [r['table_name'] for r in assigned_rows]
-    return [t for t in all_tables if t in allowed_tables]
+    return [t for t in ui_tables if t in allowed_tables]
 
 
 # ==========================================
@@ -327,15 +330,18 @@ async def show_table(request, table_name):
         # Process Row Presentation
         for col in columns:
             c_name = col['raw']
+            
+            # --- FIX 1: NEVER ALTER THE PRIMARY KEY VALUE ---
+            if c_name == pk_column:
+                continue
+                
             options = await get_dropdown_options(conn, c_name)
             lookup = {str(opt['id']): opt['name'] for opt in options} if options else None
             
             for row in rows_dict:
                 val = row.get(c_name)
-                # 1. Resolve Foreign Keys
                 if val is not None and lookup and str(val) in lookup:
                     row[c_name] = f"{lookup[str(val)]} (ID: {val})"
-                # 2. Mask Sensitive Fields
                 row[c_name] = mask_sensitive_data(c_name, row.get(c_name), request.ctx.user_type)
         
         return await render("table_view.html", context={"table_name": table_name, "table_title": make_human_readable(table_name), "columns": columns, "rows": rows_dict, "all_tables": allowed, "pk_column": pk_column})
@@ -396,29 +402,41 @@ async def show_edit_form(request, table_name, pk_val):
         col_rows = await conn.fetch("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
         columns = []
         
+        # --- FIX 2: INCLUDE ORACLE-STYLE WHO COLUMNS ---
+        who_cols = ('creation_date', 'created_by', 'last_update_date', 'last_updated_by')
+        
         for r in col_rows:
             c_name = r['column_name']
-            if c_name == pk_column or c_name.endswith(('_created', '_modified', '_created_by', '_modified_by')): continue
             
-            # Mask Data in Edit Form if not Admin
+            # Hide audit columns from the form entirely (backend handles them)
+            if c_name.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or c_name.lower() in who_cols: 
+                continue
+            
+            # Flag if this is the primary key
+            is_pk = (c_name == pk_column)
+            
             val = mask_sensitive_data(c_name, record[c_name], request.ctx.user_type)
-
             if isinstance(val, (date, datetime)): val = val.strftime('%Y-%m-%d')
-            options = await get_dropdown_options(conn, c_name)
-            is_req = (r['is_nullable'] == 'NO')
-            columns.append({"column_name": c_name, "label": make_human_readable(c_name), "required": is_req, "value": val, "data_type": r['data_type'], "options": options})
+            
+            # Do not fetch dropdown options for the Primary Key
+            options = await get_dropdown_options(conn, c_name) if not is_pk else None
+            
+            # Primary keys are NEVER required fields for the user to fill out (they are auto-generated/read-only)
+            is_req = (r['is_nullable'] == 'NO') and not is_pk
+            
+            columns.append({"column_name": c_name, "label": make_human_readable(c_name), "required": is_req, "value": val, "data_type": r['data_type'], "options": options, "is_pk": is_pk})
 
         if table_name == 'phc_roles_t':
             screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
             assignments = await conn.fetch("SELECT prs_screen_id FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", int(pk_val))
             assigned_val = ",".join([str(a['prs_screen_id']) for a in assignments])
-            columns.append({"column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False, "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in screens]})
+            columns.append({"column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False, "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in screens], "is_pk": False})
 
         if table_name == 'phc_users_t':
             roles = await conn.fetch("SELECT prl_role_id as id, prl_role_name as name FROM phc_roles_t WHERE prl_status = 'ACT'")
             assignments = await conn.fetch("SELECT pua_role_id FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", int(pk_val))
             assigned_val = ",".join([str(a['pua_role_id']) for a in assignments])
-            columns.append({"column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False, "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in roles]})
+            columns.append({"column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False, "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in roles], "is_pk": False})
 
         return await render("form_view.html", context={"table_name": table_name, "table_title": f"Edit {make_human_readable(table_name)}", "columns": columns, "all_tables": allowed, "pk_val": pk_val, "mode": "edit"})
 
@@ -433,25 +451,28 @@ async def show_add_form(request, table_name):
         pk_row = await conn.fetchrow("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'", table_name)
         pk_column = pk_row['column_name'] if pk_row else None
         columns = []
+        who_cols = ('creation_date', 'created_by', 'last_update_date', 'last_updated_by')
 
         for r in col_rows:
             c_name = r['column_name']
-            if c_name == pk_column or c_name.endswith(('_created', '_modified', '_created_by', '_modified_by')): continue
-            options = await get_dropdown_options(conn, c_name)
-            is_req = (r['is_nullable'] == 'NO')
-            columns.append({"column_name": c_name, "label": make_human_readable(c_name), "required": is_req, "value": "", "data_type": r['data_type'], "options": options})
+            if c_name.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or c_name.lower() in who_cols: 
+                continue
+            
+            is_pk = (c_name == pk_column)
+            options = await get_dropdown_options(conn, c_name) if not is_pk else None
+            is_req = (r['is_nullable'] == 'NO') and not is_pk
+            columns.append({"column_name": c_name, "label": make_human_readable(c_name), "required": is_req, "value": "", "data_type": r['data_type'], "options": options, "is_pk": is_pk})
             
         if table_name == 'phc_roles_t':
             screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
-            columns.append({"column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False, "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in screens]})
+            columns.append({"column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False, "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in screens], "is_pk": False})
 
         if table_name == 'phc_users_t':
             roles = await conn.fetch("SELECT prl_role_id as id, prl_role_name as name FROM phc_roles_t WHERE prl_status = 'ACT'")
-            columns.append({"column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False, "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in roles]})
+            columns.append({"column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False, "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in roles], "is_pk": False})
 
         return await render("form_view.html", context={"table_name": table_name, "table_title": f"New {make_human_readable(table_name)}", "columns": columns, "all_tables": allowed, "mode": "create"})
 
-# --- API SAVE ---
 @app.post("/api/<table_name>", name="create_row")
 @app.put("/api/<table_name>/<pk_val>", name="update_row")
 @login_required
@@ -473,20 +494,20 @@ async def save_data(request, table_name, pk_val=None):
         schema_rows = await conn.fetch("SELECT column_name, data_type, character_maximum_length, is_nullable FROM information_schema.columns WHERE table_name = $1", table_name)
         schema_map = {r['column_name']: r for r in schema_rows}
         clean_data = {}
+        who_cols = ('creation_date', 'created_by', 'last_update_date', 'last_updated_by')
         
-        # --- AUTO-POPULATE BLANK DATES ---
+        # --- FIX 3: AUTO-POPULATE REGULAR DATES ---
         for r in schema_rows:
             c_name = r['column_name']
             if (data.get(c_name) in ["", None]) and ('date' in r['data_type'] or 'timestamp' in r['data_type']):
-                if 'end' not in c_name.lower():  # Protects against auto-filling termination dates
+                if 'end' not in c_name.lower():  
                     data[c_name] = datetime.now().strftime('%Y-%m-%d')
         
         for k, v in data.items():
             if v == "" or v is None: continue 
             if k == pk_column: continue 
-            if k.endswith(('_created', '_modified', '_created_by', '_modified_by')): continue
+            if k.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or k.lower() in who_cols: continue
 
-            # Auto-Hash Passwords securely
             if k == 'pus_pwd':
                 salt = bcrypt.gensalt()
                 v = bcrypt.hashpw(v.encode('utf-8'), salt).decode('utf-8')
@@ -495,7 +516,6 @@ async def save_data(request, table_name, pk_val=None):
             target_type = col_info.get('data_type', '').lower()
             max_len = col_info.get('character_maximum_length')
             
-            # Robust Date Conversion
             if 'date' in target_type or 'timestamp' in target_type or (isinstance(v, str) and len(v) == 10 and v[4] == '-' and v[7] == '-'):
                 if isinstance(v, str) and v:
                     try: v = datetime.strptime(v, '%Y-%m-%d')
@@ -513,10 +533,15 @@ async def save_data(request, table_name, pk_val=None):
                 if v.strip().isdigit(): clean_data[k] = int(v)
             else: clean_data[k] = v
 
+        # --- FIX 4: PROPERLY INJECT NEW SCHEMA 'WHO' COLUMNS ---
         for col_name in schema_map:
-            if col_name.endswith(('_created_by', '_modified_by')): clean_data[col_name] = str(current_user_id)
-            if col_name.endswith('_created') and request.method == "POST": clean_data[col_name] = datetime.now()
-            if col_name.endswith('_modified'): clean_data[col_name] = datetime.now() 
+            c_lower = col_name.lower()
+            if c_lower.endswith(('_created_by', '_modified_by', 'created_by', 'last_updated_by')): 
+                clean_data[col_name] = int(current_user_id) if current_user_id.isdigit() else str(current_user_id)
+            if request.method == "POST" and (c_lower.endswith('_created') or c_lower == 'creation_date'): 
+                clean_data[col_name] = datetime.now()
+            if c_lower.endswith('_modified') or c_lower == 'last_update_date': 
+                clean_data[col_name] = datetime.now() 
 
         if request.method == "POST":
             if pk_column:
@@ -530,6 +555,7 @@ async def save_data(request, table_name, pk_val=None):
             await conn.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({', '.join([f'${i+1}' for i in range(len(vals))])})", *vals)
         else:
             set_clauses = [f"{k} = ${i+2}" for i, k in enumerate(clean_data.keys())]; vals = list(clean_data.values())
+            if not set_clauses: return response.json({"status": "success"}) # Handle no-op updates
             await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {pk_column} = $1", int(pk_val), *vals)
 
         target_id = new_id if request.method == "POST" else int(pk_val)
