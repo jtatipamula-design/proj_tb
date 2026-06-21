@@ -2,63 +2,99 @@
 
 {% block content %}
 <style>
-    .welcome-section { margin-bottom: 60px; animation: slideDown 0.5s ease-out; text-align: center; }
-    .welcome-section h1 { font-size: 44px; font-weight: 500; letter-spacing: normal; color: #ffffff; margin-bottom: 16px; }
-    .welcome-section p { color: var(--color-pebble); font-size: 18px; font-weight: 400; }
-
-    /* --- AUTHKIT FEATURE TILES (BENTO GRID) --- */
-    .bento-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
-
-    .bento-card {
-        background: var(--color-graphite-plate);
-        border: 1px solid var(--color-steel-border);
-        border-radius: 10px; /* Authkit card radius */
-        padding: 32px 24px;
-        position: relative; overflow: hidden;
-        display: flex; flex-direction: column; justify-content: space-between;
-        min-height: 160px;
-        box-shadow: var(--shadow-subtle-4);
-        transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    .dashboard-header {
+        margin-bottom: 40px;
     }
-    .bento-card:hover { transform: translateY(-2px); }
+    .dashboard-header h1 {
+        font-size: 32px;
+        font-weight: 600;
+        color: var(--color-glacier);
+        margin-top: 8px;
+    }
 
-    .card-title { font-family: var(--font-mono); font-size: 13px; color: var(--color-fog); letter-spacing: 0.1em; z-index: 2; margin-bottom: 12px; }
-    .card-value { font-size: 40px; font-weight: 500; color: var(--color-glacier); line-height: 1; z-index: 2; }
-    
-    /* Faint architectural accents */
-    .card-emp { border-top: 2px solid var(--color-electric-iris); }
-    .card-comp { border-top: 2px solid var(--color-cipher-mint); }
-    .card-dept { border-top: 2px solid var(--color-ember); }
-    .card-app { border-top: 2px solid var(--color-azure); }
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 24px;
+    }
 
-    @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    .stat-card {
+        background: var(--glass-surface);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid var(--glass-border);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.2);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 15px 35px -10px rgba(0,0,0,0.3);
+    }
+
+    .stat-icon {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .icon-blue { background: rgba(59, 130, 246, 0.15); color: #3B82F6; }
+    .icon-purple { background: rgba(139, 92, 246, 0.15); color: #8B5CF6; }
+    .icon-green { background: rgba(16, 185, 129, 0.15); color: #10B981; }
+    .icon-orange { background: rgba(249, 115, 22, 0.15); color: #F97316; }
+
+    .stat-value {
+        font-size: 36px;
+        font-weight: 700;
+        color: var(--color-glacier);
+        font-family: var(--font-mono);
+    }
+
+    .stat-label {
+        font-size: 14px;
+        color: var(--color-fog);
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
 </style>
 
-<div class="welcome-section">
-    <div class="eyebrow-text">OVERVIEW</div>
-    <h1>Good morning, {{ username.title() if username else 'Admin' }}</h1>
-    <p>Welcome to your control center. Select a module to begin.</p>
-</div>
+<header class="dashboard-header">
+    <p class="eyebrow-text">Overview</p>
+    <h1>Welcome back, {{ username.title() if username else 'Admin' }}</h1>
+</header>
 
-<div class="bento-grid">
-    <div class="bento-card card-emp">
-        <div class="card-title">TOTAL EMPLOYEES</div>
-        <div class="card-value">{{ stats.emp_count }}</div>
-    </div>
+<section class="stats-grid">
+    <article class="stat-card">
+        <div class="stat-icon icon-blue"><i data-lucide="users"></i></div>
+        <div class="stat-value">{{ stats.emp_count }}</div>
+        <div class="stat-label">Total Employees</div>
+    </article>
 
-    <div class="bento-card card-comp">
-        <div class="card-title">ACTIVE COMPANIES</div>
-        <div class="card-value">{{ stats.comp_count }}</div>
-    </div>
+    <article class="stat-card">
+        <div class="stat-icon icon-purple"><i data-lucide="building-2"></i></div>
+        <div class="stat-value">{{ stats.comp_count }}</div>
+        <div class="stat-label">Active Companies</div>
+    </article>
 
-    <div class="bento-card card-dept">
-        <div class="card-title">DEPARTMENTS</div>
-        <div class="card-value">{{ stats.dept_count }}</div>
-    </div>
+    <article class="stat-card">
+        <div class="stat-icon icon-green"><i data-lucide="network"></i></div>
+        <div class="stat-value">{{ stats.dept_count }}</div>
+        <div class="stat-label">Departments</div>
+    </article>
 
-    <div class="bento-card card-app">
-        <div class="card-title">SYSTEM APPS</div>
-        <div class="card-value">{{ stats.app_count }}</div>
-    </div>
-</div>
+    <article class="stat-card">
+        <div class="stat-icon icon-orange"><i data-lucide="blocks"></i></div>
+        <div class="stat-value">{{ stats.app_count }}</div>
+        <div class="stat-label">Integrated Apps</div>
+    </article>
+</section>
 {% endblock %}
