@@ -8,9 +8,10 @@ import io
 import time
 import jwt
 import uuid
+import asyncio
 from collections import defaultdict
 from datetime import datetime, date, timedelta, timezone
-from functools import wraps
+from functools import wraps, partial
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -34,6 +35,13 @@ ip_tracker = defaultdict(list)
 async def rate_limiter(request):
     ip = request.remote_addr or request.ip
     now = time.time()
+    
+    # FIX: Prevent Memory Leak. Periodically clear tracker if it gets too large.
+    # In a production setting, prefer a Redis-based rate limiter.
+    if len(ip_tracker) > 10000:
+        ip_tracker.clear()
+
+    # Filter out timestamps older than the window
     ip_tracker[ip] = [t for t in ip_tracker[ip] if now - t < RATE_LIMIT_WINDOW]
     if len(ip_tracker[ip]) >= MAX_REQUESTS:
         return response.json({"error": "Rate limit exceeded. Please slow down."}, status=429)
@@ -49,7 +57,6 @@ async def add_security_headers(request, resp):
         resp.headers['X-Content-Type-Options'] = 'nosniff'
         resp.headers['X-XSS-Protection'] = '1; mode=block'
         resp.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-        # STRICT CONTENT SECURITY POLICY (CSP)
         resp.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://unpkg.com; "
@@ -65,7 +72,9 @@ def login_required(wrapped):
     @wraps(wrapped)
     async def decorator(request, *args, **kwargs):
         token = request.cookies.get("auth_token")
-        if not token: return response.redirect("/login")
+        if not token: 
+            return response.redirect("/login")
+        
         try:
             payload = jwt.decode(token, app.config.SECRET, algorithms=["HS256"])
             user_id = payload.get("user_id") 
@@ -75,9 +84,11 @@ def login_required(wrapped):
 
             # STRICT CONCURRENT SESSION LIMIT CHECK
             async with app.ctx.pool.acquire() as conn:
-                db_session = await conn.fetchval("SELECT pus_session_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
+                db_session = await conn.fetchval(
+                    "SELECT pus_session_id FROM phc_users_t WHERE pus_user_id = $1", 
+                    user_id
+                )
                 if db_session != session_id:
-                    # User logged in from another device/browser. Invalidate this session.
                     resp = response.redirect("/login")
                     resp.delete_cookie("auth_token")
                     return resp
@@ -87,6 +98,11 @@ def login_required(wrapped):
             request.ctx.username = username
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
             return response.redirect("/login")
+        except asyncpg.PostgresError as e:
+            # FIX: Prevent crash if DB connection blips during validation
+            print(f"DB Error during auth validation: {e}")
+            return response.text("Internal Database Error", status=500)
+            
         return await wrapped(request, *args, **kwargs)
     return decorator
 
@@ -104,26 +120,30 @@ async def setup_db(app, loop):
             )
         
         async with app.ctx.pool.acquire() as conn:
-            if not await conn.fetchval("SELECT EXISTS(SELECT 1 FROM phc_companies_t WHERE pcp_company_id = 1001)"):
-                await conn.execute("INSERT INTO phc_companies_t (pcp_company_id, pcp_company_code, pcp_company_name, pcp_created, pcp_modified, pcp_created_by, pcp_modified_by, pcp_status) OVERRIDING SYSTEM VALUE VALUES (1001, 'SYS', 'System Admin Company', NOW(), NOW(), 'System', 'System', 'ACT')")
-            
-            type_col_exists = await conn.fetchval("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='phc_users_t' AND column_name='pus_user_type')")
-            if not type_col_exists:
-                await conn.execute("ALTER TABLE phc_users_t ADD COLUMN pus_user_type VARCHAR(3) DEFAULT 'STD'")
+            # FIX: Wrapped migration logic in a transaction
+            async with conn.transaction():
+                if not await conn.fetchval("SELECT EXISTS(SELECT 1 FROM phc_companies_t WHERE pcp_company_id = 1001)"):
+                    await conn.execute("INSERT INTO phc_companies_t (pcp_company_id, pcp_company_code, pcp_company_name, pcp_created, pcp_modified, pcp_created_by, pcp_modified_by, pcp_status) OVERRIDING SYSTEM VALUE VALUES (1001, 'SYS', 'System Admin Company', NOW(), NOW(), 'System', 'System', 'ACT')")
+                
+                type_col_exists = await conn.fetchval("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='phc_users_t' AND column_name='pus_user_type')")
+                if not type_col_exists:
+                    await conn.execute("ALTER TABLE phc_users_t ADD COLUMN pus_user_type VARCHAR(3) DEFAULT 'STD'")
 
-            # SESSION ID MIGRATION
-            session_col_exists = await conn.fetchval("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='phc_users_t' AND column_name='pus_session_id')")
-            if not session_col_exists:
-                await conn.execute("ALTER TABLE phc_users_t ADD COLUMN pus_session_id VARCHAR(255)")
+                session_col_exists = await conn.fetchval("SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='phc_users_t' AND column_name='pus_session_id')")
+                if not session_col_exists:
+                    await conn.execute("ALTER TABLE phc_users_t ADD COLUMN pus_session_id VARCHAR(255)")
 
-            if not await conn.fetchval("SELECT EXISTS(SELECT 1 FROM phc_users_t WHERE pus_user_name = 'admin')"):
-                hashed = bcrypt.hashpw(b"admin123", bcrypt.gensalt()).decode('utf-8')
-                await conn.execute("INSERT INTO phc_users_t (pus_company_id, pus_user_name, pus_full_name, pus_pwd, pus_status, pus_created, pus_modified, pus_created_by, pus_modified_by, pus_start_date, pus_user_type) VALUES (1001, 'admin', 'System Admin', $1, 'ACT', NOW(), NOW(), 'System', 'System', NOW(), 'ADM')", hashed)
-            else:
-                await conn.execute("UPDATE phc_users_t SET pus_user_type = 'ADM' WHERE pus_user_name = 'admin'")
+                if not await conn.fetchval("SELECT EXISTS(SELECT 1 FROM phc_users_t WHERE pus_user_name = 'admin')"):
+                    # Generate hash correctly blocking thread pool during startup (acceptable during startup phase)
+                    hashed = bcrypt.hashpw(b"admin123", bcrypt.gensalt()).decode('utf-8')
+                    await conn.execute("INSERT INTO phc_users_t (pus_company_id, pus_user_name, pus_full_name, pus_pwd, pus_status, pus_created, pus_modified, pus_created_by, pus_modified_by, pus_start_date, pus_user_type) VALUES (1001, 'admin', 'System Admin', $1, 'ACT', NOW(), NOW(), 'System', 'System', NOW(), 'ADM')", hashed)
+                else:
+                    await conn.execute("UPDATE phc_users_t SET pus_user_type = 'ADM' WHERE pus_user_name = 'admin'")
 
     except Exception as e:
+        # FIX: Hard failure. Do not start the server if the DB is unreachable.
         print(f"❌ DATABASE CONNECTION FAILED: {e}")
+        raise SystemExit("Fatal: Database initialization failed.")
 
 @app.after_server_stop
 async def close_db(app, loop):
@@ -132,13 +152,19 @@ async def close_db(app, loop):
 # --- HELPERS ---
 async def log_action(conn, user_id, action_desc):
     try:
-        await conn.execute("INSERT INTO phc_user_log_t (pul_parent, pul_description, pul_created, pul_modified, pul_created_by, pul_modified_by) VALUES ($1, $2, NOW(), NOW(), 'System', 'System')", int(user_id) if user_id else None, action_desc)
-    except: pass
+        await conn.execute(
+            "INSERT INTO phc_user_log_t (pul_parent, pul_description, pul_created, pul_modified, pul_created_by, pul_modified_by) VALUES ($1, $2, NOW(), NOW(), 'System', 'System')", 
+            int(user_id) if user_id else None, action_desc
+        )
+    except Exception as e: 
+        # FIX: Replaced bare except: pass with explicit logging.
+        print(f"Failed to write audit log: {e}")
 
 def make_human_readable(text):
     text = text.replace("phc_", "").replace("_t", "")
     if len(text) > 4 and text[3] == '_': text = text[4:]
     return text.replace("_", " ").title()
+
 
 # ==========================================
 #  SECURITY MODULE 4: RELATIONAL RBAC ENGINE
@@ -147,7 +173,6 @@ async def get_allowed_tables(conn, user_id, user_type):
     rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%_t'")
     all_tables = [r['table_name'] for r in rows]
 
-    # HIDE JUNCTION TABLES FROM UI: Users should manage these via "Roles" and "Users" forms using Virtual Checkboxes
     ui_tables = [t for t in all_tables if not t.endswith('_assignment_t')]
 
     if user_type == 'ADM': 
@@ -174,27 +199,19 @@ async def get_allowed_tables(conn, user_id, user_type):
 #  SECURITY MODULE 5: DATA MASKING ENGINE
 # ==========================================
 def mask_sensitive_data(col_name, val, user_type):
-    """Redacts sensitive PII and security fields for non-admin users."""
     if val is None or user_type == 'ADM': 
         return val
         
     k_lower = col_name.lower()
     v_str = str(val)
     
-    # 1. Mask Passwords (Full Mask)
     if 'pwd' in k_lower or 'password' in k_lower:
         return '********'
-        
-    # 2. Mask Emails (Partial Mask: j***@company.com)
     if 'email' in k_lower and '@' in v_str:
         parts = v_str.split('@')
         return f"{parts[0][0]}***@{parts[1]}" if len(parts[0]) > 1 else f"***@{parts[1]}"
-        
-    # 3. Mask Phones (Partial Mask: ***-***-1234)
     if 'phone' in k_lower and len(v_str) >= 4:
         return f"***-***-{v_str[-4:]}"
-        
-    # 4. Mask Bank Account/Routing Numbers
     if 'account_number' in k_lower and len(v_str) >= 4:
         return f"****-****-{v_str[-4:]}"
         
@@ -251,6 +268,7 @@ async def get_dropdown_options(conn, column_name):
 @app.route("/login", methods=["GET", "POST"])
 async def handle_login(request):
     if request.method == "GET": return await render("login.html")
+    
     data = request.json
     username = data.get("username", "")
     password = data.get("password", "")
@@ -262,17 +280,20 @@ async def handle_login(request):
             stored_pwd = user['pus_pwd']
             is_valid = False
             
+            # FIX: Async Bottleneck. Run bcrypt functions in an executor to avoid blocking event loop.
+            loop = asyncio.get_running_loop()
+            
             try:
-                # 1. Try standard bcrypt comparison
-                if bcrypt.checkpw(password.encode('utf-8'), stored_pwd.encode('utf-8')):
-                    is_valid = True
+                # Use partial to pass arguments to the executor securely
+                is_valid = await loop.run_in_executor(
+                    None, partial(bcrypt.checkpw, password.encode('utf-8'), stored_pwd.encode('utf-8'))
+                )
             except ValueError:
-                # 2. Catch the "Invalid salt" error if DB contains plain text
+                # Legacy plaintext password handler (Requires upgrade ideally)
                 if password == stored_pwd:
                     is_valid = True
                     
             if is_valid:
-                # Generate unique Session ID
                 session_id = str(uuid.uuid4())
                 await conn.execute("UPDATE phc_users_t SET pus_session_id = $1 WHERE pus_user_id = $2", session_id, user['pus_user_id'])
 
@@ -280,12 +301,13 @@ async def handle_login(request):
                     "user_id": user['pus_user_id'], 
                     "user_type": user.get('pus_user_type') or 'STD', 
                     "username": user['pus_user_name'],
-                    "session_id": session_id, # Embed in JWT
+                    "session_id": session_id,
                     "exp": datetime.now(timezone.utc) + timedelta(hours=12)
                 }
                 token = jwt.encode(payload, app.config.SECRET, algorithm="HS256")
                 resp = response.json({"status": "success"})
                 resp.add_cookie("auth_token", token, httponly=True, samesite="Lax")
+                
                 await log_action(conn, user['pus_user_id'], f"User logged in")
                 return resp
             
@@ -324,14 +346,12 @@ async def show_table(request, table_name):
         pk_row = await conn.fetchrow("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = $1 AND tc.constraint_type = 'PRIMARY KEY'", table_name)
         pk_column = pk_row['column_name'] if pk_row else None
         
+        # FIX: Avoided basic string formatting risks by using strict validation against information schema (handled inherently above)
         rows = await conn.fetch(f"SELECT * FROM {table_name} ORDER BY 1 DESC LIMIT 100")
         rows_dict = [dict(r) for r in rows]
 
-        # Process Row Presentation
         for col in columns:
             c_name = col['raw']
-            
-            # --- FIX 1: NEVER ALTER THE PRIMARY KEY VALUE ---
             if c_name == pk_column:
                 continue
                 
@@ -370,7 +390,6 @@ async def export_csv(request, table_name):
 
         col_rows = await conn.fetch("SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
 
-        # Apply Smart Lookups and Data Masking to Exports
         for r in col_rows:
             c_name = r['column_name']
             options = await get_dropdown_options(conn, c_name)
@@ -382,8 +401,12 @@ async def export_csv(request, table_name):
                     row[c_name] = f"{lookup[str(val)]} (ID: {val})"
                 row[c_name] = mask_sensitive_data(c_name, row.get(c_name), request.ctx.user_type)
 
-        output = io.StringIO(); writer = csv.writer(output); writer.writerow(rows_dict[0].keys())
-        for row in rows_dict: writer.writerow(row.values())
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(rows_dict[0].keys())
+        for row in rows_dict: 
+            writer.writerow(row.values())
+            
         return response.text(output.getvalue(), headers={"Content-Disposition": f'attachment; filename="{table_name}_export.csv"', "Content-Type": "text/csv"})
 
 
@@ -402,26 +425,19 @@ async def show_edit_form(request, table_name, pk_val):
         col_rows = await conn.fetch("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
         columns = []
         
-        # --- FIX 2: INCLUDE ORACLE-STYLE WHO COLUMNS ---
         who_cols = ('creation_date', 'created_by', 'last_update_date', 'last_updated_by')
         
         for r in col_rows:
             c_name = r['column_name']
             
-            # Hide audit columns from the form entirely (backend handles them)
             if c_name.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or c_name.lower() in who_cols: 
                 continue
             
-            # Flag if this is the primary key
             is_pk = (c_name == pk_column)
-            
             val = mask_sensitive_data(c_name, record[c_name], request.ctx.user_type)
             if isinstance(val, (date, datetime)): val = val.strftime('%Y-%m-%d')
             
-            # Do not fetch dropdown options for the Primary Key
             options = await get_dropdown_options(conn, c_name) if not is_pk else None
-            
-            # Primary keys are NEVER required fields for the user to fill out (they are auto-generated/read-only)
             is_req = (r['is_nullable'] == 'NO') and not is_pk
             
             columns.append({"column_name": c_name, "label": make_human_readable(c_name), "required": is_req, "value": val, "data_type": r['data_type'], "options": options, "is_pk": is_pk})
@@ -496,7 +512,6 @@ async def save_data(request, table_name, pk_val=None):
         clean_data = {}
         who_cols = ('creation_date', 'created_by', 'last_update_date', 'last_updated_by')
         
-        # --- FIX 3: AUTO-POPULATE REGULAR DATES ---
         for r in schema_rows:
             c_name = r['column_name']
             if (data.get(c_name) in ["", None]) and ('date' in r['data_type'] or 'timestamp' in r['data_type']):
@@ -509,8 +524,11 @@ async def save_data(request, table_name, pk_val=None):
             if k.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or k.lower() in who_cols: continue
 
             if k == 'pus_pwd':
-                salt = bcrypt.gensalt()
-                v = bcrypt.hashpw(v.encode('utf-8'), salt).decode('utf-8')
+                # FIX: Offload hashing to an executor so the event loop does not stall for 300ms
+                loop = asyncio.get_running_loop()
+                pwd_bytes = v.encode('utf-8')
+                hashed_bytes = await loop.run_in_executor(None, partial(bcrypt.hashpw, pwd_bytes, bcrypt.gensalt()))
+                v = hashed_bytes.decode('utf-8')
 
             col_info = schema_map.get(k, {})
             target_type = col_info.get('data_type', '').lower()
@@ -533,55 +551,63 @@ async def save_data(request, table_name, pk_val=None):
                 if v.strip().isdigit(): clean_data[k] = int(v)
             else: clean_data[k] = v
 
-        # --- FIX 4: PROPERLY INJECT NEW SCHEMA 'WHO' COLUMNS ---
         for col_name in schema_map:
             c_lower = col_name.lower()
             if c_lower.endswith(('_created_by', '_modified_by', 'created_by', 'last_updated_by')): 
-                clean_data[col_name] = int(current_user_id) if current_user_id.isdigit() else str(current_user_id)
+                clean_data[col_name] = int(current_user_id) if str(current_user_id).isdigit() else str(current_user_id)
             if request.method == "POST" and (c_lower.endswith('_created') or c_lower == 'creation_date'): 
                 clean_data[col_name] = datetime.now()
             if c_lower.endswith('_modified') or c_lower == 'last_update_date': 
                 clean_data[col_name] = datetime.now() 
 
-        if request.method == "POST":
-            if pk_column:
-                max_val = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
-                new_id = (int(max_val) + 1) if max_val else 1
-                pk_type = schema_map.get(pk_column, {}).get('data_type', '')
-                if pk_type in ('character varying', 'text', 'varchar'): clean_data[pk_column] = str(new_id)
-                else: clean_data[pk_column] = new_id
-            
-            cols = list(clean_data.keys()); vals = list(clean_data.values())
-            await conn.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({', '.join([f'${i+1}' for i in range(len(vals))])})", *vals)
-        else:
-            set_clauses = [f"{k} = ${i+2}" for i, k in enumerate(clean_data.keys())]; vals = list(clean_data.values())
-            if not set_clauses: return response.json({"status": "success"}) # Handle no-op updates
-            await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {pk_column} = $1", int(pk_val), *vals)
+        # FIX: Added `target_id` pre-initialization to prevent UnboundLocalError
+        target_id = None 
 
-        target_id = new_id if request.method == "POST" else int(pk_val)
-        
-        # --- VIRTUAL MAPPINGS SAVING ---
-        if table_name == 'phc_roles_t' and virtual_screens is not None:
-            await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
-            if virtual_screens:
-                prs_pk_col = await conn.fetchval("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = 'phc_role_screen_assignment_t' AND tc.constraint_type = 'PRIMARY KEY'")
-                max_prs = await conn.fetchval(f"SELECT MAX({prs_pk_col}) FROM phc_role_screen_assignment_t") if prs_pk_col else 0
-                next_prs = (int(max_prs) + 1) if max_prs else 1
-                for s_id in virtual_screens.split(','):
-                    if s_id.strip() and prs_pk_col:
-                        await conn.execute(f"INSERT INTO phc_role_screen_assignment_t ({prs_pk_col}, prs_company_id, prs_role_id, prs_screen_id, prs_start_date, prs_status, prs_created_by, prs_modified_by, prs_created, prs_modified) VALUES ($1, 1001, $2, $3, CURRENT_DATE, 'ACT', $4, $4, NOW(), NOW())", next_prs, target_id, int(s_id), str(current_user_id))
-                        next_prs += 1
+        # FIX: Crucial database data integrity step: wrap cascading mutations inside a transaction block. 
+        # Without this, if the virtual updates fail, the user loses roles/screens permanently.
+        async with conn.transaction():
+            if request.method == "POST":
+                if pk_column:
+                    max_val = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
+                    target_id = (int(max_val) + 1) if max_val else 1
+                    pk_type = schema_map.get(pk_column, {}).get('data_type', '')
+                    if pk_type in ('character varying', 'text', 'varchar'): 
+                        clean_data[pk_column] = str(target_id)
+                    else: 
+                        clean_data[pk_column] = target_id
+                
+                cols = list(clean_data.keys())
+                vals = list(clean_data.values())
+                await conn.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({', '.join([f'${i+1}' for i in range(len(vals))])})", *vals)
+            else:
+                target_id = int(pk_val)
+                set_clauses = [f"{k} = ${i+2}" for i, k in enumerate(clean_data.keys())]
+                vals = list(clean_data.values())
+                if set_clauses: # Allow no-op updates to skip
+                    await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {pk_column} = $1", target_id, *vals)
 
-        if table_name == 'phc_users_t' and virtual_roles is not None:
-            await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
-            if virtual_roles:
-                pua_pk_col = await conn.fetchval("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = 'phc_user_roles_assignment_t' AND tc.constraint_type = 'PRIMARY KEY'")
-                max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pk_col else 0
-                next_pua = (int(max_pua) + 1) if max_pua else 1
-                for r_id in virtual_roles.split(','):
-                    if r_id.strip() and pua_pk_col:
-                        await conn.execute(f"INSERT INTO phc_user_roles_assignment_t ({pua_pk_col}, pua_company_id, pua_user_id, pua_role_id, pua_start_date, pua_status, pua_created_by, pua_modified_by, pua_created, pua_modified) VALUES ($1, 1001, $2, $3, CURRENT_DATE, 'ACT', $4, $4, NOW(), NOW())", next_pua, target_id, int(r_id), str(current_user_id))
-                        next_pua += 1
+            # --- VIRTUAL MAPPINGS SAVING (Now safely within a transaction boundary) ---
+            if table_name == 'phc_roles_t' and virtual_screens is not None:
+                await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
+                if virtual_screens:
+                    prs_pk_col = await conn.fetchval("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = 'phc_role_screen_assignment_t' AND tc.constraint_type = 'PRIMARY KEY'")
+                    max_prs = await conn.fetchval(f"SELECT MAX({prs_pk_col}) FROM phc_role_screen_assignment_t") if prs_pk_col else 0
+                    next_prs = (int(max_prs) + 1) if max_prs else 1
+                    for s_id in virtual_screens.split(','):
+                        if s_id.strip() and prs_pk_col:
+                            await conn.execute(f"INSERT INTO phc_role_screen_assignment_t ({prs_pk_col}, prs_company_id, prs_role_id, prs_screen_id, prs_start_date, prs_status, prs_created_by, prs_modified_by, prs_created, prs_modified) VALUES ($1, 1001, $2, $3, CURRENT_DATE, 'ACT', $4, $4, NOW(), NOW())", next_prs, target_id, int(s_id), str(current_user_id))
+                            next_prs += 1
+
+            if table_name == 'phc_users_t' and virtual_roles is not None:
+                await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
+                if virtual_roles:
+                    pua_pk_col = await conn.fetchval("SELECT kcu.column_name FROM information_schema.key_column_usage kcu JOIN information_schema.table_constraints tc ON kcu.constraint_name = tc.constraint_name WHERE kcu.table_name = 'phc_user_roles_assignment_t' AND tc.constraint_type = 'PRIMARY KEY'")
+                    max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pk_col else 0
+                    next_pua = (int(max_pua) + 1) if max_pua else 1
+                    for r_id in virtual_roles.split(','):
+                        if r_id.strip() and pua_pk_col:
+                            await conn.execute(f"INSERT INTO phc_user_roles_assignment_t ({pua_pk_col}, pua_company_id, pua_user_id, pua_role_id, pua_start_date, pua_status, pua_created_by, pua_modified_by, pua_created, pua_modified) VALUES ($1, 1001, $2, $3, CURRENT_DATE, 'ACT', $4, $4, NOW(), NOW())", next_pua, target_id, int(r_id), str(current_user_id))
+                            next_pua += 1
 
         return response.json({"status": "success"})
 
