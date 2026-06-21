@@ -65,6 +65,7 @@ ip_tracker = defaultdict(list)
 
 @app.on_request
 async def rate_limiter(request):
+    """Limits requests to prevent brute force and DDoS attacks."""
     ip = request.remote_addr or request.ip
     now = time.time()
 
@@ -76,8 +77,10 @@ async def rate_limiter(request):
         return response.json({"error": "Rate limit exceeded. Please slow down."}, status=429)
     ip_tracker[ip].append(now)
 
+
 @app.on_response
 async def add_security_headers(request, resp):
+    """Injects robust HTTP security headers into every response."""
     if resp:
         resp.headers['X-Frame-Options'] = 'SAMEORIGIN'
         resp.headers['X-Content-Type-Options'] = 'nosniff'
@@ -91,7 +94,9 @@ async def add_security_headers(request, resp):
             "img-src 'self' data:;"
         )
 
+
 def login_required(wrapped):
+    """Decorator to enforce JWT authentication and session validation."""
     @wraps(wrapped)
     async def decorator(request, *args, **kwargs):
         token = request.cookies.get("auth_token")
@@ -132,6 +137,7 @@ def login_required(wrapped):
 # ==========================================
 @app.before_server_start
 async def setup_db(app_instance, loop):
+    """Initializes the database connection pool and runs migrations."""
     try:
         dsn = CLOUD_DB_URL or f"postgres://postgres:{os.environ.get('LOCAL_DB_PASSWORD')}@localhost/tablesproj"
         app_instance.ctx.pool = await asyncpg.create_pool(
@@ -154,6 +160,7 @@ async def close_db(app_instance, loop):
 
 
 async def _run_initial_migrations(conn):
+    """Handles schema generation, initial data seeding, and indexing."""
     if not await conn.fetchval("SELECT EXISTS(SELECT 1 FROM phc_companies_t WHERE pcp_company_id = 1001)"):
         await conn.execute("""
             INSERT INTO phc_companies_t 
@@ -192,6 +199,7 @@ async def _run_initial_migrations(conn):
 
 
 async def log_action(conn, user_id, action_desc):
+    """Records an audit log entry."""
     try:
         await conn.execute("""
             INSERT INTO phc_user_log_t 
@@ -213,6 +221,7 @@ def make_human_readable(text):
 #  DATA RESOLUTION & RBAC ENGINES
 # ==========================================
 async def get_allowed_tables(conn, user_id, user_type):
+    """Resolves UI tables the user is allowed to view/edit."""
     if SCHEMA_CACHE["tables"] is None:
         rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%_t'")
         SCHEMA_CACHE["tables"] = [r['table_name'] for r in rows]
@@ -240,6 +249,7 @@ async def get_allowed_tables(conn, user_id, user_type):
 
 
 def mask_sensitive_data(col_name, val, user_type):
+    """Redacts PII and sensitive data for non-admin users."""
     if val is None or user_type == 'ADM':
         return val
 
@@ -310,6 +320,7 @@ async def get_dropdown_options(conn, column_name):
         return None
 
     if target_table not in SCHEMA_CACHE["columns"]:
+        # FIX: Included data_type in the select query to prevent KeyError
         cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", target_table)
         SCHEMA_CACHE["columns"][target_table] = [dict(c) for c in cols]
 
@@ -354,6 +365,7 @@ async def handle_login(request):
                     None, partial(bcrypt.checkpw, password.encode('utf-8'), stored_pwd.encode('utf-8'))
                 )
             except ValueError:
+                # Legacy plaintext password handler natively upgrades to secure bcrypt hashing
                 if password == stored_pwd:
                     is_valid = True
                     new_hashed_bytes = await loop.run_in_executor(None, partial(bcrypt.hashpw, password.encode('utf-8'), bcrypt.gensalt()))
@@ -415,7 +427,7 @@ async def show_table(request, table_name):
             return response.redirect("/")
 
         if table_name not in SCHEMA_CACHE["columns"]:
-            # FIX: Added data_type to the SELECT statement
+            # FIX: Included data_type in the select query to prevent KeyError
             cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
             SCHEMA_CACHE["columns"][table_name] = [dict(c) for c in cols]
 
@@ -457,11 +469,10 @@ async def export_csv(request, table_name):
         pk_column = await get_pk_column(conn, table_name)
 
         if table_name not in SCHEMA_CACHE["columns"]:
-            # FIX: Added data_type to the SELECT statement
+            # FIX: Included data_type in the select query to prevent KeyError
             cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
             SCHEMA_CACHE["columns"][table_name] = [dict(c) for c in cols]
 
-        # FIX: Ensure we cast the PK safely based on the Schema data type
         if pk_id and pk_column:
             query += f" WHERE {pk_column} = $1"
             pk_type = next((r['data_type'] for r in SCHEMA_CACHE["columns"][table_name] if r['column_name'] == pk_column), 'integer')
@@ -508,7 +519,6 @@ async def show_edit_form(request, table_name, pk_val):
         pk_column = await get_pk_column(conn, table_name)
         col_rows = await conn.fetch("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
         
-        # --- CRASH FIX: Cast PK appropriately instead of forcing int() ---
         pk_type = next((r['data_type'] for r in col_rows if r['column_name'] == pk_column), 'integer')
         parsed_pk = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
         
@@ -569,7 +579,6 @@ async def show_add_form(request, table_name):
             options = await get_dropdown_options(conn, c_name) if not is_pk else None
             is_req = (r['is_nullable'] == 'NO') and not is_pk
             
-            # --- FIX: Pre-fill frontend Date fields so required='NO' doesn't block submission ---
             val = ""
             if ('date' in r['data_type'] or 'timestamp' in r['data_type']) and 'end' not in c_name.lower() and not is_pk:
                 val = datetime.now().strftime('%Y-%m-%d')
@@ -643,8 +652,15 @@ async def _sanitize_payload(data, schema_map, pk_column, current_user_id, reques
 
     for col_name in schema_map:
         c_lower = col_name.lower()
+        
+        # --- FIX: Dynamically cast the audit user ID based on DB schema to prevent DataError ---
         if c_lower.endswith(('_created_by', '_modified_by', 'created_by', 'last_updated_by')):
-            clean_data[col_name] = int(current_user_id) if str(current_user_id).isdigit() else str(current_user_id)
+            target_type = schema_map.get(col_name, {}).get('data_type', '').lower()
+            if target_type in ('integer', 'bigint', 'numeric', 'smallint'):
+                clean_data[col_name] = int(current_user_id) if str(current_user_id).isdigit() else None
+            else:
+                clean_data[col_name] = str(current_user_id)
+                
         if request_method == "POST" and (c_lower.endswith('_created') or c_lower == 'creation_date'):
             clean_data[col_name] = datetime.now()
         if c_lower.endswith('_modified') or c_lower == 'last_update_date':
@@ -694,7 +710,6 @@ async def save_data(request, table_name, pk_val=None):
                 placeholders = ', '.join([f'${i+1}' for i in range(len(vals))])
                 await conn.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({placeholders})", *vals)
             else:
-                # --- CRASH FIX: Cast PK appropriately ---
                 pk_type = schema_map.get(pk_column, {}).get('data_type', '')
                 target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
                 
