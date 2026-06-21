@@ -4,10 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nexus ERP - Login</title>
-    <!-- Premium Typography -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <style>
@@ -18,195 +15,98 @@
             --text-main: #F8FAFC;
             --text-muted: #94A3B8;
             --accent-primary: #3B82F6;
-            --accent-glow: rgba(59, 130, 246, 0.5);
-            --accent-danger: #EF4444;
-            --font-main: 'Plus Jakarta Sans', sans-serif;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: var(--font-main);
+            font-family: 'Inter', sans-serif;
             background-color: var(--bg-deep);
             color: var(--text-main);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            display: flex; align-items: center; justify-content: center;
             min-height: 100vh;
-            overflow: hidden;
-            position: relative; /* Required for absolute background */
         }
-
-        /* --- DOTTED GLOW BACKGROUND EFFECT --- */
-        .dotted-glow-bg {
-            position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            z-index: -1;
-            overflow: hidden;
-            background-color: var(--bg-deep);
-        }
-
-        /* The Dotted Grid Overlay */
-        .dotted-pattern {
-            position: absolute;
-            inset: -50%; /* Make it larger to allow movement if needed */
-            background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
-            background-size: 24px 24px;
-            /* Fades the grid out at the edges like a radial mask */
-            -webkit-mask-image: radial-gradient(ellipse at center, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 80%);
-            mask-image: radial-gradient(ellipse at center, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 80%);
-            z-index: 2;
-        }
-
-        /* Moving Glowing Orbs */
-        .glow-orb {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(90px);
-            opacity: 0.4;
-            z-index: 1;
-            animation: floatGlow 20s infinite alternate ease-in-out;
-        }
-
-        .orb-1 {
-            width: 500px; height: 500px;
-            background: #3B82F6; /* Blue glow */
-            top: 10%; left: 15%;
-        }
-
-        .orb-2 {
-            width: 400px; height: 400px;
-            background: #8B5CF6; /* Purple glow */
-            bottom: 10%; right: 15%;
-            animation-delay: -10s;
-            animation-duration: 25s;
-        }
-
-        @keyframes floatGlow {
-            0% { transform: translate(0, 0) scale(1); }
-            33% { transform: translate(100px, -50px) scale(1.1); }
-            66% { transform: translate(-50px, 100px) scale(0.9); }
-            100% { transform: translate(0, 0) scale(1); }
-        }
-        /* ------------------------------------- */
 
         .login-card {
-            background: var(--bg-card);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--border-color);
-            border-radius: 24px;
-            padding: 50px 40px;
-            width: 100%;
-            max-width: 420px;
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+            background: var(--bg-card); backdrop-filter: blur(20px);
+            border: 1px solid var(--border-color); border-radius: 24px;
+            padding: 50px 40px; width: 100%; max-width: 420px;
             text-align: center;
-            animation: floatIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-            position: relative;
-            z-index: 10;
-        }
-
-        @keyframes floatIn {
-            0% { opacity: 0; transform: translateY(30px) scale(0.95); }
-            100% { opacity: 1; transform: translateY(0) scale(1); }
         }
 
         .logo-wrap {
             display: inline-flex; align-items: center; justify-content: center;
             width: 64px; height: 64px; border-radius: 16px;
-            background: linear-gradient(135deg, rgba(59,130,246,0.2), rgba(139,92,246,0.2));
-            border: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px;
-            color: var(--accent-primary);
+            background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); 
+            margin-bottom: 20px; color: var(--accent-primary);
         }
 
-        h1 { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 8px; }
-        p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 40px; }
+        .login-header h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 8px; }
+        .login-header p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 40px; }
 
-        .input-group {
-            display: flex; flex-direction: column; gap: 8px; text-align: left; margin-bottom: 20px;
-        }
-
-        .input-group label {
-            font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;
-        }
+        .input-group { display: flex; flex-direction: column; gap: 8px; text-align: left; margin-bottom: 20px; }
+        .input-group label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
 
         .input-wrapper { position: relative; }
         .input-wrapper i {
             position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
-            color: var(--text-muted); width: 20px; height: 20px;
+            color: var(--text-muted); width: 18px;
         }
 
         input {
             width: 100%; padding: 14px 16px 14px 46px;
             border: 1px solid var(--border-color); border-radius: 12px;
-            font-size: 1rem; font-family: var(--font-main);
-            background: rgba(0,0,0,0.2); color: white;
-            transition: all 0.2s;
+            font-size: 1rem; font-family: inherit;
+            background: rgba(0,0,0,0.2); color: white; transition: all 0.2s;
         }
-        input:focus {
-            outline: none; border-color: var(--accent-primary);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-            background: rgba(0,0,0,0.4);
-        }
+        input:focus { outline: none; border-color: var(--accent-primary); background: rgba(0,0,0,0.4); }
 
         .btn-login {
             width: 100%; padding: 16px; margin-top: 10px;
             background: var(--accent-primary); color: white;
-            border: none; border-radius: 12px;
-            font-size: 1rem; font-weight: 700; font-family: var(--font-main); cursor: pointer;
-            box-shadow: 0 10px 25px -5px var(--accent-glow);
-            transition: all 0.2s;
+            border: none; border-radius: 12px; font-size: 1rem; font-weight: 600;
+            cursor: pointer; transition: background 0.2s;
             display: flex; justify-content: center; align-items: center; gap: 10px;
         }
-        .btn-login:hover {
-            transform: translateY(-2px); box-shadow: 0 15px 30px -5px var(--accent-glow);
-        }
+        .btn-login:hover { background: #2563EB; }
 
         #error-msg {
-            color: var(--accent-danger); font-size: 0.85rem; font-weight: 600;
-            margin-top: 15px; min-height: 20px; opacity: 0; transition: opacity 0.3s;
+            color: #EF4444; font-size: 0.85rem; font-weight: 500;
+            margin-top: 15px; min-height: 20px; opacity: 0;
         }
     </style>
 </head>
 <body>
-
-    <!-- DOTTED GLOW BACKGROUND INJECTED HERE -->
-    <div class="dotted-glow-bg">
-        <div class="glow-orb orb-1"></div>
-        <div class="glow-orb orb-2"></div>
-        <div class="dotted-pattern"></div>
-    </div>
-
-    <div class="login-card">
-        <div class="logo-wrap">
-            <i data-lucide="layers" style="width: 32px; height: 32px;"></i>
-        </div>
-        <h1>Nexus ERP</h1>
-        <p>Sign in to your control center</p>
+    <main class="login-card">
+        <header class="login-header">
+            <div class="logo-wrap"><i data-lucide="layers"></i></div>
+            <h1>Nexus ERP</h1>
+            <p>Sign in to your control center</p>
+        </header>
 
         <form id="loginForm" onsubmit="handleLogin(event)">
-            <div class="input-group">
-                <label>Username</label>
+            <section class="input-group">
+                <label for="username">Username</label>
                 <div class="input-wrapper">
                     <i data-lucide="user"></i>
                     <input type="text" id="username" required placeholder="Enter username" autocomplete="username">
                 </div>
-            </div>
+            </section>
 
-            <div class="input-group">
-                <label>Password</label>
+            <section class="input-group">
+                <label for="password">Password</label>
                 <div class="input-wrapper">
                     <i data-lucide="lock"></i>
                     <input type="password" id="password" required placeholder="••••••••" autocomplete="current-password">
                 </div>
-            </div>
+            </section>
 
             <button type="submit" class="btn-login" id="loginBtn">
                 Sign In <i data-lucide="arrow-right" style="width: 18px;"></i>
             </button>
-            <div id="error-msg">Invalid Credentials</div>
+            <div id="error-msg" role="alert">Invalid Credentials</div>
         </form>
-    </div>
+    </main>
 
     <script>
         lucide.createIcons();
@@ -231,9 +131,8 @@
 
                 if (res.ok) {
                     btn.innerHTML = '<i data-lucide="check-circle-2" style="width:18px;"></i> Success';
-                    lucide.createIcons();
                     btn.style.background = "#10B981";
-                    btn.style.boxShadow = "0 10px 25px -5px rgba(16,185,129,0.5)";
+                    lucide.createIcons();
                     setTimeout(() => window.location.href = "/", 600);
                 } else {
                     const data = await res.json();
