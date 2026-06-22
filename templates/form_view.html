@@ -2,26 +2,17 @@
 
 {% block content %}
 <style>
-    /* THIS CENTERS THE FORM ON THE SCREEN */
     .content-wrapper {
-        width: 100%;
-        max-width: 900px;
-        margin: 0 auto;
-        display: flex;
-        flex-direction: column;
+        width: 100%; max-width: 900px; margin: 0 auto;
+        display: flex; flex-direction: column;
     }
 
     .page-header { margin-bottom: 32px; }
     .page-header h1 { font-size: 28px; font-weight: 500; color: var(--color-glacier); letter-spacing: normal; line-height: 1.17; margin: 0; }
 
-    /* Translucent Glassmorphism Form */
     .form-container {
-        background: var(--glass-surface);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
-        border: 1px solid var(--glass-border);
-        border-radius: 12px;
-        padding: 40px;
+        background: var(--glass-surface); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+        border: 1px solid var(--glass-border); border-radius: 12px; padding: 40px;
         box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
         animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
@@ -32,7 +23,6 @@
     .form-group { display: flex; flex-direction: column; gap: 8px; }
     .form-group label { font-size: 14px; font-weight: 500; color: var(--color-moonlight); text-transform: none; }
 
-    /* Form Inputs */
     .form-group input[type="text"], .form-group input[type="password"], .form-group input[type="date"], .form-group select {
         padding: 12px 14px; border: 1px solid var(--glass-border); border-radius: 6px;
         font-size: 14px; font-family: var(--font-ui); background-color: rgba(0,0,0,0.3); color: var(--color-glacier); 
@@ -47,16 +37,9 @@
         box-shadow: 0 0 0 1px var(--color-frost-link);
     }
 
-    /* STRICT READ-ONLY FOR PRIMARY KEYS */
-    .readonly-input {
-        opacity: 0.6;
-        cursor: not-allowed;
-        background-color: rgba(0,0,0,0.3) !important;
-        pointer-events: none;
-    }
+    .readonly-input { opacity: 0.6; cursor: not-allowed; background-color: rgba(0,0,0,0.3) !important; pointer-events: none; }
     html.light-mode .readonly-input { background-color: rgba(0,0,0,0.05) !important; }
 
-    /* CHECKBOXES & TOGGLES */
     .checkbox-scroll-box { max-height: 250px; overflow-y: auto; padding: 12px; border-radius: 6px; background-color: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); }
     html.light-mode .checkbox-scroll-box { background-color: rgba(255,255,255,0.6); }
     .checkbox-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 4px; cursor: pointer; transition: background 0.2s; font-weight: 400; font-size: 14px; color: var(--color-moonlight); }
@@ -99,7 +82,16 @@
     </div>
 
     <div class="form-container">
-        <form onsubmit="submitForm(event)">
+        <!-- HTMX JSON-ENC Form -->
+        <form hx-ext="json-enc" 
+              hx-swap="none"
+              {% if mode == 'edit' %}
+              hx-put="/api/{{ table_name }}/{{ pk_val }}"
+              {% else %}
+              hx-post="/api/{{ table_name }}"
+              {% endif %}
+              id="recordForm">
+            
             <div class="form-grid">
                 {% for col in columns %}
                 <div class="form-group">
@@ -110,7 +102,6 @@
                     </label>
                     
                     {% if col.column_name.lower().endswith('status') %}
-                        <!-- FIX: Safely catches ANY column ending in "status" (like pjb_status, status, pcc_status) -->
                         <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'ACT' }}">
                         <div class="status-group">
                             <div class="status-btn" id="btn_act_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'ACT')">Active</div>
@@ -125,7 +116,6 @@
                         </script>
 
                     {% elif col.is_pk %}
-                        <!-- STRICTLY READ-ONLY FOR PRIMARY KEYS -->
                         <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else 'Pending...' }}" class="readonly-input" readonly tabindex="-1">
 
                     {% elif col.data_type == 'virtual_checkbox' %}
@@ -181,52 +171,6 @@
         const btnIna = document.getElementById('btn_ina_' + colName);
         if(btnAct) { btnAct.className = 'status-btn'; if(value === 'ACT' || value === 'AIU') btnAct.classList.add('active-selected'); }
         if(btnIna) { btnIna.className = 'status-btn'; if(value !== 'ACT' && value !== 'AIU') btnIna.classList.add('inactive-selected'); }
-    }
-
-    async function submitForm(e) {
-        e.preventDefault();
-        const btn = e.target.querySelector('.btn-submit');
-        const originalBtnHTML = btn.innerHTML;
-        btn.innerHTML = '<i data-lucide="loader-2" class="lucide-spin" style="width: 18px;"></i> Saving...';
-        lucide.createIcons();
-
-        const formData = new FormData(e.target);
-        const data = {};
-        for (const [key, value] of formData.entries()) {
-            if (data[key] !== undefined) data[key] += ',' + value;
-            else data[key] = value;
-        }
-
-        ['pr_allowed_tables', 'pu_assigned_roles'].forEach(groupName => {
-            if (document.querySelectorAll(`input[type="checkbox"][name="${groupName}"]`).length > 0 && data[groupName] === undefined) data[groupName] = "";
-        });
-
-        for (const key in data) if (data[key] === "") data[key] = null; 
-
-        const mode = "{{ mode }}";
-        const url = mode === "edit" ? "/api/{{ table_name }}/{{ pk_val }}" : "/api/{{ table_name }}";
-        const method = mode === "edit" ? "PUT" : "POST";
-
-        try {
-            const res = await fetch(url, { method: method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
-            if (res.ok) {
-                btn.innerHTML = '<i data-lucide="check" style="width: 18px;"></i> Saved';
-                lucide.createIcons();
-                
-                sessionStorage.setItem('pendingToast', JSON.stringify({msg: 'Record saved successfully!', type: 'success'}));
-                setTimeout(() => window.location.href = "/table/{{ table_name }}", 600);
-            } else {
-                const err = await res.json();
-                showToast("Error: " + (err.error || "Failed to save"), "error");
-                btn.innerHTML = originalBtnHTML;
-                lucide.createIcons();
-            }
-        } catch (err) { 
-            showToast("Network Error occurred.", "error"); 
-            console.error(err); 
-            btn.innerHTML = originalBtnHTML;
-            lucide.createIcons();
-        }
     }
 </script>
 {% endblock %}
