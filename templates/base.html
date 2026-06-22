@@ -64,6 +64,19 @@
 
         tr.htmx-swapping td { opacity: 0; transition: opacity 0.4s ease-out; }
 
+        /* YOUTUBE-STYLE TOP LOADING BAR FOR HTMX */
+        body.htmx-request::before {
+            content: ""; position: fixed; top: 0; left: 0; height: 3px;
+            background: var(--color-electric-iris); z-index: 9999;
+            box-shadow: 0 0 10px var(--color-electric-iris);
+            animation: loadingBar 1.5s infinite ease-out;
+        }
+        @keyframes loadingBar {
+            0% { width: 0%; opacity: 1; }
+            50% { width: 60%; opacity: 1; }
+            100% { width: 100%; opacity: 0; }
+        }
+
         .animated-bg {
             position: fixed; inset: 0; z-index: -10; 
             background: var(--color-midnight-ink); transition: background 0.3s;
@@ -132,7 +145,6 @@
         .nav-item:hover { background: rgba(186, 215, 247, 0.08); color: var(--color-glacier); }
         .nav-item.active { background: rgba(186, 215, 247, 0.12); color: var(--color-frost-link); }
 
-        /* CENTERED THEME TOGGLE */
         .theme-toggle-wrap { padding: 0 24px 20px 24px; display: flex; justify-content: center; }
         .theme-toggle {
             width: 64px; height: 32px; padding: 3px; border-radius: 999px; cursor: pointer;
@@ -147,7 +159,6 @@
         html.light-mode .theme-toggle { background: #e2e8f0; border-color: #cbd5e1; }
         html.light-mode .theme-toggle-handle { transform: translateX(32px); background: white; }
 
-        /* CLICKABLE USER PROFILE */
         .user-profile {
             padding: 24px; border-top: 1px solid var(--glass-border); 
             display: flex; align-items: center; justify-content: space-between; white-space: nowrap;
@@ -164,11 +175,18 @@
         .logout-btn { color: var(--color-fog); transition: color 0.2s; padding: 4px; }
         .logout-btn:hover { color: var(--color-ember); }
 
+        /* SMOOTH ENTRANCE ANIMATION FOR SWAPPING TABS */
         .main-content {
             margin-left: 260px; flex-grow: 1; padding: 60px 40px; width: calc(100vw - 260px);
             transition: margin-left 0.3s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s ease;
             display: flex; flex-direction: column;
+            animation: fadeIn 0.2s ease-out;
         }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
         .sidebar.collapsed ~ .main-content { margin-left: 78px; width: calc(100vw - 78px); }
 
         .toast-container { position: fixed; bottom: 30px; right: 30px; z-index: 9999; display: flex; flex-direction: column; gap: 12px; }
@@ -193,7 +211,9 @@
         }
     </style>
 </head>
-<body>
+
+<!-- FIX 1: The magical hx-boost="true" that turns the ERP into a seamless SPA -->
+<body hx-boost="true">
 
     <div class="animated-bg">
         <div class="bg-grid-overlay"></div>
@@ -240,7 +260,6 @@
         </div>
 
         <section class="user-profile">
-            <!-- Routs directly to edit form for current user -->
             <a href="/edit/phc_users_t/{{ user_id }}" class="profile-link" title="Edit Profile">
                 <div class="avatar">{{ username[0]|upper if username else 'U' }}</div>
                 <div class="user-profile-info">
@@ -259,80 +278,123 @@
     </main>
 
     <script>
-        lucide.createIcons();
+        // --- FIX 2: Bulletproof memory leak prevention for Global HTMX events ---
+        if (!window.erpAppInitialized) {
+            
+            window.toggleTheme = function() {
+                const html = document.documentElement;
+                const isLight = html.classList.toggle('light-mode');
+                localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            };
 
-        document.body.addEventListener('htmx:beforeRequest', function(evt) {
-            if (evt.target.tagName === 'FORM') {
+            window.toggleSidebar = function() {
+                const sidebar = document.getElementById('sidebar');
+                sidebar.classList.toggle('collapsed');
+                localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+            };
+
+            window.showToast = function(message, type = 'success') {
+                const container = document.getElementById('toast-container');
+                if(!container) return;
+                const toast = document.createElement('div');
+                toast.className = `toast toast-${type}`;
+                const icon = type === 'success' ? 'check-circle-2' : 'alert-circle';
+                toast.innerHTML = `<i data-lucide="${icon}" style="color: ${type === 'success' ? 'var(--color-cipher-mint)' : 'var(--color-ember)'}"></i> ${message}`;
+                container.appendChild(toast);
+                lucide.createIcons();
+                setTimeout(() => toast.remove(), 4000);
+            };
+
+            window.filterSidebar = function() {
+                const searchInput = document.getElementById("sidebarSearch");
+                if(!searchInput) return;
+                let filter = searchInput.value.toLowerCase();
+                
+                // SAVE SEARCH QUERY TO MEMORY!
+                sessionStorage.setItem('sidebarSearchQuery', filter);
+                
+                document.querySelectorAll('.nav-menu .nav-item[data-search]').forEach(item => {
+                    item.style.display = item.getAttribute('data-search').includes(filter) ? "flex" : "none";
+                });
+            };
+
+            document.body.addEventListener('htmx:beforeRequest', function(evt) {
+                if (evt.target.tagName === 'FORM') {
+                    const btn = evt.target.querySelector('.btn-submit');
+                    if (btn) {
+                        btn.innerHTML = '<i data-lucide="loader-2" class="lucide-spin" style="width: 18px;"></i> Saving...';
+                        lucide.createIcons();
+                    }
+                }
+            });
+
+            document.body.addEventListener('htmx:responseError', function(evt) {
+                let errorMsg = "Failed to process request.";
+                try {
+                    const response = JSON.parse(evt.detail.xhr.response);
+                    if (response.error) errorMsg = response.error;
+                } catch(e) {}
+                window.showToast("Error: " + errorMsg, "error");
+                
                 const btn = evt.target.querySelector('.btn-submit');
                 if (btn) {
-                    btn.innerHTML = '<i data-lucide="loader-2" class="lucide-spin" style="width: 18px;"></i> Saving...';
+                    btn.innerHTML = '<i data-lucide="save" style="width: 18px;"></i> Save Record';
                     lucide.createIcons();
                 }
-            }
-        });
+            });
 
-        document.body.addEventListener('htmx:responseError', function(evt) {
-            let errorMsg = "Failed to process request.";
-            try {
-                const response = JSON.parse(evt.detail.xhr.response);
-                if (response.error) errorMsg = response.error;
-            } catch(e) {}
-            showToast("Error: " + errorMsg, "error");
-            
-            const btn = evt.target.querySelector('.btn-submit');
-            if (btn) {
-                btn.innerHTML = '<i data-lucide="save" style="width: 18px;"></i> Save Record';
-                lucide.createIcons();
-            }
-        });
+            // THIS TRIGGERS IMMEDIATELY AFTER HTMX SWAPS THE SCREEN IN
+            document.body.addEventListener('htmx:afterSwap', function(evt) {
+                window.applySidebarState();
+            });
 
-        document.body.addEventListener('htmx:afterSwap', function(evt) {
+            window.erpAppInitialized = true;
+        }
+
+        // --- FIX 3: Guaranteed Sidebar Memory Restore Logic ---
+        window.applySidebarState = function() {
             lucide.createIcons();
-        });
 
+            if (localStorage.getItem('sidebarCollapsed') === 'true') {
+                const sidebar = document.getElementById('sidebar');
+                if(sidebar) sidebar.classList.add('collapsed');
+            }
 
-        function toggleTheme() {
-            const html = document.documentElement;
-            const isLight = html.classList.toggle('light-mode');
-            localStorage.setItem('theme', isLight ? 'light' : 'dark');
-        }
+            const sidebarMenu = document.getElementById('sidebarMenu');
+            if (sidebarMenu) {
+                // 1. Instantly snap back to the previous scroll height
+                const scrollPos = sessionStorage.getItem('sidebarScrollPos');
+                if (scrollPos) {
+                    sidebarMenu.scrollTop = parseInt(scrollPos, 10);
+                }
+                
+                // 2. Continuously track where the user is scrolling
+                sidebarMenu.onscroll = function() {
+                    sessionStorage.setItem('sidebarScrollPos', sidebarMenu.scrollTop);
+                };
+                
+                // 3. Re-apply the search query if the user had one active
+                const savedQuery = sessionStorage.getItem('sidebarSearchQuery');
+                if (savedQuery) {
+                    const searchInput = document.getElementById("sidebarSearch");
+                    if (searchInput) {
+                        searchInput.value = savedQuery;
+                        window.filterSidebar();
+                    }
+                }
+            }
 
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('collapsed');
-            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
-        }
-        
-        if (localStorage.getItem('sidebarCollapsed') === 'true') {
-            document.getElementById('sidebar').classList.add('collapsed');
-        }
-
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-            const icon = type === 'success' ? 'check-circle-2' : 'alert-circle';
-            toast.innerHTML = `<i data-lucide="${icon}" style="color: ${type === 'success' ? 'var(--color-cipher-mint)' : 'var(--color-ember)'}"></i> ${message}`;
-            container.appendChild(toast);
-            lucide.createIcons();
-            setTimeout(() => toast.remove(), 4000);
-        }
-
-        document.addEventListener("DOMContentLoaded", () => {
+            // Fire any pending toasts (like 'Record Saved!')
             const pendingToast = sessionStorage.getItem('pendingToast');
             if (pendingToast) {
                 const toastData = JSON.parse(pendingToast);
-                showToast(toastData.msg, toastData.type);
+                window.showToast(toastData.msg, toastData.type);
                 sessionStorage.removeItem('pendingToast');
             }
-        });
+        };
 
-        function filterSidebar() {
-            let filter = document.getElementById("sidebarSearch").value.toLowerCase();
-            document.querySelectorAll('.nav-menu .nav-item[data-search]').forEach(item => {
-                item.style.display = item.getAttribute('data-search').includes(filter) ? "flex" : "none";
-            });
-        }
+        // Fire once on absolute initial page load
+        window.applySidebarState();
     </script>
 </body>
 </html>
