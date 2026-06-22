@@ -7,7 +7,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    
+    <!-- Icons & HTMX Core -->
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
     
     <script>
         if (localStorage.getItem('theme') === 'light') {
@@ -17,7 +21,6 @@
 
     <style>
         :root {
-            /* Dark Mode Design Tokens */
             --color-midnight-ink: #05060f;
             --color-graphite-plate: #2f343e;
             --color-steel-border: rgba(255, 255, 255, 0.1);
@@ -60,13 +63,17 @@
             transition: background-color 0.3s, color 0.3s;
         }
 
-        /* ========================================= */
-        /* ANIMATED PASTEL GRADIENT BACKGROUND       */
-        /* ========================================= */
+        /* HTMX Fade out for deletions */
+        tr.htmx-swapping td {
+            opacity: 0;
+            transition: opacity 0.4s ease-out;
+        }
+
+        /* Animated Background */
         .animated-bg {
             position: fixed; inset: 0; z-index: -10; 
             background: var(--color-midnight-ink); transition: background 0.3s;
-            overflow: hidden; /* Added to prevent scrollbars from blobs */
+            overflow: hidden; 
         }
         .bg-grid-overlay {
             position: absolute; inset: 0; z-index: 1;
@@ -79,7 +86,6 @@
                               linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
         }
 
-        /* --- THE MISSING BLOBS AND ANIMATIONS --- */
         .gradient-blob {
             position: absolute; filter: blur(120px); opacity: 0.35;
             animation: floatBlob 20s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
@@ -96,7 +102,6 @@
             66% { transform: translate(-5vw, 5vh) scale(0.9); }
             100% { transform: translate(2vw, 2vh) scale(1); }
         }
-        /* ========================================= */
 
         /* Sidebar Layout */
         .sidebar {
@@ -189,7 +194,6 @@
 </head>
 <body>
 
-    <!-- THE MISSING BLOBS ARE NOW HERE! -->
     <div class="animated-bg">
         <div class="bg-grid-overlay"></div>
         <div class="gradient-blob blob-1"></div>
@@ -252,6 +256,41 @@
     <script>
         lucide.createIcons();
 
+        // HTMX GLOBAL EVENT LISTENERS
+        document.body.addEventListener('htmx:beforeRequest', function(evt) {
+            // Add Loading Spinner to forms
+            if (evt.target.tagName === 'FORM') {
+                const btn = evt.target.querySelector('.btn-submit');
+                if (btn) {
+                    btn.innerHTML = '<i data-lucide="loader-2" class="lucide-spin" style="width: 18px;"></i> Saving...';
+                    lucide.createIcons();
+                }
+            }
+        });
+
+        document.body.addEventListener('htmx:responseError', function(evt) {
+            // Global Error Handler for HTMX requests
+            let errorMsg = "Failed to process request.";
+            try {
+                const response = JSON.parse(evt.detail.xhr.response);
+                if (response.error) errorMsg = response.error;
+            } catch(e) {}
+            showToast("Error: " + errorMsg, "error");
+            
+            const btn = evt.target.querySelector('.btn-submit');
+            if (btn) {
+                btn.innerHTML = '<i data-lucide="save" style="width: 18px;"></i> Save Record';
+                lucide.createIcons();
+            }
+        });
+
+        document.body.addEventListener('htmx:afterSwap', function(evt) {
+            // Auto-render Lucide icons for content swapped in by HTMX
+            lucide.createIcons();
+        });
+
+
+        // THEME & SIDEBAR
         function toggleTheme() {
             const html = document.documentElement;
             const isLight = html.classList.toggle('light-mode');
@@ -268,6 +307,7 @@
             document.getElementById('sidebar').classList.add('collapsed');
         }
 
+        // TOASTS
         function showToast(message, type = 'success') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
