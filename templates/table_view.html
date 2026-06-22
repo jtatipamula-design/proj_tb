@@ -51,45 +51,14 @@
     .pill-ina { background: rgba(228, 109, 76, 0.15); color: var(--color-ember); border-color: rgba(228, 109, 76, 0.3); }
     .pill-def { background: rgba(255,255,255,0.05); color: var(--color-fog); border-color: var(--glass-border); }
 
-    .action-menu-wrap { position: relative; display: inline-block; }
+    /* Edit Button Styling (Replaced the complex Dropdown) */
     .action-btn { 
-        background: transparent; border: none; color: var(--color-fog); cursor: pointer; 
-        padding: 6px; border-radius: 4px; transition: color 0.2s; display: flex; align-items: center; justify-content: center;
+        background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border); color: var(--color-fog); cursor: pointer; 
+        padding: 6px; border-radius: 6px; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center;
+        text-decoration: none;
     }
-    .action-btn:hover { color: var(--color-glacier); background: rgba(255, 255, 255, 0.08); }
-    .action-dropdown { 
-        position: absolute; left: 100%; top: 0; margin-left: 5px; background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(12px); border: 1px solid var(--glass-border); 
-        border-radius: 8px; padding: 6px; width: 170px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); 
-        opacity: 0; visibility: hidden; transform: translateX(-5px); transition: all 0.15s ease; z-index: 50; 
-    }
-    html.light-mode .action-dropdown { background: rgba(255, 255, 255, 0.95); }
-    .action-menu-wrap.active .action-dropdown { opacity: 1; visibility: visible; transform: translateX(0); }
-    
-    .dropdown-item { 
-        display: flex; align-items: center; gap: 10px; padding: 8px 12px; color: var(--color-moonlight); 
-        text-decoration: none; font-size: 13px; font-weight: 500; border-radius: 4px; 
-        transition: background 0.2s; cursor: pointer; border: none; width: 100%; text-align: left; background: transparent; font-family: var(--font-ui);
-    }
-    .dropdown-item:hover { background: rgba(255, 255, 255, 0.06); color: var(--color-glacier); }
-    html.light-mode .dropdown-item:hover { background: rgba(0,0,0,0.05); color: var(--color-glacier); }
-    .dropdown-item.danger { color: var(--color-ember); }
-    .dropdown-item.danger:hover { background: rgba(228, 109, 76, 0.1); }
-
-    .modal-overlay { position: fixed; inset: 0; background: rgba(5, 6, 15, 0.8); backdrop-filter: blur(4px); z-index: 2000; display: none; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; }
-    .modal-overlay.active { display: flex; opacity: 1; }
-    .modal-card { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border: 1px solid var(--glass-border); padding: 32px; border-radius: 12px; max-width: 400px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); transform: scale(0.95); transition: transform 0.2s; }
-    html.light-mode .modal-card { background: rgba(255,255,255,0.95); }
-    .modal-overlay.active .modal-card { transform: scale(1); }
-    .modal-icon { width: 48px; height: 48px; border-radius: 8px; background: rgba(228, 109, 76, 0.15); color: var(--color-ember); display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; border: 1px solid rgba(228, 109, 76, 0.3); }
-    .modal-card h3 { font-size: 18px; font-weight: 500; margin-bottom: 8px; color: var(--color-glacier); }
-    html.light-mode .modal-card h3 { color: var(--color-midnight-ink); }
-    .modal-card p { color: var(--color-pebble); font-size: 14px; margin-bottom: 24px; line-height: 1.5; }
-    .modal-actions { display: flex; gap: 12px; }
-    .modal-actions button { flex: 1; padding: 10px; border-radius: 6px; font-weight: 500; font-family: var(--font-ui); cursor: pointer; border: 1px solid transparent; font-size: 14px; transition: all 0.2s; }
-    .btn-cancel { background: transparent; color: var(--color-moonlight); border-color: var(--glass-border); }
-    .btn-cancel:hover { background: rgba(255, 255, 255, 0.05); color: white; }
-    html.light-mode .btn-cancel:hover { background: rgba(0,0,0,0.05); color: black; }
-    .btn-danger-confirm { background: var(--color-ember); color: white; border-radius: 6px; }
+    .action-btn:hover { color: var(--color-electric-iris); background: rgba(186, 215, 247, 0.08); border-color: var(--color-electric-iris); }
+    html.light-mode .action-btn { background: rgba(0,0,0,0.03); }
 
     .floating-dock {
         position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
@@ -137,7 +106,6 @@
             <p class="eyebrow-text" style="font-family: var(--font-mono); color: var(--color-fog); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">DATABASE TABLE</p>
             <h1>{{ table_title }}</h1>
         </div>
-        <!-- HTMX LIVE SEARCH ENABLED -->
         <input type="text" class="search-box" id="searchInput" name="q" placeholder="Search records live..." 
                hx-get="/table/{{ table_name }}" 
                hx-trigger="keyup changed delay:300ms, search" 
@@ -153,6 +121,7 @@
                 <thead>
                     <tr>
                         <th style="width: 60px; text-align: center;"></th>
+                        <!-- Backend now naturally sorts these exactly as requested -->
                         {% for col in columns %}
                         <th data-index="{{ loop.index }}" onclick="sortTable({{ loop.index }}, false)">
                             {{ col.label }} <i class="sort-icon" data-lucide="arrow-up-down" style="width:12px; opacity:0.3; margin-left: 4px; vertical-align: middle;"></i>
@@ -164,20 +133,10 @@
                     {% for row in rows %}
                     <tr>
                         <td style="text-align: center;">
-                            <div class="action-menu-wrap">
-                                <button class="action-btn" onclick="toggleMenu(event, this)">
-                                    <i data-lucide="more-vertical" style="width: 16px;"></i>
-                                </button>
-                                <div class="action-dropdown">
-                                    <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" class="dropdown-item">
-                                        <i data-lucide="edit-2" style="width: 14px;"></i> Edit Record
-                                    </a>
-                                    <!-- HTMX DELETION HOOK -->
-                                    <button class="dropdown-item danger" onclick="requestDelete('{{ row[pk_column] }}', this)">
-                                        <i data-lucide="trash-2" style="width: 14px;"></i> Delete...
-                                    </button>
-                                </div>
-                            </div>
+                            <!-- SINGLE EDIT BUTTON REPLACES THE DROPDOWN/DELETE -->
+                            <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" class="action-btn" title="Edit Record">
+                                <i data-lucide="edit-2" style="width: 16px;"></i>
+                            </a>
                         </td>
                         {% for col in columns %}
                             <td>
@@ -196,18 +155,6 @@
     </div>
 </div>
 
-<div class="modal-overlay" id="confirmModal">
-    <div class="modal-card">
-        <div class="modal-icon"><i data-lucide="alert-triangle" style="width: 24px; height: 24px;"></i></div>
-        <h3>Confirm Delete</h3>
-        <p>Are you sure you want to permanently delete this record? This action cannot be undone.</p>
-        <div class="modal-actions">
-            <button class="btn-cancel" onclick="closeModal()">Cancel</button>
-            <button class="btn-danger-confirm" onclick="executeDelete()">Delete</button>
-        </div>
-    </div>
-</div>
-
 <div class="floating-dock">
     <a href="/export/{{ table_name }}" class="dock-item" tooltip="Export CSV">
         <i data-lucide="download" style="width:20px;"></i>
@@ -221,38 +168,6 @@
 </div>
 
 <script>
-    function toggleMenu(e, btn) {
-        e.stopPropagation();
-        document.querySelectorAll('.action-menu-wrap').forEach(w => {
-            if (w !== btn.parentElement) w.classList.remove('active');
-        });
-        btn.parentElement.classList.toggle('active');
-    }
-    document.addEventListener('click', () => {
-        document.querySelectorAll('.action-menu-wrap.active').forEach(w => w.classList.remove('active'));
-    });
-
-    // --- HTMX AJAX DELETION EXECUTION ---
-    let deleteTargetId = null;
-    let deleteTargetRow = null;
-
-    function requestDelete(id, btn) { 
-        deleteTargetId = id; 
-        deleteTargetRow = btn.closest('tr');
-        document.getElementById('confirmModal').classList.add('active'); 
-    }
-    
-    function closeModal() { document.getElementById('confirmModal').classList.remove('active'); }
-    
-    function executeDelete() { 
-        closeModal(); 
-        // Tell HTMX to send the DELETE request and smoothly swap the row out
-        htmx.ajax('DELETE', `/api/{{ table_name }}/${deleteTargetId}`, {
-            target: deleteTargetRow,
-            swap: 'outerHTML swap:0.4s'
-        });
-    }
-
     const searchInput = document.getElementById("searchInput");
     let sortDir = {};
 
