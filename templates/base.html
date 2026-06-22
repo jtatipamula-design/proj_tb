@@ -8,7 +8,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     
-    <!-- Icons & HTMX Core -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
@@ -63,13 +62,8 @@
             transition: background-color 0.3s, color 0.3s;
         }
 
-        /* HTMX Fade out for deletions */
-        tr.htmx-swapping td {
-            opacity: 0;
-            transition: opacity 0.4s ease-out;
-        }
+        tr.htmx-swapping td { opacity: 0; transition: opacity 0.4s ease-out; }
 
-        /* Animated Background */
         .animated-bg {
             position: fixed; inset: 0; z-index: -10; 
             background: var(--color-midnight-ink); transition: background 0.3s;
@@ -103,7 +97,6 @@
             100% { transform: translate(2vw, 2vh) scale(1); }
         }
 
-        /* Sidebar Layout */
         .sidebar {
             width: 260px; height: 100vh; position: fixed; z-index: 100;
             display: flex; flex-direction: column;
@@ -114,7 +107,7 @@
         .sidebar.collapsed { width: 78px; }
         .sidebar.collapsed .brand-text, .sidebar.collapsed .nav-text, 
         .sidebar.collapsed .sidebar-search-wrap, .sidebar.collapsed .eyebrow-text, 
-        .sidebar.collapsed .user-profile-info, .sidebar.collapsed .theme-toggle-wrap { display: none; }
+        .sidebar.collapsed .user-profile-info, .sidebar.collapsed .theme-toggle-wrap, .sidebar.collapsed .logout-btn { display: none; }
 
         .sidebar-toggle {
             position: absolute; right: -14px; top: 34px; width: 28px; height: 28px;
@@ -139,7 +132,8 @@
         .nav-item:hover { background: rgba(186, 215, 247, 0.08); color: var(--color-glacier); }
         .nav-item.active { background: rgba(186, 215, 247, 0.12); color: var(--color-frost-link); }
 
-        .theme-toggle-wrap { padding: 0 24px 20px 24px; display: flex; justify-content: flex-start; }
+        /* CENTERED THEME TOGGLE */
+        .theme-toggle-wrap { padding: 0 24px 20px 24px; display: flex; justify-content: center; }
         .theme-toggle {
             width: 64px; height: 32px; padding: 3px; border-radius: 999px; cursor: pointer;
             background: var(--color-midnight-ink); border: 1px solid var(--color-steel-border);
@@ -153,15 +147,22 @@
         html.light-mode .theme-toggle { background: #e2e8f0; border-color: #cbd5e1; }
         html.light-mode .theme-toggle-handle { transform: translateX(32px); background: white; }
 
+        /* CLICKABLE USER PROFILE */
         .user-profile {
             padding: 24px; border-top: 1px solid var(--glass-border); 
-            display: flex; align-items: center; gap: 12px; white-space: nowrap;
+            display: flex; align-items: center; justify-content: space-between; white-space: nowrap;
+            transition: background 0.2s; cursor: pointer;
         }
+        .user-profile:hover { background: rgba(255, 255, 255, 0.05); }
+        html.light-mode .user-profile:hover { background: rgba(0, 0, 0, 0.05); }
+        .profile-link { display: flex; align-items: center; gap: 12px; flex-grow: 1; text-decoration: none; }
         .avatar {
             width: 36px; height: 36px; border-radius: 6px; background: rgba(186, 215, 247, 0.08); 
             border: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; 
             font-weight: 500; color: var(--color-glacier); min-width: 36px;
         }
+        .logout-btn { color: var(--color-fog); transition: color 0.2s; padding: 4px; }
+        .logout-btn:hover { color: var(--color-ember); }
 
         .main-content {
             margin-left: 260px; flex-grow: 1; padding: 60px 40px; width: calc(100vw - 260px);
@@ -239,11 +240,15 @@
         </div>
 
         <section class="user-profile">
-            <div class="avatar">{{ username[0]|upper if username else 'U' }}</div>
-            <div class="user-profile-info" style="flex-grow: 1;">
-                <div style="font-size: 14px; font-weight: 500; color: var(--color-glacier);">{{ username.title() if username else 'User' }}</div>
-                <a href="/logout" style="font-size: 12px; color: var(--color-ember); text-decoration: none;">Log Out</a>
-            </div>
+            <!-- Routs directly to edit form for current user -->
+            <a href="/edit/phc_users_t/{{ user_id }}" class="profile-link" title="Edit Profile">
+                <div class="avatar">{{ username[0]|upper if username else 'U' }}</div>
+                <div class="user-profile-info">
+                    <div style="font-size: 14px; font-weight: 500; color: var(--color-glacier);">{{ username.title() if username else 'User' }}</div>
+                    <div style="font-size: 11px; color: var(--color-fog);">Edit Profile</div>
+                </div>
+            </a>
+            <a href="/logout" class="logout-btn" title="Logout"><i data-lucide="log-out" style="width: 18px;"></i></a>
         </section>
     </aside>
 
@@ -256,9 +261,7 @@
     <script>
         lucide.createIcons();
 
-        // HTMX GLOBAL EVENT LISTENERS
         document.body.addEventListener('htmx:beforeRequest', function(evt) {
-            // Add Loading Spinner to forms
             if (evt.target.tagName === 'FORM') {
                 const btn = evt.target.querySelector('.btn-submit');
                 if (btn) {
@@ -269,7 +272,6 @@
         });
 
         document.body.addEventListener('htmx:responseError', function(evt) {
-            // Global Error Handler for HTMX requests
             let errorMsg = "Failed to process request.";
             try {
                 const response = JSON.parse(evt.detail.xhr.response);
@@ -285,12 +287,10 @@
         });
 
         document.body.addEventListener('htmx:afterSwap', function(evt) {
-            // Auto-render Lucide icons for content swapped in by HTMX
             lucide.createIcons();
         });
 
 
-        // THEME & SIDEBAR
         function toggleTheme() {
             const html = document.documentElement;
             const isLight = html.classList.toggle('light-mode');
@@ -307,7 +307,6 @@
             document.getElementById('sidebar').classList.add('collapsed');
         }
 
-        // TOASTS
         function showToast(message, type = 'success') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
