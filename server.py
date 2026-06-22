@@ -414,7 +414,7 @@ async def dashboard(request):
             "dept_count": await conn.fetchval("SELECT COUNT(*) FROM phc_dept_t") if 'phc_dept_t' in allowed else "🔒",
             "app_count": await conn.fetchval("SELECT COUNT(*) FROM phc_apps_t") if 'phc_apps_t' in allowed else "🔒"
         }
-    return await render("dashboard.html", context={"stats": stats, "all_tables": allowed, "username": request.ctx.username})
+    return await render("dashboard.html", context={"stats": stats, "all_tables": allowed, "username": request.ctx.username, "user_id": request.ctx.user_id})
 
 
 @app.get("/table/<table_name>")
@@ -431,6 +431,19 @@ async def show_table(request, table_name):
 
         columns = [{"raw": r['column_name'], "label": make_human_readable(r['column_name'])} for r in SCHEMA_CACHE["columns"][table_name]]
         pk_column = await get_pk_column(conn, table_name)
+
+        # --- FIX: Sort Table columns by programmatic priority ---
+        def get_col_priority(c_name):
+            name = c_name.lower()
+            if c_name == pk_column: return 0
+            if name.endswith('status'): return 1
+            if 'start_date' in name: return 2
+            if 'end_date' in name: return 3
+            if name.endswith('created_by'): return 100
+            if name.endswith('modified_by') or name.endswith('updated_by'): return 101
+            return 50
+
+        columns = sorted(columns, key=lambda c: get_col_priority(c['raw']))
 
         order_clause = f"ORDER BY {pk_column} DESC" if pk_column else "ORDER BY 1 DESC"
         rows = await conn.fetch(f"SELECT * FROM {table_name} {order_clause} LIMIT 100")
@@ -459,7 +472,7 @@ async def show_table(request, table_name):
                     row[c_name] = f"{lookup[str(val)]} (ID: {val})"
                 row[c_name] = mask_sensitive_data(c_name, row.get(c_name), request.ctx.user_type)
 
-        return await render("table_view.html", context={"table_name": table_name, "table_title": make_human_readable(table_name), "columns": columns, "rows": rows_dict, "all_tables": allowed, "pk_column": pk_column})
+        return await render("table_view.html", context={"table_name": table_name, "table_title": make_human_readable(table_name), "columns": columns, "rows": rows_dict, "all_tables": allowed, "pk_column": pk_column, "user_id": request.ctx.user_id})
 
 
 @app.route("/export/<table_name>")
@@ -561,7 +574,7 @@ async def show_edit_form(request, table_name, pk_val):
             assigned_val = ",".join([str(a['pua_role_id']) for a in assignments])
             columns.append({"column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False, "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in roles], "is_pk": False})
 
-        return await render("form_view.html", context={"table_name": table_name, "table_title": f"Edit {make_human_readable(table_name)}", "columns": columns, "all_tables": allowed, "pk_val": pk_val, "mode": "edit"})
+        return await render("form_view.html", context={"table_name": table_name, "table_title": f"Edit {make_human_readable(table_name)}", "columns": columns, "all_tables": allowed, "pk_val": pk_val, "mode": "edit", "user_id": request.ctx.user_id})
 
 
 @app.get("/new/<table_name>")
@@ -602,7 +615,7 @@ async def show_add_form(request, table_name):
             roles = await conn.fetch("SELECT prl_role_id as id, prl_role_name as name FROM phc_roles_t WHERE prl_status = 'ACT'")
             columns.append({"column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False, "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in roles], "is_pk": False})
 
-        return await render("form_view.html", context={"table_name": table_name, "table_title": f"New {make_human_readable(table_name)}", "columns": columns, "all_tables": allowed, "mode": "create"})
+        return await render("form_view.html", context={"table_name": table_name, "table_title": f"New {make_human_readable(table_name)}", "columns": columns, "all_tables": allowed, "mode": "create", "user_id": request.ctx.user_id})
 
 
 async def _sanitize_payload(data, schema_map, pk_column, current_user_id, request_method):
@@ -762,51 +775,11 @@ async def save_data(request, table_name, pk_val=None):
             return response.html(f"""
                 <script>
                     sessionStorage.setItem('pendingToast', JSON.stringify({{"msg": "Record saved successfully!", "type": "success"}}));
+                    localStorage.removeItem('draft_{table_name}'); // Clear local draft on success
                     window.location.href = "/table/{table_name}";
                 </script>
             """)
 
-        return response.json({"status": "success"})
-
-
-# HTMX DELETE ROUTE
-@app.delete("/api/<table_name>/<pk_val>", name="delete_row")
-@login_required
-async def delete_data(request, table_name, pk_val):
-    current_user_id = request.ctx.user_id
-    user_type = request.ctx.user_type
-    
-    if user_type != 'ADM' and table_name == 'phc_users_t' and str(pk_val) != str(current_user_id):
-        return response.json({"error": "Unauthorized to delete other users."}, status=403)
-
-    async with app.ctx.pool.acquire() as conn:
-        allowed = await get_allowed_tables(conn, current_user_id, user_type)
-        if table_name not in allowed:
-            return response.json({"error": "Unauthorized API Access"}, status=403)
-
-        pk_column = await get_pk_column(conn, table_name)
-        schema_rows = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1", table_name)
-        pk_type = next((r['data_type'] for r in schema_rows if r['column_name'] == pk_column), 'integer')
-        target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
-
-        async with conn.transaction():
-            if table_name == 'phc_roles_t':
-                await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
-            if table_name == 'phc_users_t':
-                await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
-
-            await conn.execute(f"DELETE FROM {table_name} WHERE {pk_column} = $1", target_id)
-            await log_action(conn, current_user_id, f"Deleted record {target_id} from {table_name}")
-
-        if request.headers.get("HX-Request"):
-            return response.html(f"""
-                <div id="toast-container" hx-swap-oob="beforeend">
-                    <div class="toast" style="animation: slideInToast 0.4s ease, fadeOutToast 0.4s ease 3.5s forwards;">
-                        <i data-lucide="check-circle-2" style="color: var(--color-cipher-mint)"></i> Record deleted successfully.
-                    </div>
-                </div>
-            """)
-            
         return response.json({"status": "success"})
 
 
