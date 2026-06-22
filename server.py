@@ -320,7 +320,6 @@ async def get_dropdown_options(conn, column_name):
         return None
 
     if target_table not in SCHEMA_CACHE["columns"]:
-        # FIX: Included data_type in the select query to prevent KeyError
         cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", target_table)
         SCHEMA_CACHE["columns"][target_table] = [dict(c) for c in cols]
 
@@ -427,7 +426,6 @@ async def show_table(request, table_name):
             return response.redirect("/")
 
         if table_name not in SCHEMA_CACHE["columns"]:
-            # FIX: Included data_type in the select query to prevent KeyError
             cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
             SCHEMA_CACHE["columns"][table_name] = [dict(c) for c in cols]
 
@@ -437,6 +435,15 @@ async def show_table(request, table_name):
         order_clause = f"ORDER BY {pk_column} DESC" if pk_column else "ORDER BY 1 DESC"
         rows = await conn.fetch(f"SELECT * FROM {table_name} {order_clause} LIMIT 100")
         rows_dict = [dict(r) for r in rows]
+
+        # HTMX LIVE SEARCH LOGIC
+        search_query = request.args.get("q", "").lower()
+        if search_query:
+            filtered_rows = []
+            for row in rows_dict:
+                if any(search_query in str(v).lower() for v in row.values() if v is not None):
+                    filtered_rows.append(row)
+            rows_dict = filtered_rows
 
         for col in columns:
             c_name = col['raw']
@@ -469,7 +476,6 @@ async def export_csv(request, table_name):
         pk_column = await get_pk_column(conn, table_name)
 
         if table_name not in SCHEMA_CACHE["columns"]:
-            # FIX: Included data_type in the select query to prevent KeyError
             cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
             SCHEMA_CACHE["columns"][table_name] = [dict(c) for c in cols]
 
@@ -600,9 +606,15 @@ async def show_add_form(request, table_name):
 
 
 async def _sanitize_payload(data, schema_map, pk_column, current_user_id, request_method):
-    """Helper function to parse, clean, and cast JSON payload into database-ready dictionary."""
+    """Helper function to parse, clean, and cast HTMX JSON payload into database-ready dictionary."""
     clean_data = {}
     loop = asyncio.get_running_loop()
+
+    virtual_screens = data.pop("pr_allowed_tables", None)
+    if isinstance(virtual_screens, list): data["pr_allowed_tables"] = ",".join(virtual_screens)
+    
+    virtual_roles = data.pop("pu_assigned_roles", None)
+    if isinstance(virtual_roles, list): data["pu_assigned_roles"] = ",".join(virtual_roles)
 
     for r in schema_map.values():
         c_name = r['column_name']
@@ -653,7 +665,6 @@ async def _sanitize_payload(data, schema_map, pk_column, current_user_id, reques
     for col_name in schema_map:
         c_lower = col_name.lower()
         
-        # --- FIX: Dynamically cast the audit user ID based on DB schema to prevent DataError ---
         if c_lower.endswith(('_created_by', '_modified_by', 'created_by', 'last_updated_by')):
             target_type = schema_map.get(col_name, {}).get('data_type', '').lower()
             if target_type in ('integer', 'bigint', 'numeric', 'smallint'):
@@ -677,7 +688,6 @@ async def save_data(request, table_name, pk_val=None):
     current_user_id = request.ctx.user_id
     user_type = request.ctx.user_type
 
-    # Privilege Escalation Guard
     if user_type != 'ADM':
         data.pop('pus_user_type', None)
         if table_name == 'phc_users_t' and request.method == "PUT" and str(pk_val) != str(current_user_id):
@@ -718,7 +728,6 @@ async def save_data(request, table_name, pk_val=None):
                 if set_clauses:
                     await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {pk_column} = $1", target_id, *vals)
 
-            # --- Virtual Assignations ---
             if table_name == 'phc_roles_t' and virtual_screens is not None:
                 await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
                 if virtual_screens:
@@ -738,7 +747,7 @@ async def save_data(request, table_name, pk_val=None):
                 await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
                 if virtual_roles:
                     pua_pk_col = await get_pk_column(conn, 'phc_user_roles_assignment_t')
-                    max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pk_col else 0
+                    max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pua_col else 0
                     next_pua = (int(max_pua) + 1) if max_pua else 1
                     for r_id in virtual_roles.split(','):
                         if r_id.strip() and pua_pk_col:
@@ -749,6 +758,55 @@ async def save_data(request, table_name, pk_val=None):
                             """.format(pua_pk_col), next_pua, target_id, int(r_id), str(current_user_id))
                             next_pua += 1
 
+        if request.headers.get("HX-Request"):
+            return response.html(f"""
+                <script>
+                    sessionStorage.setItem('pendingToast', JSON.stringify({{"msg": "Record saved successfully!", "type": "success"}}));
+                    window.location.href = "/table/{table_name}";
+                </script>
+            """)
+
+        return response.json({"status": "success"})
+
+
+# HTMX DELETE ROUTE
+@app.delete("/api/<table_name>/<pk_val>", name="delete_row")
+@login_required
+async def delete_data(request, table_name, pk_val):
+    current_user_id = request.ctx.user_id
+    user_type = request.ctx.user_type
+    
+    if user_type != 'ADM' and table_name == 'phc_users_t' and str(pk_val) != str(current_user_id):
+        return response.json({"error": "Unauthorized to delete other users."}, status=403)
+
+    async with app.ctx.pool.acquire() as conn:
+        allowed = await get_allowed_tables(conn, current_user_id, user_type)
+        if table_name not in allowed:
+            return response.json({"error": "Unauthorized API Access"}, status=403)
+
+        pk_column = await get_pk_column(conn, table_name)
+        schema_rows = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1", table_name)
+        pk_type = next((r['data_type'] for r in schema_rows if r['column_name'] == pk_column), 'integer')
+        target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
+
+        async with conn.transaction():
+            if table_name == 'phc_roles_t':
+                await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
+            if table_name == 'phc_users_t':
+                await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
+
+            await conn.execute(f"DELETE FROM {table_name} WHERE {pk_column} = $1", target_id)
+            await log_action(conn, current_user_id, f"Deleted record {target_id} from {table_name}")
+
+        if request.headers.get("HX-Request"):
+            return response.html(f"""
+                <div id="toast-container" hx-swap-oob="beforeend">
+                    <div class="toast" style="animation: slideInToast 0.4s ease, fadeOutToast 0.4s ease 3.5s forwards;">
+                        <i data-lucide="check-circle-2" style="color: var(--color-cipher-mint)"></i> Record deleted successfully.
+                    </div>
+                </div>
+            """)
+            
         return response.json({"status": "success"})
 
 
