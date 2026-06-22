@@ -2,13 +2,9 @@
 
 {% block content %}
 <style>
-    /* THIS CENTERS EVERYTHING AND ALLOWS MAXIMUM WIDTH */
     .content-wrapper {
-        width: 100%;
-        max-width: 98%; /* Expanded from 1100px to fill the screen */
-        margin: 0 auto; /* Dead center horizontally */
-        display: flex;
-        flex-direction: column;
+        width: 100%; max-width: 98%; margin: 0 auto;
+        display: flex; flex-direction: column;
     }
 
     .page-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 32px; }
@@ -23,15 +19,10 @@
     .search-box:focus { outline: none; border-color: var(--color-frost-link); box-shadow: 0 0 0 1px var(--color-frost-link); }
     html.light-mode .search-box { background: rgba(255,255,255,0.5); color: var(--color-glacier); }
 
-    /* Translucent Glass Table */
     .table-container {
-        background: var(--glass-surface);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
-        border: 1px solid var(--glass-border);
-        border-radius: 12px; overflow: hidden; 
-        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5); 
-        width: 100%;
+        background: var(--glass-surface); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+        border: 1px solid var(--glass-border); border-radius: 12px; overflow: hidden; 
+        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5); width: 100%;
     }
     .table-scroll { overflow-x: auto; max-height: 70vh; overflow-y: auto; width: 100%; }
     table { width: 100%; border-collapse: collapse; white-space: nowrap; text-align: left; }
@@ -47,14 +38,11 @@
     
     td {
         padding: 16px 24px; font-size: 14px; font-weight: 400; color: var(--color-moonlight);
-        border-bottom: 1px solid var(--glass-border); transition: background 0.2s, color 0.2s;
-        background: transparent;
+        border-bottom: 1px solid var(--glass-border); transition: background 0.2s, color 0.2s; background: transparent;
     }
     html.light-mode td { color: var(--color-moonlight); }
     
     tbody tr:last-child td { border-bottom: none; }
-    
-    /* Elegant Row Hover */
     tbody tr:hover td { background: rgba(255, 255, 255, 0.05); color: var(--color-glacier); }
     html.light-mode tbody tr:hover td { background: rgba(0, 0, 0, 0.03); color: var(--color-glacier); }
 
@@ -63,7 +51,6 @@
     .pill-ina { background: rgba(228, 109, 76, 0.15); color: var(--color-ember); border-color: rgba(228, 109, 76, 0.3); }
     .pill-def { background: rgba(255,255,255,0.05); color: var(--color-fog); border-color: var(--glass-border); }
 
-    /* Context Menus */
     .action-menu-wrap { position: relative; display: inline-block; }
     .action-btn { 
         background: transparent; border: none; color: var(--color-fog); cursor: pointer; 
@@ -88,7 +75,6 @@
     .dropdown-item.danger { color: var(--color-ember); }
     .dropdown-item.danger:hover { background: rgba(228, 109, 76, 0.1); }
 
-    /* Modals */
     .modal-overlay { position: fixed; inset: 0; background: rgba(5, 6, 15, 0.8); backdrop-filter: blur(4px); z-index: 2000; display: none; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; }
     .modal-overlay.active { display: flex; opacity: 1; }
     .modal-card { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(12px); border: 1px solid var(--glass-border); padding: 32px; border-radius: 12px; max-width: 400px; text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); transform: scale(0.95); transition: transform 0.2s; }
@@ -105,7 +91,6 @@
     html.light-mode .btn-cancel:hover { background: rgba(0,0,0,0.05); color: black; }
     .btn-danger-confirm { background: var(--color-ember); color: white; border-radius: 6px; }
 
-    /* --- MAC OS FLOATING DOCK (RESTORED COMPLETELY) --- */
     .floating-dock {
         position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
         display: flex; align-items: center; gap: 12px; padding: 12px 20px;
@@ -123,7 +108,6 @@
     }
     html.light-mode .dock-item { background: rgba(0,0,0,0.05); color: var(--color-pebble); }
 
-    /* The Magnify Effect */
     .floating-dock:hover .dock-item { transform: scale(0.9); opacity: 0.6; }
     .floating-dock .dock-item:hover {
         transform: scale(1.3) translateY(-10px); opacity: 1;
@@ -132,7 +116,6 @@
         z-index: 10;
     }
 
-    /* Tooltip */
     .dock-item::before {
         content: attr(tooltip); position: absolute; top: -40px;
         background: #000; color: white; border: 1px solid var(--glass-border);
@@ -142,7 +125,6 @@
     .dock-item:hover::before { opacity: 1; transform: translateY(0); }
 </style>
 
-<!-- Wraps content to expand maximum width on the screen -->
 <div class="content-wrapper">
     <div class="breadcrumbs" style="display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 25px; color: var(--color-fog);">
         <a href="/" style="color: var(--color-fog); text-decoration: none;">Nexus ERP</a> 
@@ -155,7 +137,14 @@
             <p class="eyebrow-text" style="font-family: var(--font-mono); color: var(--color-fog); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">DATABASE TABLE</p>
             <h1>{{ table_title }}</h1>
         </div>
-        <input type="text" class="search-box" id="searchInput" placeholder="Search records..." onkeyup="filterTable()">
+        <!-- HTMX LIVE SEARCH ENABLED -->
+        <input type="text" class="search-box" id="searchInput" name="q" placeholder="Search records live..." 
+               hx-get="/table/{{ table_name }}" 
+               hx-trigger="keyup changed delay:300ms, search" 
+               hx-target="#dataTable" 
+               hx-select="#dataTable"
+               hx-swap="outerHTML"
+               autocomplete="off">
     </div>
 
     <div class="table-container">
@@ -183,7 +172,8 @@
                                     <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" class="dropdown-item">
                                         <i data-lucide="edit-2" style="width: 14px;"></i> Edit Record
                                     </a>
-                                    <button class="dropdown-item danger" onclick="requestDelete('{{ row[pk_column] }}')">
+                                    <!-- HTMX DELETION HOOK -->
+                                    <button class="dropdown-item danger" onclick="requestDelete('{{ row[pk_column] }}', this)">
                                         <i data-lucide="trash-2" style="width: 14px;"></i> Delete...
                                     </button>
                                 </div>
@@ -206,7 +196,6 @@
     </div>
 </div>
 
-<!-- Modal Overlay for Deletions -->
 <div class="modal-overlay" id="confirmModal">
     <div class="modal-card">
         <div class="modal-icon"><i data-lucide="alert-triangle" style="width: 24px; height: 24px;"></i></div>
@@ -219,7 +208,6 @@
     </div>
 </div>
 
-<!-- MAC OS FLOATING DOCK (RESTORED) -->
 <div class="floating-dock">
     <a href="/export/{{ table_name }}" class="dock-item" tooltip="Export CSV">
         <i data-lucide="download" style="width:20px;"></i>
@@ -244,16 +232,31 @@
         document.querySelectorAll('.action-menu-wrap.active').forEach(w => w.classList.remove('active'));
     });
 
-    function requestDelete(id) { document.getElementById('confirmModal').classList.add('active'); }
+    // --- HTMX AJAX DELETION EXECUTION ---
+    let deleteTargetId = null;
+    let deleteTargetRow = null;
+
+    function requestDelete(id, btn) { 
+        deleteTargetId = id; 
+        deleteTargetRow = btn.closest('tr');
+        document.getElementById('confirmModal').classList.add('active'); 
+    }
+    
     function closeModal() { document.getElementById('confirmModal').classList.remove('active'); }
-    function executeDelete() { closeModal(); showToast("Record successfully deleted (Simulated).", "success"); }
+    
+    function executeDelete() { 
+        closeModal(); 
+        // Tell HTMX to send the DELETE request and smoothly swap the row out
+        htmx.ajax('DELETE', `/api/{{ table_name }}/${deleteTargetId}`, {
+            target: deleteTargetRow,
+            swap: 'outerHTML swap:0.4s'
+        });
+    }
 
     const searchInput = document.getElementById("searchInput");
     let sortDir = {};
 
     document.addEventListener("DOMContentLoaded", () => {
-        const savedSearch = sessionStorage.getItem('tableSearch_{{ table_name }}');
-        if (savedSearch) { searchInput.value = savedSearch; filterTable(false); }
         const savedSort = sessionStorage.getItem('tableSort_{{ table_name }}');
         if (savedSort) {
             const { col, dir } = JSON.parse(savedSort);
@@ -261,16 +264,6 @@
             sortTable(col, true); 
         }
     });
-
-    function filterTable(saveState = true) {
-        let filter = searchInput.value.toLowerCase();
-        if (saveState) sessionStorage.setItem('tableSearch_{{ table_name }}', filter);
-        let rows = document.querySelectorAll("#dataTable tbody tr");
-        rows.forEach(row => {
-            let text = row.innerText.toLowerCase();
-            row.style.display = text.includes(filter) ? "" : "none";
-        });
-    }
 
     function sortTable(n, skipToggle) {
         let table = document.getElementById("dataTable");
