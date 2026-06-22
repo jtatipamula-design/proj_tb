@@ -4,109 +4,150 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nexus ERP - Login</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- AuthKit Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <style>
         :root {
-            --bg-deep: #0B0F19;
-            --bg-card: rgba(30, 41, 59, 0.5);
-            --border-color: rgba(255, 255, 255, 0.08);
-            --text-main: #F8FAFC;
-            --text-muted: #94A3B8;
-            --accent-primary: #3B82F6;
+            --color-midnight-ink: #05060f;
+            --color-graphite-plate: #2f343e;
+            --color-steel-border: #3f4959;
+            --color-fog: #81899b;
+            --color-pebble: #9da7ba;
+            --color-moonlight: #c7d3ea;
+            --color-glacier: #d8ecf8;
+            --color-frost-link: #b6d9fc;
+            --color-electric-iris: #663af3;
+            --color-ember: #e46d4c;
+
+            --font-ui: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+
+            --shadow-subtle-4: inset 0px 1px 1px 0px rgba(199, 211, 234, 0.12), inset 0px 24px 48px 0px rgba(199, 211, 234, 0.05), 0px 24px 32px 0px rgba(6, 6, 14, 0.7);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-deep);
-            color: var(--text-main);
-            display: flex; align-items: center; justify-content: center;
-            min-height: 100vh;
+            font-family: var(--font-ui);
+            background-color: var(--color-midnight-ink);
+            color: var(--color-moonlight);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            min-height: 100vh; overflow: hidden; position: relative;
+            letter-spacing: -0.01em;
+            /* AuthKit Blueprint Grid */
+            background-image: 
+                linear-gradient(rgba(186, 215, 247, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(186, 215, 247, 0.04) 1px, transparent 1px);
+            background-size: 40px 40px;
         }
 
+        svg.lucide { stroke-width: 1.5px; }
+
+        /* AuthKit Blueprint Glow (Top Center Radial) */
+        .blueprint-glow {
+            position: absolute; top: -20%; left: 50%; transform: translateX(-50%);
+            width: 800px; height: 600px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(186, 207, 247, 0.08) 0%, transparent 70%);
+            pointer-events: none; z-index: 1;
+        }
+
+        /* Hero Text Lockup */
+        .hero-lockup {
+            text-align: center; margin-bottom: 40px; z-index: 10; position: relative;
+        }
+        .hero-eyebrow {
+            font-family: var(--font-mono); font-size: 15px; color: var(--color-fog);
+            letter-spacing: 0.1em; margin-bottom: 16px;
+        }
+        .hero-title {
+            font-size: 48px; font-weight: 500; color: #ffffff;
+            line-height: 1.14; margin-bottom: 16px; letter-spacing: normal;
+        }
+        .hero-subtitle {
+            font-size: 18px; color: var(--color-pebble); font-weight: 400;
+        }
+
+        /* AuthKit Graphite Plate Card */
         .login-card {
-            background: var(--bg-card); backdrop-filter: blur(20px);
-            border: 1px solid var(--border-color); border-radius: 24px;
-            padding: 50px 40px; width: 100%; max-width: 420px;
-            text-align: center;
+            background: var(--color-graphite-plate);
+            border: 1px solid var(--color-steel-border);
+            border-radius: 10px;
+            padding: 32px 24px; width: 100%; max-width: 380px;
+            box-shadow: var(--shadow-subtle-4);
+            animation: floatIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative; z-index: 10;
         }
 
-        .logo-wrap {
-            display: inline-flex; align-items: center; justify-content: center;
-            width: 64px; height: 64px; border-radius: 16px;
-            background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); 
-            margin-bottom: 20px; color: var(--accent-primary);
+        @keyframes floatIn {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
         }
-
-        .login-header h1 { font-size: 1.8rem; font-weight: 700; margin-bottom: 8px; }
-        .login-header p { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 40px; }
 
         .input-group { display: flex; flex-direction: column; gap: 8px; text-align: left; margin-bottom: 20px; }
-        .input-group label { font-size: 0.8rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
+        .input-group label { font-size: 14px; font-weight: 500; color: var(--color-moonlight); }
 
-        .input-wrapper { position: relative; }
-        .input-wrapper i {
-            position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
-            color: var(--text-muted); width: 18px;
-        }
-
+        /* AuthKit 2px Radius Inputs */
         input {
-            width: 100%; padding: 14px 16px 14px 46px;
-            border: 1px solid var(--border-color); border-radius: 12px;
-            font-size: 1rem; font-family: inherit;
-            background: rgba(0,0,0,0.2); color: white; transition: all 0.2s;
+            width: 100%; padding: 10px 12px; border: 1px solid var(--color-steel-border);
+            border-radius: 2px; font-size: 14px; font-family: var(--font-ui);
+            background-color: var(--color-midnight-ink); color: white;
+            box-shadow: inset 0px 0px 0px 1px rgba(186, 215, 247, 0.06); transition: all 0.2s;
         }
-        input:focus { outline: none; border-color: var(--accent-primary); background: rgba(0,0,0,0.4); }
+        input:focus {
+            outline: none; border-color: var(--color-frost-link);
+            box-shadow: 0 0 0 1px var(--color-frost-link), inset 0px 0px 0px 1px rgba(186, 215, 247, 0.12);
+        }
 
+        /* AuthKit Electric Iris CTA */
         .btn-login {
-            width: 100%; padding: 16px; margin-top: 10px;
-            background: var(--accent-primary); color: white;
-            border: none; border-radius: 12px; font-size: 1rem; font-weight: 600;
-            cursor: pointer; transition: background 0.2s;
-            display: flex; justify-content: center; align-items: center; gap: 10px;
+            width: 100%; padding: 10px 16px; margin-top: 10px;
+            background: var(--color-electric-iris); color: white;
+            border: none; border-radius: 2px;
+            font-size: 16px; font-weight: 500; font-family: var(--font-ui);
+            cursor: pointer; box-shadow: none; transition: background 0.2s;
+            display: flex; justify-content: center; align-items: center; gap: 8px; line-height: 1.5;
         }
-        .btn-login:hover { background: #2563EB; }
+        .btn-login:hover { background: #7a52f5; }
 
         #error-msg {
-            color: #EF4444; font-size: 0.85rem; font-weight: 500;
-            margin-top: 15px; min-height: 20px; opacity: 0;
+            color: var(--color-ember); font-size: 14px; font-weight: 500;
+            margin-top: 15px; min-height: 20px; opacity: 0; transition: opacity 0.3s; text-align: center;
         }
     </style>
 </head>
 <body>
-    <main class="login-card">
-        <header class="login-header">
-            <div class="logo-wrap"><i data-lucide="layers"></i></div>
-            <h1>Nexus ERP</h1>
-            <p>Sign in to your control center</p>
-        </header>
 
+    <div class="blueprint-glow"></div>
+
+    <div class="hero-lockup">
+        <div class="hero-eyebrow">NEXUS ERP</div>
+        <h1 class="hero-title">Sign In</h1>
+        <p class="hero-subtitle">Access your enterprise control center.</p>
+    </div>
+
+    <div class="login-card">
         <form id="loginForm" onsubmit="handleLogin(event)">
-            <section class="input-group">
-                <label for="username">Username</label>
-                <div class="input-wrapper">
-                    <i data-lucide="user"></i>
-                    <input type="text" id="username" required placeholder="Enter username" autocomplete="username">
-                </div>
-            </section>
+            <div class="input-group">
+                <label>Username</label>
+                <input type="text" id="username" required placeholder="admin" autocomplete="username">
+            </div>
 
-            <section class="input-group">
-                <label for="password">Password</label>
-                <div class="input-wrapper">
-                    <i data-lucide="lock"></i>
-                    <input type="password" id="password" required placeholder="••••••••" autocomplete="current-password">
-                </div>
-            </section>
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="password" required placeholder="••••••••" autocomplete="current-password">
+            </div>
 
             <button type="submit" class="btn-login" id="loginBtn">
-                Sign In <i data-lucide="arrow-right" style="width: 18px;"></i>
+                Continue
             </button>
-            <div id="error-msg" role="alert">Invalid Credentials</div>
+            <div id="error-msg">Invalid Credentials</div>
         </form>
-    </main>
+    </div>
 
     <script>
         lucide.createIcons();
@@ -118,34 +159,30 @@
             const u = document.getElementById('username').value;
             const p = document.getElementById('password').value;
 
-            btn.innerHTML = '<i data-lucide="loader-2" class="lucide-spin" style="width:18px;"></i> Authenticating...';
+            btn.innerHTML = '<i data-lucide="loader-2" class="lucide-spin" style="width:16px;"></i> Authenticating...';
             lucide.createIcons();
             err.style.opacity = "0";
 
             try {
                 const res = await fetch("/login", {
-                    method: "POST",
-                    headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({username: u, password: p})
+                    method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({username: u, password: p})
                 });
 
                 if (res.ok) {
-                    btn.innerHTML = '<i data-lucide="check-circle-2" style="width:18px;"></i> Success';
-                    btn.style.background = "#10B981";
+                    btn.innerHTML = '<i data-lucide="check" style="width:16px;"></i> Success';
                     lucide.createIcons();
+                    btn.style.background = "var(--color-cipher-mint)";
                     setTimeout(() => window.location.href = "/", 600);
                 } else {
                     const data = await res.json();
                     err.innerText = data.error || "Invalid Credentials";
                     err.style.opacity = "1";
-                    btn.innerHTML = 'Sign In <i data-lucide="arrow-right" style="width: 18px;"></i>';
-                    lucide.createIcons();
+                    btn.innerHTML = 'Continue';
                 }
             } catch (error) {
                 err.innerText = "Network Error";
                 err.style.opacity = "1";
-                btn.innerHTML = 'Sign In <i data-lucide="arrow-right" style="width: 18px;"></i>';
-                lucide.createIcons();
+                btn.innerHTML = 'Continue';
             }
         }
     </script>
