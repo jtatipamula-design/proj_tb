@@ -18,8 +18,12 @@
     }
     @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
-    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+    /* New Specific Side-by-Side Layout Grids */
+    .form-grid-2-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-bottom: 24px; }
     
+    @media (max-width: 600px) { .form-grid-2-col { grid-template-columns: 1fr; } }
+
     .form-group { display: flex; flex-direction: column; gap: 8px; }
     .form-group label { font-size: 14px; font-weight: 500; color: var(--color-moonlight); text-transform: none; }
 
@@ -56,14 +60,26 @@
 
     .form-divider { height: 1px; width: 100%; background: var(--glass-border); margin: 32px 0; }
 
+    /* Form Actions Section */
+    .form-actions {
+        display: flex; gap: 12px; align-items: center; justify-content: flex-end;
+    }
     .btn-submit {
         display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-        width: 100%; padding: 12px 16px; border-radius: 6px;
-        background: var(--color-electric-iris); color: white; font-weight: 500; font-family: var(--font-ui); font-size: 16px;
-        border: none; cursor: pointer; box-shadow: none; transition: background 0.2s, transform 0.2s; line-height: 1.5;
+        padding: 10px 24px; border-radius: 6px;
+        background: var(--color-electric-iris); color: white; font-weight: 500; font-family: var(--font-ui); font-size: 14px;
+        border: none; cursor: pointer; transition: background 0.2s, transform 0.2s; line-height: 1.5;
     }
     .btn-submit:hover { background: #7a52f5; transform: translateY(-1px); }
 
+    .btn-cancel, .btn-clear {
+        padding: 10px 16px; border-radius: 6px; font-weight: 500; font-family: var(--font-ui); font-size: 14px;
+        cursor: pointer; transition: all 0.2s; background: transparent; border: 1px solid var(--glass-border); color: var(--color-moonlight);
+    }
+    .btn-cancel:hover { background: rgba(255,255,255,0.05); color: white; }
+    html.light-mode .btn-cancel:hover { background: rgba(0,0,0,0.05); color: black; }
+    .btn-clear { border-color: var(--color-ember); color: var(--color-ember); margin-right: auto; }
+    .btn-clear:hover { background: rgba(228, 109, 76, 0.1); }
 </style>
 
 <div class="content-wrapper">
@@ -82,7 +98,51 @@
     </div>
 
     <div class="form-container">
-        <!-- HTMX JSON-ENC Form -->
+        <!-- Jinja Macro to render each input elegantly without repeating the huge block 4 times -->
+        {% macro render_field(col) %}
+        <div class="form-group">
+            <label>
+                {{ col.label }} 
+                {% if col.required and not col.is_pk %}<span style="color: var(--color-ember);">*</span>{% endif %}
+                {% if col.is_pk %}<span style="color: var(--color-fog); font-size: 12px; margin-left: 6px;">(Auto-Generated ID)</span>{% endif %}
+            </label>
+            
+            {% if col.column_name.lower().endswith('status') %}
+                <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'ACT' }}">
+                <div class="status-group">
+                    <div class="status-btn" id="btn_act_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'ACT')">Active</div>
+                    <div class="status-btn" id="btn_ina_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'INA')">Inactive</div>
+                </div>
+            {% elif col.is_pk %}
+                <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else 'Pending...' }}" class="readonly-input" readonly tabindex="-1">
+            {% elif col.data_type == 'virtual_checkbox' %}
+                <div class="checkbox-scroll-box">
+                    {% set selected_items = (col.value or "").split(',') %}
+                    {% for opt in col.options %}
+                        <label class="checkbox-item">
+                            <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %}>
+                            <span>{{ opt.name }}</span>
+                        </label>
+                    {% endfor %}
+                </div>
+            {% elif col.options %}
+                <select name="{{ col.column_name }}" {% if col.required %}required{% endif %}>
+                    <option value="">-- Select --</option>
+                    {% for opt in col.options %}
+                        <option value="{{ opt.id }}" {% if col.value|string == opt.id|string %}selected{% endif %}>{{ opt.name }}</option>
+                    {% endfor %}
+                </select>
+            {% elif col.data_type == 'date' or col.data_type == 'timestamp' %}
+                <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %}>
+            {% elif 'pwd' in col.column_name or 'password' in col.column_name %}
+                <input type="password" name="{{ col.column_name }}" autocomplete="new-password" placeholder="{% if mode == 'edit' %}Leave blank to keep unchanged{% else %}••••••••{% endif %}" {% if col.required and mode != 'edit' %}required{% endif %}>
+            {% else %}
+                <input type="text" name="{{ col.column_name }}" placeholder="Enter {{ col.label|lower }}" value="{{ col.value if col.value != None else '' }}" {% if col.required %}required{% endif %}>
+            {% endif %}
+        </div>
+        {% endmacro %}
+
+
         <form hx-ext="json-enc" 
               hx-swap="none"
               {% if mode == 'edit' %}
@@ -92,72 +152,41 @@
               {% endif %}
               id="recordForm">
             
+            <!-- SECTION 1: Exact formatting for ID and Status -->
+            <div class="form-grid-2-col">
+                {% for col in columns if col.is_pk or col.column_name.lower().endswith('status') %}
+                    {{ render_field(col) }}
+                {% endfor %}
+            </div>
+
+            <!-- SECTION 2: Exact formatting for Start/End Dates -->
+            <div class="form-grid-2-col">
+                {% for col in columns if 'start_date' in col.column_name.lower() or 'end_date' in col.column_name.lower() %}
+                    {{ render_field(col) }}
+                {% endfor %}
+            </div>
+
+            <!-- SECTION 3: Standard formatting for Everything Else -->
             <div class="form-grid">
-                {% for col in columns %}
-                <div class="form-group">
-                    <label>
-                        {{ col.label }} 
-                        {% if col.required and not col.is_pk %}<span style="color: var(--color-ember);">*</span>{% endif %}
-                        {% if col.is_pk %}<span style="color: var(--color-fog); font-size: 12px; margin-left: 6px;">(Auto-Generated ID)</span>{% endif %}
-                    </label>
-                    
-                    {% if col.column_name.lower().endswith('status') %}
-                        <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'ACT' }}">
-                        <div class="status-group">
-                            <div class="status-btn" id="btn_act_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'ACT')">Active</div>
-                            <div class="status-btn" id="btn_ina_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'INA')">Inactive</div>
-                        </div>
-                        <script>
-                            document.addEventListener("DOMContentLoaded", function() {
-                                let val = "{{ col.value }}";
-                                if (!val || val === 'None' || val === 'AIU') val = 'ACT'; 
-                                setStatus('{{ col.column_name }}', val);
-                            });
-                        </script>
-
-                    {% elif col.is_pk %}
-                        <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else 'Pending...' }}" class="readonly-input" readonly tabindex="-1">
-
-                    {% elif col.data_type == 'virtual_checkbox' %}
-                        <div class="checkbox-scroll-box">
-                            {% set selected_items = (col.value or "").split(',') %}
-                            {% for opt in col.options %}
-                                <label class="checkbox-item">
-                                    <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" 
-                                    {% if opt.id|string in selected_items %}checked{% endif %}>
-                                    <span>{{ opt.name }}</span>
-                                </label>
-                            {% endfor %}
-                        </div>
-
-                    {% elif col.options %}
-                        <select name="{{ col.column_name }}" {% if col.required %}required{% endif %}>
-                            <option value="">-- Select --</option>
-                            {% for opt in col.options %}
-                                <option value="{{ opt.id }}" {% if col.value|string == opt.id|string %}selected{% endif %}>
-                                    {{ opt.name }}
-                                </option>
-                            {% endfor %}
-                        </select>
-
-                    {% elif col.data_type == 'date' or col.data_type == 'timestamp' %}
-                        <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %}>
-                    
-                    {% elif 'pwd' in col.column_name or 'password' in col.column_name %}
-                        <input type="password" name="{{ col.column_name }}" autocomplete="new-password" placeholder="{% if mode == 'edit' %}Leave blank to keep unchanged{% else %}••••••••{% endif %}" {% if col.required and mode != 'edit' %}required{% endif %}>
-
-                    {% else %}
-                        <input type="text" name="{{ col.column_name }}" placeholder="Enter {{ col.label|lower }}" value="{{ col.value if col.value != None else '' }}" {% if col.required %}required{% endif %}>
-                    {% endif %}
-                </div>
+                {% for col in columns if not (col.is_pk or col.column_name.lower().endswith('status') or 'start_date' in col.column_name.lower() or 'end_date' in col.column_name.lower()) %}
+                    {{ render_field(col) }}
                 {% endfor %}
             </div>
             
             <div class="form-divider"></div>
 
-            <div>
+            <div class="form-actions">
+                <!-- Displays the CLEAR button ONLY when mode is create -->
+                {% if mode == 'create' %}
+                    <button type="button" class="btn-clear" onclick="clearForm()">
+                        <i data-lucide="trash" style="width: 16px; margin-right: 4px; vertical-align: middle;"></i> Clear
+                    </button>
+                {% endif %}
+
+                <button type="button" class="btn-cancel" onclick="cancelForm()">Cancel (Save Draft)</button>
+                
                 <button type="submit" class="btn-submit">
-                    <i data-lucide="save" style="width: 18px;"></i> Save Record
+                    <i data-lucide="save" style="width: 16px;"></i> Save Record
                 </button>
             </div>
         </form>
@@ -165,12 +194,75 @@
 </div>
 
 <script>
+    // Handles the UI updating for our custom active/inactive toggles
     function setStatus(colName, value) {
-        document.getElementById('input_' + colName).value = value;
+        let inputEl = document.getElementById('input_' + colName);
+        if (inputEl) inputEl.value = value;
         const btnAct = document.getElementById('btn_act_' + colName);
         const btnIna = document.getElementById('btn_ina_' + colName);
         if(btnAct) { btnAct.className = 'status-btn'; if(value === 'ACT' || value === 'AIU') btnAct.classList.add('active-selected'); }
         if(btnIna) { btnIna.className = 'status-btn'; if(value !== 'ACT' && value !== 'AIU') btnIna.classList.add('inactive-selected'); }
+    }
+
+    // Initialize statuses if needed
+    document.addEventListener("DOMContentLoaded", function() {
+        document.querySelectorAll('.hidden-input').forEach(el => {
+            if (el.name.toLowerCase().endswith('status')) {
+                setStatus(el.name, el.value || 'ACT');
+            }
+        });
+    });
+
+
+    // --- DRAFT CACHING LOGIC ---
+    const formId = "recordForm";
+    const draftKey = `draft_{{ table_name }}`;
+    const mode = '{{ mode }}';
+
+    // Captures all input and silently saves to LocalStorage so data is never lost
+    function saveDraft() {
+        if (mode !== 'create') return;
+        const formData = new FormData(document.getElementById(formId));
+        const draft = Object.fromEntries(formData.entries());
+        localStorage.setItem(draftKey, JSON.stringify(draft));
+    }
+
+    // Attach listeners to automatically save draft as they type
+    document.querySelectorAll('input, select, textarea').forEach(el => {
+        el.addEventListener('input', saveDraft);
+        el.addEventListener('change', saveDraft);
+    });
+
+    // Populate data from LocalStorage natively if returning to "Add New"
+    document.addEventListener('DOMContentLoaded', () => {
+        if (mode !== 'create') return;
+        const draft = JSON.parse(localStorage.getItem(draftKey));
+        if (draft) {
+            Object.keys(draft).forEach(key => {
+                const el = document.querySelector(`[name="${key}"]`);
+                if (el && el.type !== 'file') {
+                    el.value = draft[key];
+                    // Trigger the visual UI updates for Custom Status Buttons
+                    if (key.toLowerCase().endswith('status')) setStatus(key, draft[key]);
+                }
+            });
+        }
+    });
+
+    // Action button triggers
+    function cancelForm() {
+        saveDraft(); // Final safe save
+        window.location.href = "/table/{{ table_name }}";
+    }
+
+    function clearForm() {
+        document.getElementById(formId).reset();
+        localStorage.removeItem(draftKey);
+        
+        // Reset all custom visual status toggles to default Active
+        document.querySelectorAll('.hidden-input').forEach(el => {
+            if(el.name.toLowerCase().endswith('status')) setStatus(el.name, 'ACT');
+        });
     }
 </script>
 {% endblock %}
