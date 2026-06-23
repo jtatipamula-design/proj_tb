@@ -238,12 +238,15 @@ def get_column_sort_priority(pk_column, c_name):
     name = c_name.lower()
     if c_name == pk_column: return 0
     if name.endswith('status'): return 1
-    if 'start_date' in name: return 2
-    if 'end_date' in name: return 3
+    
     if name in ('created_by', 'creation_date', 'last_update_date', 'last_updated_by', 'last_update_login') or \
        name.endswith('_created_by') or name.endswith('_modified_by') or \
        name.endswith('_created') or name.endswith('_modified'):
         return 100
+        
+    if 'start_date' in name: return 80
+    if 'end_date' in name: return 81
+    
     return 50
 
 
