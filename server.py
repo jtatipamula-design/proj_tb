@@ -111,26 +111,35 @@ def login_required(wrapped):
 
             cached_auth = AUTH_CACHE.get(user_id)
             if cached_auth and cached_auth['session'] == session_id and cached_auth['expires'] > now:
-                pass 
+                request.ctx.company_id = cached_auth['company_id']
             else:
                 async with app.ctx.pool.acquire() as conn:
-                    db_session = await conn.fetchval(
-                        "SELECT pus_session_id FROM phc_users_t WHERE pus_user_id = $1", user_id
+                    db_user = await conn.fetchrow(
+                        "SELECT pus_session_id, pus_company_id FROM phc_users_t WHERE pus_user_id = $1", int(user_id)
                     )
-                    if db_session != session_id:
+                    if not db_user or db_user['pus_session_id'] != session_id:
                         resp = response.redirect("/login")
                         resp.delete_cookie("auth_token")
                         return resp
-                    AUTH_CACHE[user_id] = {'session': db_session, 'expires': now + 60}
+                    
+                    AUTH_CACHE[user_id] = {
+                        'session': db_user['pus_session_id'], 
+                        'company_id': db_user['pus_company_id'], 
+                        'expires': now + 60
+                    }
+                    request.ctx.company_id = db_user['pus_company_id']
 
             request.ctx.user_id = user_id
             request.ctx.user_type = payload.get("user_type")
             request.ctx.username = payload.get("username", "User")
+            request.ctx.csrf_token = payload.get("csrf_token")
 
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
             return response.redirect("/login")
         except asyncpg.PostgresError as e:
             print(f"DB Error during auth validation: {e}")
+            if request.headers.get("HX-Request"):
+                return response.json({"error": "Internal Database Error during authentication."}, status=500)
             return response.text("Internal Database Error", status=500)
 
         return await wrapped(request, *args, **kwargs)
@@ -145,12 +154,10 @@ async def setup_db(app_instance, loop):
     try:
         dsn = CLOUD_DB_URL or f"postgres://postgres:{os.environ.get('LOCAL_DB_PASSWORD')}@localhost/tablesproj"
         
-        # 1. FIX: Reduced pool limits back to safe numbers to prevent DB connection exhaustion
         app_instance.ctx.pool = await asyncpg.create_pool(
             dsn=dsn, statement_cache_size=0, min_size=2, max_size=20
         )
 
-        # Ensure single-process safety when creating initial tables
         async with app_instance.ctx.pool.acquire() as conn:
             await conn.execute("SELECT pg_advisory_lock(1337)")
             try:
@@ -223,6 +230,21 @@ def make_human_readable(text):
     if len(text) > 4 and text[3] == '_':
         text = text[4:]
     return text.replace("_", " ").title()
+
+
+# --- DRY Helper Function for Table/Export Sorting ---
+def get_column_sort_priority(pk_column, c_name):
+    """Helper to standardize column order across all UI tables and CSV exports."""
+    name = c_name.lower()
+    if c_name == pk_column: return 0
+    if name.endswith('status'): return 1
+    if 'start_date' in name: return 2
+    if 'end_date' in name: return 3
+    if name in ('created_by', 'creation_date', 'last_update_date', 'last_updated_by', 'last_update_login') or \
+       name.endswith('_created_by') or name.endswith('_modified_by') or \
+       name.endswith('_created') or name.endswith('_modified'):
+        return 100
+    return 50
 
 
 # ==========================================
@@ -387,11 +409,14 @@ async def handle_login(request):
                 session_id = str(uuid.uuid4())
                 await conn.execute("UPDATE phc_users_t SET pus_session_id = $1 WHERE pus_user_id = $2", session_id, user['pus_user_id'])
 
+                csrf_token = str(uuid.uuid4().hex)
+
                 payload = {
                     "user_id": user['pus_user_id'],
                     "user_type": user.get('pus_user_type') or 'STD',
                     "username": user['pus_user_name'],
                     "session_id": session_id,
+                    "csrf_token": csrf_token,
                     "exp": datetime.now(timezone.utc) + timedelta(hours=12)
                 }
                 token = jwt.encode(payload, app.config.SECRET, algorithm="HS256")
@@ -427,7 +452,13 @@ async def dashboard(request):
             "dept_count": await conn.fetchval("SELECT COUNT(*) FROM phc_dept_t") if 'phc_dept_t' in allowed else "🔒",
             "app_count": await conn.fetchval("SELECT COUNT(*) FROM phc_apps_t") if 'phc_apps_t' in allowed else "🔒"
         }
-    return await render("dashboard.html", context={"stats": stats, "all_tables": allowed, "username": request.ctx.username, "user_id": request.ctx.user_id})
+    return await render("dashboard.html", context={
+        "stats": stats, 
+        "all_tables": allowed, 
+        "username": request.ctx.username, 
+        "user_id": request.ctx.user_id,
+        "csrf_token": request.ctx.csrf_token 
+    })
 
 
 @app.get("/table/<table_name>")
@@ -446,32 +477,32 @@ async def show_table(request, table_name):
             columns = [{"raw": r['column_name'], "label": make_human_readable(r['column_name'])} for r in SCHEMA_CACHE["columns"][table_name]]
             pk_column = await get_pk_column(conn, table_name)
 
-            def get_col_priority(c_name):
-                name = c_name.lower()
-                if c_name == pk_column: return 0
-                if name.endswith('status'): return 1
-                if 'start_date' in name: return 2
-                if 'end_date' in name: return 3
-                if name in ('created_by', 'creation_date', 'last_update_date', 'last_updated_by', 'last_update_login') or \
-                   name.endswith('_created_by') or name.endswith('_modified_by') or \
-                   name.endswith('_created') or name.endswith('_modified'):
-                    return 100
-                return 50
+            columns = sorted(columns, key=lambda c: get_column_sort_priority(pk_column, c['raw']))
 
-            columns = sorted(columns, key=lambda c: get_col_priority(c['raw']))
+            page = int(request.args.get("page", 1))
+            limit = 50
+            offset = (page - 1) * limit
 
             search_query = request.args.get("q", "").strip()
             where_clause = ""
             params = []
 
-            if search_query and columns:
+            valid_search_types = ('character varying', 'text', 'varchar', 'integer', 'bigint', 'numeric')
+            searchable_cols = [c['column_name'] for c in SCHEMA_CACHE["columns"][table_name] if c.get('data_type') in valid_search_types]
+
+            if search_query and searchable_cols:
                 params.append(f"%{search_query}%")
-                cast_clauses = [f"CAST({c['raw']} AS TEXT) ILIKE $1" for c in columns]
+                cast_clauses = [f"CAST({col} AS TEXT) ILIKE $1" for col in searchable_cols]
                 where_clause = f"WHERE {' OR '.join(cast_clauses)}"
                 
             order_clause = f"ORDER BY {pk_column} DESC" if pk_column else "ORDER BY 1 DESC"
             
-            rows = await conn.fetch(f"SELECT * FROM {table_name} {where_clause} {order_clause} LIMIT 100", *params)
+            total_count = await conn.fetchval(f"SELECT COUNT(*) FROM {table_name} {where_clause}", *params)
+            total_pages = max(1, (total_count + limit - 1) // limit)
+            start_row = offset + 1 if total_count > 0 else 0
+            end_row = min(offset + limit, total_count)
+
+            rows = await conn.fetch(f"SELECT * FROM {table_name} {where_clause} {order_clause} LIMIT {limit} OFFSET {offset}", *params)
             rows_dict = [dict(r) for r in rows]
 
             for col in columns:
@@ -495,17 +526,21 @@ async def show_table(request, table_name):
                 "all_tables": allowed, 
                 "pk_column": pk_column, 
                 "user_id": request.ctx.user_id,
-                "username": request.ctx.username 
+                "username": request.ctx.username,
+                "csrf_token": request.ctx.csrf_token,
+                "search_query": search_query,
+                "page": page,
+                "total_pages": total_pages,
+                "total_count": total_count,
+                "start_row": start_row,
+                "end_row": end_row
             })
             
     except Exception as e:
         print(f"Error loading table {table_name}: {e}")
-        return response.html(f"""
-            <script>
-                sessionStorage.setItem('pendingToast', JSON.stringify({{"msg": "Table could not be loaded: {str(e)[:50]}", "type": "error"}}));
-                window.location.href = "/";
-            </script>
-        """)
+        if request.headers.get("HX-Request"):
+            return response.json({"error": f"Table could not be loaded: {str(e)[:50]}"}, status=500)
+        return response.redirect("/")
 
 
 @app.route("/export/<table_name>")
@@ -537,19 +572,7 @@ async def export_csv(request, table_name):
         
         rows_dict = [dict(r) for r in rows]
         
-        def get_col_priority(c_name):
-            name = c_name.lower()
-            if c_name == pk_column: return 0
-            if name.endswith('status'): return 1
-            if 'start_date' in name: return 2
-            if 'end_date' in name: return 3
-            if name in ('created_by', 'creation_date', 'last_update_date', 'last_updated_by', 'last_update_login') or \
-               name.endswith('_created_by') or name.endswith('_modified_by') or \
-               name.endswith('_created') or name.endswith('_modified'):
-                return 100
-            return 50
-            
-        sorted_cols = sorted(SCHEMA_CACHE["columns"][table_name], key=lambda c: get_col_priority(c['column_name']))
+        sorted_cols = sorted(SCHEMA_CACHE["columns"][table_name], key=lambda c: get_column_sort_priority(pk_column, c['column_name']))
 
         for r in sorted_cols:
             c_name = r['column_name']
@@ -632,11 +655,14 @@ async def show_edit_form(request, table_name, pk_val):
                 "pk_val": pk_val, 
                 "mode": "edit", 
                 "user_id": request.ctx.user_id,
-                "username": request.ctx.username
+                "username": request.ctx.username,
+                "csrf_token": request.ctx.csrf_token 
             })
     except Exception as e:
         print(f"Error loading edit form: {e}")
-        return response.html(f"""<script>sessionStorage.setItem('pendingToast', JSON.stringify({{"msg": "Error loading record.", "type": "error"}})); window.location.href = "/table/{table_name}";</script>""")
+        if request.headers.get("HX-Request"):
+            return response.json({"error": "Error loading record."}, status=500)
+        return response.redirect(f"/table/{table_name}")
 
 
 @app.get("/new/<table_name>")
@@ -685,11 +711,14 @@ async def show_add_form(request, table_name):
                 "all_tables": allowed, 
                 "mode": "create", 
                 "user_id": request.ctx.user_id,
-                "username": request.ctx.username
+                "username": request.ctx.username,
+                "csrf_token": request.ctx.csrf_token 
             })
     except Exception as e:
         print(f"Error loading create form: {e}")
-        return response.html(f"""<script>sessionStorage.setItem('pendingToast', JSON.stringify({{"msg": "Error creating record.", "type": "error"}})); window.location.href = "/table/{table_name}";</script>""")
+        if request.headers.get("HX-Request"):
+            return response.json({"error": "Error creating record."}, status=500)
+        return response.redirect(f"/table/{table_name}")
 
 
 async def _sanitize_payload(data, schema_map, pk_column, current_user_id, request_method):
@@ -770,14 +799,24 @@ async def _sanitize_payload(data, schema_map, pk_column, current_user_id, reques
 @app.put("/api/<table_name>/<pk_val>", name="update_row")
 @login_required
 async def save_data(request, table_name, pk_val=None):
+    
+    provided_csrf = request.headers.get("X-CSRFToken")
+    if not provided_csrf or provided_csrf != request.ctx.csrf_token:
+        return response.json({"error": "Missing or Invalid CSRF Token. Are you a hacker?"}, status=403)
+
     data = request.json
     current_user_id = request.ctx.user_id
     user_type = request.ctx.user_type
+    company_id = int(request.ctx.company_id)
 
     if user_type != 'ADM':
         data.pop('pus_user_type', None)
+        data.pop('pus_status', None)
+        data.pop('pus_company_id', None)
         if table_name == 'phc_users_t' and request.method == "PUT" and str(pk_val) != str(current_user_id):
-            data.pop('pus_pwd', None)
+            return response.json({"error": "Unauthorized to edit other users' profiles."}, status=403)
+        if table_name == 'phc_users_t' and request.method == "PUT":
+            data.pop('pus_pwd', None) 
 
     async with app.ctx.pool.acquire() as conn:
         allowed = await get_allowed_tables(conn, current_user_id, user_type)
@@ -825,8 +864,8 @@ async def save_data(request, table_name, pk_val=None):
                             await conn.execute("""
                                 INSERT INTO phc_role_screen_assignment_t 
                                 ({0}, prs_company_id, prs_role_id, prs_screen_id, prs_start_date, prs_status, prs_created_by, prs_modified_by, prs_created, prs_modified) 
-                                VALUES ($1, 1001, $2, $3, CURRENT_DATE, 'ACT', $4, $4, NOW(), NOW())
-                            """.format(prs_pk_col), next_prs, target_id, int(s_id), str(current_user_id))
+                                VALUES ($1, $2, $3, $4, CURRENT_DATE, 'ACT', $5, $5, NOW(), NOW())
+                            """.format(prs_pk_col), next_prs, company_id, target_id, int(s_id), str(current_user_id))
                             next_prs += 1
 
             if table_name == 'phc_users_t' and virtual_roles is not None:
@@ -840,8 +879,8 @@ async def save_data(request, table_name, pk_val=None):
                             await conn.execute("""
                                 INSERT INTO phc_user_roles_assignment_t 
                                 ({0}, pua_company_id, pua_user_id, pua_role_id, pua_start_date, pua_status, pua_created_by, pua_modified_by, pua_created, pua_modified) 
-                                VALUES ($1, 1001, $2, $3, CURRENT_DATE, 'ACT', $4, $4, NOW(), NOW())
-                            """.format(pua_pk_col), next_pua, target_id, int(r_id), str(current_user_id))
+                                VALUES ($1, $2, $3, $4, CURRENT_DATE, 'ACT', $5, $5, NOW(), NOW())
+                            """.format(pua_pk_col), next_pua, company_id, target_id, int(r_id), str(current_user_id))
                             next_pua += 1
 
         if request.headers.get("HX-Request"):
@@ -856,7 +895,52 @@ async def save_data(request, table_name, pk_val=None):
         return response.json({"status": "success"})
 
 
+# HTMX DELETE ROUTE
+@app.delete("/api/<table_name>/<pk_val>", name="delete_row")
+@login_required
+async def delete_data(request, table_name, pk_val):
+    
+    provided_csrf = request.headers.get("X-CSRFToken")
+    if not provided_csrf or provided_csrf != request.ctx.csrf_token:
+        return response.json({"error": "Missing or Invalid CSRF Token. Are you a hacker?"}, status=403)
+
+    current_user_id = request.ctx.user_id
+    user_type = request.ctx.user_type
+    
+    if user_type != 'ADM' and table_name == 'phc_users_t' and str(pk_val) != str(current_user_id):
+        return response.json({"error": "Unauthorized to delete other users."}, status=403)
+
+    async with app.ctx.pool.acquire() as conn:
+        allowed = await get_allowed_tables(conn, current_user_id, user_type)
+        if table_name not in allowed:
+            return response.json({"error": "Unauthorized API Access"}, status=403)
+
+        pk_column = await get_pk_column(conn, table_name)
+        schema_rows = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1", table_name)
+        pk_type = next((r['data_type'] for r in schema_rows if r['column_name'] == pk_column), 'integer')
+        target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
+
+        async with conn.transaction():
+            if table_name == 'phc_roles_t':
+                await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
+            if table_name == 'phc_users_t':
+                await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
+
+            await conn.execute(f"DELETE FROM {table_name} WHERE {pk_column} = $1", target_id)
+            await log_action(conn, current_user_id, f"Deleted record {target_id} from {table_name}")
+
+        if request.headers.get("HX-Request"):
+            return response.html(f"""
+                <div id="toast-container" hx-swap-oob="beforeend">
+                    <div class="toast" style="animation: slideIn Toast 0.4s ease, fadeOutToast 0.4s ease 3.5s forwards;">
+                        <i data-lucide="check-circle-2" style="color: var(--color-cipher-mint)"></i> Record deleted successfully.
+                    </div>
+                </div>
+            """)
+            
+        return response.json({"status": "success"})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    # 2. FIX: Safely disabled multi-worker generation. Single process handles concurrency purely async without DB lockouts!
     app.run(host="0.0.0.0", port=port, debug=is_development, single_process=True)
