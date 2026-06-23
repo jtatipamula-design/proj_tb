@@ -31,7 +31,8 @@
             --color-electric-iris: #663af3;
             --color-ember: #e46d4c;
             --color-cipher-mint: #269684;
-            --glass-surface: rgba(10, 15, 30, 0.5);
+            /* ENTERPRISE FIX: Dropped opacity of glass slightly to improve readabilty and reduce render load */
+            --glass-surface: rgba(10, 15, 30, 0.6); 
             --glass-border: rgba(255, 255, 255, 0.08);
 
             --font-ui: 'Inter', ui-sans-serif, system-ui, sans-serif;
@@ -64,7 +65,6 @@
 
         tr.htmx-swapping td { opacity: 0; transition: opacity 0.4s ease-out; }
 
-        /* YOUTUBE-STYLE TOP LOADING BAR FOR HTMX */
         body.htmx-request::before {
             content: ""; position: fixed; top: 0; left: 0; height: 3px;
             background: var(--color-electric-iris); z-index: 9999;
@@ -93,10 +93,13 @@
                               linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
         }
 
+        /* ENTERPRISE FIX: Hardware acceleration for blobs to stop GPU lag when scrolling tables */
         .gradient-blob {
-            position: absolute; filter: blur(120px); opacity: 0.35;
+            position: absolute; filter: blur(60px); opacity: 0.3; /* Dropped blur to save GPU */
             animation: floatBlob 20s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
             border-radius: 50%;
+            will-change: transform;
+            transform: translateZ(0); 
         }
         .blob-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: #3B82F6; }
         .blob-2 { bottom: -10%; right: -10%; width: 60vw; height: 60vw; background: #8B5CF6; animation-delay: -5s; animation-direction: alternate-reverse; }
@@ -104,16 +107,18 @@
         .blob-4 { bottom: 10%; left: 10%; width: 45vw; height: 45vw; background: #F43F5E; animation-delay: -15s; opacity: 0.15; }
         
         @keyframes floatBlob {
-            0% { transform: translate(0, 0) scale(1); }
-            33% { transform: translate(5vw, -5vh) scale(1.1); }
-            66% { transform: translate(-5vw, 5vh) scale(0.9); }
-            100% { transform: translate(2vw, 2vh) scale(1); }
+            0% { transform: translate3d(0, 0, 0) scale(1); }
+            33% { transform: translate3d(5vw, -5vh, 0) scale(1.1); }
+            66% { transform: translate3d(-5vw, 5vh, 0) scale(0.9); }
+            100% { transform: translate3d(2vw, 2vh, 0) scale(1); }
         }
 
         .sidebar {
             width: 260px; height: 100vh; position: fixed; z-index: 100;
             display: flex; flex-direction: column;
-            background: var(--glass-surface); backdrop-filter: blur(24px);
+            background: var(--glass-surface); 
+            /* ENTERPRISE FIX: Optimized glassmorphism render constraints */
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); will-change: transform, backdrop-filter;
             border-right: 1px solid var(--glass-border);
             transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s;
         }
@@ -145,7 +150,7 @@
         .nav-item:hover { background: rgba(186, 215, 247, 0.08); color: var(--color-glacier); }
         .nav-item.active { background: rgba(186, 215, 247, 0.12); color: var(--color-frost-link); }
 
-        .theme-toggle-wrap { padding: 0 24px 20px 24px; display: flex; justify-content: center; }
+        .theme-toggle-wrap { padding: 0 0 20px 0; display: flex; justify-content: center; width: 100%; }
         .theme-toggle {
             width: 64px; height: 32px; padding: 3px; border-radius: 999px; cursor: pointer;
             background: var(--color-midnight-ink); border: 1px solid var(--color-steel-border);
@@ -175,7 +180,6 @@
         .logout-btn { color: var(--color-fog); transition: color 0.2s; padding: 4px; }
         .logout-btn:hover { color: var(--color-ember); }
 
-        /* SMOOTH ENTRANCE ANIMATION FOR SWAPPING TABS */
         .main-content {
             margin-left: 260px; flex-grow: 1; padding: 60px 40px; width: calc(100vw - 260px);
             transition: margin-left 0.3s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s ease;
@@ -212,7 +216,6 @@
     </style>
 </head>
 
-<!-- FIX 1: The magical hx-boost="true" that turns the ERP into a seamless SPA -->
 <body hx-boost="true">
 
     <div class="animated-bg">
@@ -252,149 +255,4 @@
         </nav>
         
         <div class="theme-toggle-wrap">
-            <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle Theme">
-                <div class="theme-toggle-handle">
-                    <i data-lucide="moon" style="position: absolute; width:14px; color:var(--color-electric-iris)"></i>
-                </div>
-            </button>
-        </div>
-
-        <section class="user-profile">
-            <a href="/edit/phc_users_t/{{ user_id }}" class="profile-link" title="Edit Profile">
-                <div class="avatar">{{ username[0]|upper if username else 'U' }}</div>
-                <div class="user-profile-info">
-                    <div style="font-size: 14px; font-weight: 500; color: var(--color-glacier);">{{ username.title() if username else 'User' }}</div>
-                    <div style="font-size: 11px; color: var(--color-fog);">Edit Profile</div>
-                </div>
-            </a>
-            <a href="/logout" class="logout-btn" title="Logout"><i data-lucide="log-out" style="width: 18px;"></i></a>
-        </section>
-    </aside>
-
-    <div id="toast-container" class="toast-container"></div>
-
-    <main class="main-content">
-        {% block content %}{% endblock %}
-    </main>
-
-    <script>
-        // --- FIX 2: Bulletproof memory leak prevention for Global HTMX events ---
-        if (!window.erpAppInitialized) {
-            
-            window.toggleTheme = function() {
-                const html = document.documentElement;
-                const isLight = html.classList.toggle('light-mode');
-                localStorage.setItem('theme', isLight ? 'light' : 'dark');
-            };
-
-            window.toggleSidebar = function() {
-                const sidebar = document.getElementById('sidebar');
-                sidebar.classList.toggle('collapsed');
-                localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
-            };
-
-            window.showToast = function(message, type = 'success') {
-                const container = document.getElementById('toast-container');
-                if(!container) return;
-                const toast = document.createElement('div');
-                toast.className = `toast toast-${type}`;
-                const icon = type === 'success' ? 'check-circle-2' : 'alert-circle';
-                toast.innerHTML = `<i data-lucide="${icon}" style="color: ${type === 'success' ? 'var(--color-cipher-mint)' : 'var(--color-ember)'}"></i> ${message}`;
-                container.appendChild(toast);
-                lucide.createIcons();
-                setTimeout(() => toast.remove(), 4000);
-            };
-
-            window.filterSidebar = function() {
-                const searchInput = document.getElementById("sidebarSearch");
-                if(!searchInput) return;
-                let filter = searchInput.value.toLowerCase();
-                
-                // SAVE SEARCH QUERY TO MEMORY!
-                sessionStorage.setItem('sidebarSearchQuery', filter);
-                
-                document.querySelectorAll('.nav-menu .nav-item[data-search]').forEach(item => {
-                    item.style.display = item.getAttribute('data-search').includes(filter) ? "flex" : "none";
-                });
-            };
-
-            document.body.addEventListener('htmx:beforeRequest', function(evt) {
-                if (evt.target.tagName === 'FORM') {
-                    const btn = evt.target.querySelector('.btn-submit');
-                    if (btn) {
-                        btn.innerHTML = '<i data-lucide="loader-2" class="lucide-spin" style="width: 18px;"></i> Saving...';
-                        lucide.createIcons();
-                    }
-                }
-            });
-
-            document.body.addEventListener('htmx:responseError', function(evt) {
-                let errorMsg = "Failed to process request.";
-                try {
-                    const response = JSON.parse(evt.detail.xhr.response);
-                    if (response.error) errorMsg = response.error;
-                } catch(e) {}
-                window.showToast("Error: " + errorMsg, "error");
-                
-                const btn = evt.target.querySelector('.btn-submit');
-                if (btn) {
-                    btn.innerHTML = '<i data-lucide="save" style="width: 18px;"></i> Save Record';
-                    lucide.createIcons();
-                }
-            });
-
-            // THIS TRIGGERS IMMEDIATELY AFTER HTMX SWAPS THE SCREEN IN
-            document.body.addEventListener('htmx:afterSwap', function(evt) {
-                window.applySidebarState();
-            });
-
-            window.erpAppInitialized = true;
-        }
-
-        // --- FIX 3: Guaranteed Sidebar Memory Restore Logic ---
-        window.applySidebarState = function() {
-            lucide.createIcons();
-
-            if (localStorage.getItem('sidebarCollapsed') === 'true') {
-                const sidebar = document.getElementById('sidebar');
-                if(sidebar) sidebar.classList.add('collapsed');
-            }
-
-            const sidebarMenu = document.getElementById('sidebarMenu');
-            if (sidebarMenu) {
-                // 1. Instantly snap back to the previous scroll height
-                const scrollPos = sessionStorage.getItem('sidebarScrollPos');
-                if (scrollPos) {
-                    sidebarMenu.scrollTop = parseInt(scrollPos, 10);
-                }
-                
-                // 2. Continuously track where the user is scrolling
-                sidebarMenu.onscroll = function() {
-                    sessionStorage.setItem('sidebarScrollPos', sidebarMenu.scrollTop);
-                };
-                
-                // 3. Re-apply the search query if the user had one active
-                const savedQuery = sessionStorage.getItem('sidebarSearchQuery');
-                if (savedQuery) {
-                    const searchInput = document.getElementById("sidebarSearch");
-                    if (searchInput) {
-                        searchInput.value = savedQuery;
-                        window.filterSidebar();
-                    }
-                }
-            }
-
-            // Fire any pending toasts (like 'Record Saved!')
-            const pendingToast = sessionStorage.getItem('pendingToast');
-            if (pendingToast) {
-                const toastData = JSON.parse(pendingToast);
-                window.showToast(toastData.msg, toastData.type);
-                sessionStorage.removeItem('pendingToast');
-            }
-        };
-
-        // Fire once on absolute initial page load
-        window.applySidebarState();
-    </script>
-</body>
-</html>
+            <button class="theme-toggle" onclick="toggleTheme()" aria-label="
