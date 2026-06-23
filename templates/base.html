@@ -31,7 +31,6 @@
             --color-electric-iris: #663af3;
             --color-ember: #e46d4c;
             --color-cipher-mint: #269684;
-            /* ENTERPRISE FIX: Dropped opacity of glass slightly to improve readabilty and reduce render load */
             --glass-surface: rgba(10, 15, 30, 0.6); 
             --glass-border: rgba(255, 255, 255, 0.08);
 
@@ -93,9 +92,8 @@
                               linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
         }
 
-        /* ENTERPRISE FIX: Hardware acceleration for blobs to stop GPU lag when scrolling tables */
         .gradient-blob {
-            position: absolute; filter: blur(60px); opacity: 0.3; /* Dropped blur to save GPU */
+            position: absolute; filter: blur(60px); opacity: 0.3; 
             animation: floatBlob 20s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
             border-radius: 50%;
             will-change: transform;
@@ -117,7 +115,6 @@
             width: 260px; height: 100vh; position: fixed; z-index: 100;
             display: flex; flex-direction: column;
             background: var(--glass-surface); 
-            /* ENTERPRISE FIX: Optimized glassmorphism render constraints */
             backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); will-change: transform, backdrop-filter;
             border-right: 1px solid var(--glass-border);
             transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s;
@@ -150,7 +147,7 @@
         .nav-item:hover { background: rgba(186, 215, 247, 0.08); color: var(--color-glacier); }
         .nav-item.active { background: rgba(186, 215, 247, 0.12); color: var(--color-frost-link); }
 
-        .theme-toggle-wrap { padding: 0 0 20px 0; display: flex; justify-content: center; width: 100%; }
+        .theme-toggle-wrap { padding: 0 24px 20px 24px; display: flex; justify-content: flex-start; }
         .theme-toggle {
             width: 64px; height: 32px; padding: 3px; border-radius: 999px; cursor: pointer;
             background: var(--color-midnight-ink); border: 1px solid var(--color-steel-border);
@@ -166,25 +163,21 @@
 
         .user-profile {
             padding: 24px; border-top: 1px solid var(--glass-border); 
-            display: flex; align-items: center; justify-content: space-between; white-space: nowrap;
-            transition: background 0.2s; cursor: pointer;
+            display: flex; align-items: center; gap: 12px; white-space: nowrap;
         }
-        .user-profile:hover { background: rgba(255, 255, 255, 0.05); }
-        html.light-mode .user-profile:hover { background: rgba(0, 0, 0, 0.05); }
-        .profile-link { display: flex; align-items: center; gap: 12px; flex-grow: 1; text-decoration: none; }
         .avatar {
             width: 36px; height: 36px; border-radius: 6px; background: rgba(186, 215, 247, 0.08); 
             border: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; 
             font-weight: 500; color: var(--color-glacier); min-width: 36px;
         }
-        .logout-btn { color: var(--color-fog); transition: color 0.2s; padding: 4px; }
-        .logout-btn:hover { color: var(--color-ember); }
 
         .main-content {
             margin-left: 260px; flex-grow: 1; padding: 60px 40px; width: calc(100vw - 260px);
             transition: margin-left 0.3s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s ease;
             display: flex; flex-direction: column;
             animation: fadeIn 0.2s ease-out;
+            position: relative;
+            z-index: 10;
         }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(5px); }
@@ -255,4 +248,137 @@
         </nav>
         
         <div class="theme-toggle-wrap">
-            <button class="theme-toggle" onclick="toggleTheme()" aria-label="
+            <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle Theme">
+                <div class="theme-toggle-handle">
+                    <i data-lucide="moon" style="position: absolute; width:14px; color:var(--color-electric-iris)"></i>
+                </div>
+            </button>
+        </div>
+
+        <!-- REVERTED: Original, safe User Profile structure -->
+        <section class="user-profile">
+            <div class="avatar">{{ username[0]|upper if username else 'U' }}</div>
+            <div class="user-profile-info" style="flex-grow: 1;">
+                <div style="font-size: 14px; font-weight: 500; color: var(--color-glacier);">{{ username.title() if username else 'User' }}</div>
+                <a href="/logout" style="font-size: 12px; color: var(--color-ember); text-decoration: none;">Log Out</a>
+            </div>
+        </section>
+    </aside>
+
+    <div id="toast-container" class="toast-container"></div>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        if (!window.erpAppInitialized) {
+            
+            window.toggleTheme = function() {
+                const html = document.documentElement;
+                const isLight = html.classList.toggle('light-mode');
+                localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            };
+
+            window.toggleSidebar = function() {
+                const sidebar = document.getElementById('sidebar');
+                sidebar.classList.toggle('collapsed');
+                localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+            };
+
+            window.showToast = function(message, type = 'success') {
+                const container = document.getElementById('toast-container');
+                if(!container) return;
+                const toast = document.createElement('div');
+                toast.className = `toast toast-${type}`;
+                const icon = type === 'success' ? 'check-circle-2' : 'alert-circle';
+                toast.innerHTML = `<i data-lucide="${icon}" style="color: ${type === 'success' ? 'var(--color-cipher-mint)' : 'var(--color-ember)'}"></i> ${message}`;
+                container.appendChild(toast);
+                lucide.createIcons();
+                setTimeout(() => toast.remove(), 4000);
+            };
+
+            window.filterSidebar = function() {
+                const searchInput = document.getElementById("sidebarSearch");
+                if(!searchInput) return;
+                let filter = searchInput.value.toLowerCase();
+                sessionStorage.setItem('sidebarSearchQuery', filter);
+                
+                document.querySelectorAll('.nav-menu .nav-item[data-search]').forEach(item => {
+                    item.style.display = item.getAttribute('data-search').includes(filter) ? "flex" : "none";
+                });
+            };
+
+            document.body.addEventListener('htmx:beforeRequest', function(evt) {
+                if (evt.target.tagName === 'FORM') {
+                    const btn = evt.target.querySelector('.btn-submit');
+                    if (btn) {
+                        btn.innerHTML = '<i data-lucide="loader-2" class="lucide-spin" style="width: 18px;"></i> Saving...';
+                        lucide.createIcons();
+                    }
+                }
+            });
+
+            document.body.addEventListener('htmx:responseError', function(evt) {
+                let errorMsg = "Failed to process request.";
+                try {
+                    const response = JSON.parse(evt.detail.xhr.response);
+                    if (response.error) errorMsg = response.error;
+                } catch(e) {}
+                window.showToast("Error: " + errorMsg, "error");
+                
+                const btn = evt.target.querySelector('.btn-submit');
+                if (btn) {
+                    btn.innerHTML = '<i data-lucide="save" style="width: 18px;"></i> Save Record';
+                    lucide.createIcons();
+                }
+            });
+
+            document.body.addEventListener('htmx:afterSwap', function(evt) {
+                window.applySidebarState();
+            });
+
+            window.erpAppInitialized = true;
+        }
+
+        window.applySidebarState = function() {
+            lucide.createIcons();
+
+            if (localStorage.getItem('sidebarCollapsed') === 'true') {
+                const sidebar = document.getElementById('sidebar');
+                if(sidebar) sidebar.classList.add('collapsed');
+            }
+
+            const sidebarMenu = document.getElementById('sidebarMenu');
+            if (sidebarMenu) {
+                const scrollPos = sessionStorage.getItem('sidebarScrollPos');
+                if (scrollPos) {
+                    sidebarMenu.scrollTop = parseInt(scrollPos, 10);
+                }
+                
+                sidebarMenu.onscroll = function() {
+                    sessionStorage.setItem('sidebarScrollPos', sidebarMenu.scrollTop);
+                };
+                
+                const savedQuery = sessionStorage.getItem('sidebarSearchQuery');
+                if (savedQuery) {
+                    const searchInput = document.getElementById("sidebarSearch");
+                    if (searchInput) {
+                        searchInput.value = savedQuery;
+                        window.filterSidebar();
+                    }
+                }
+            }
+
+            const pendingToast = sessionStorage.getItem('pendingToast');
+            if (pendingToast) {
+                const toastData = JSON.parse(pendingToast);
+                window.showToast(toastData.msg, toastData.type);
+                sessionStorage.removeItem('pendingToast');
+            }
+        };
+
+        window.applySidebarState();
+    </script>
+</body>
+</html>
