@@ -145,18 +145,29 @@ def login_required(wrapped):
 # ==========================================
 #  DATABASE LIFECYCLE & HELPERS
 # ==========================================
+@app.main_process_start
+async def run_migrations(app_instance, loop):
+    """Runs database migrations ONLY ONCE on the main process before workers spawn to prevent deadlocks."""
+    try:
+        dsn = CLOUD_DB_URL or f"postgres://postgres:{os.environ.get('LOCAL_DB_PASSWORD')}@localhost/tablesproj"
+        conn = await asyncpg.connect(dsn)
+        async with conn.transaction():
+            await _run_initial_migrations(conn)
+        await conn.close()
+    except Exception as e:
+        print(f"❌ DATABASE MIGRATION FAILED: {e}")
+        raise SystemExit("Fatal: Database migration failed.")
+
+
 @app.before_server_start
 async def setup_db(app_instance, loop):
+    """Initializes the database connection pool for each individual worker."""
     try:
         dsn = CLOUD_DB_URL or f"postgres://postgres:{os.environ.get('LOCAL_DB_PASSWORD')}@localhost/tablesproj"
         # ENTERPRISE FIX: Expanded pool size significantly for high concurrency
         app_instance.ctx.pool = await asyncpg.create_pool(
             dsn=dsn, statement_cache_size=0, min_size=10, max_size=100
         )
-
-        async with app_instance.ctx.pool.acquire() as conn:
-            async with conn.transaction():
-                await _run_initial_migrations(conn)
 
     except Exception as e:
         print(f"❌ DATABASE CONNECTION FAILED: {e}")
