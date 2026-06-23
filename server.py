@@ -145,20 +145,6 @@ def login_required(wrapped):
 # ==========================================
 #  DATABASE LIFECYCLE & HELPERS
 # ==========================================
-@app.main_process_start
-async def run_migrations(app_instance, loop):
-    """Runs database migrations ONLY ONCE on the main process before workers spawn to prevent deadlocks."""
-    try:
-        dsn = CLOUD_DB_URL or f"postgres://postgres:{os.environ.get('LOCAL_DB_PASSWORD')}@localhost/tablesproj"
-        conn = await asyncpg.connect(dsn)
-        async with conn.transaction():
-            await _run_initial_migrations(conn)
-        await conn.close()
-    except Exception as e:
-        print(f"❌ DATABASE MIGRATION FAILED: {e}")
-        raise SystemExit("Fatal: Database migration failed.")
-
-
 @app.before_server_start
 async def setup_db(app_instance, loop):
     """Initializes the database connection pool for each individual worker."""
@@ -168,6 +154,15 @@ async def setup_db(app_instance, loop):
         app_instance.ctx.pool = await asyncpg.create_pool(
             dsn=dsn, statement_cache_size=0, min_size=10, max_size=100
         )
+
+        # ENTERPRISE FIX: PostgreSQL Advisory Lock completely eliminates deadlocks 
+        # by forcing the 8 workers to queue sequentially when verifying tables/indexes
+        async with app_instance.ctx.pool.acquire() as conn:
+            await conn.execute("SELECT pg_advisory_lock(1337)")
+            try:
+                await _run_initial_migrations(conn)
+            finally:
+                await conn.execute("SELECT pg_advisory_unlock(1337)")
 
     except Exception as e:
         print(f"❌ DATABASE CONNECTION FAILED: {e}")
@@ -470,14 +465,12 @@ async def show_table(request, table_name):
 
         columns = sorted(columns, key=lambda c: get_col_priority(c['raw']))
 
-        # ENTERPRISE FIX: Shifted filtering from Python to PostgreSQL (Lightning Fast)
         search_query = request.args.get("q", "").strip()
         where_clause = ""
         params = []
 
         if search_query:
             params.append(f"%{search_query}%")
-            # Create a dynamic ILIKE check for all columns directly in the DB Engine
             cast_clauses = [f"CAST({c['raw']} AS TEXT) ILIKE $1" for c in columns]
             where_clause = f"WHERE {' OR '.join(cast_clauses)}"
             
@@ -803,7 +796,7 @@ async def save_data(request, table_name, pk_val=None):
                 await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
                 if virtual_roles:
                     pua_pk_col = await get_pk_column(conn, 'phc_user_roles_assignment_t')
-                    max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pua_col else 0
+                    max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pk_col else 0
                     next_pua = (int(max_pua) + 1) if max_pua else 1
                     for r_id in virtual_roles.split(','):
                         if r_id.strip() and pua_pk_col:
