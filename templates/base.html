@@ -113,6 +113,7 @@
             100% { transform: translate3d(2vw, 2vh, 0) scale(1); }
         }
 
+        /* SIDEBAR BASE */
         .sidebar {
             width: 260px; height: 100vh; position: fixed; z-index: 100;
             display: flex; flex-direction: column;
@@ -121,12 +122,7 @@
             border-right: 1px solid var(--glass-border);
             transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s;
         }
-        .sidebar.collapsed { width: 78px; }
-        .sidebar.collapsed .brand-text, .sidebar.collapsed .nav-text, 
-        .sidebar.collapsed .sidebar-search-wrap, .sidebar.collapsed .eyebrow-text, 
-        .sidebar.collapsed .user-profile-info, .sidebar.collapsed .theme-toggle-wrap, .sidebar.collapsed .logout-btn,
-        .sidebar.collapsed #showAllTablesBtn { display: none; }
-
+        
         .sidebar-toggle {
             position: absolute; right: -14px; top: 34px; width: 28px; height: 28px;
             background: var(--color-midnight-ink); color: var(--color-fog);
@@ -142,13 +138,49 @@
         }
 
         .nav-menu { padding: 20px 12px; flex-grow: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
-        .nav-item {
+        
+        /* ACCORDION (BENTO BOX) NAVIGATION STYLES */
+        .nav-group { margin-bottom: 4px; }
+        .nav-group-header {
             padding: 10px 12px; border-radius: 6px; color: var(--color-moonlight);
-            text-decoration: none; font-size: 14px; display: flex; align-items: center; gap: 12px; 
+            cursor: pointer; display: flex; align-items: center; justify-content: space-between;
+            transition: all 0.2s; font-size: 14px; font-weight: 500; user-select: none;
+        }
+        .nav-group-header:hover { background: rgba(186, 215, 247, 0.08); color: var(--color-glacier); }
+        html.light-mode .nav-group-header:hover { background: rgba(0, 0, 0, 0.05); color: var(--color-midnight-ink); }
+        
+        .nav-chevron { width: 16px; transition: transform 0.3s; color: var(--color-fog); }
+        .nav-group.expanded .nav-chevron { transform: rotate(180deg); color: var(--color-electric-iris); }
+        .nav-group.expanded .nav-group-header { color: var(--color-glacier); }
+        html.light-mode .nav-group.expanded .nav-group-header { color: var(--color-midnight-ink); }
+
+        .nav-group-content { display: none; flex-direction: column; gap: 2px; margin-top: 4px; overflow: hidden; }
+        .nav-group.expanded .nav-group-content { display: flex; }
+
+        .nav-item {
+            padding: 8px 12px; border-radius: 6px; color: var(--color-moonlight);
+            text-decoration: none; font-size: 14px; display: flex; align-items: center; gap: 8px; 
             transition: all 0.2s ease; white-space: nowrap;
         }
         .nav-item:hover { background: rgba(186, 215, 247, 0.08); color: var(--color-glacier); }
-        .nav-item.active { background: rgba(186, 215, 247, 0.12); color: var(--color-frost-link); }
+        .nav-item.active { background: rgba(186, 215, 247, 0.12); color: var(--color-frost-link); font-weight: 500; }
+
+        .nav-bullet {
+            width: 6px; height: 6px; border-radius: 50%; background: var(--glass-border);
+            margin-right: 6px; margin-left: 20px; transition: background 0.2s, transform 0.2s; flex-shrink: 0;
+        }
+        .nav-item:hover .nav-bullet { background: var(--color-fog); transform: scale(1.2); }
+        .nav-item.active .nav-bullet { background: var(--color-electric-iris); box-shadow: 0 0 8px var(--color-electric-iris); }
+
+        /* COLLAPSED SIDEBAR STATE */
+        .sidebar.collapsed { width: 78px; }
+        .sidebar.collapsed .brand-text, .sidebar.collapsed .nav-text, 
+        .sidebar.collapsed .sidebar-search-wrap, .sidebar.collapsed .eyebrow-text, 
+        .sidebar.collapsed .user-profile-info, .sidebar.collapsed .theme-toggle-wrap, .sidebar.collapsed .logout-btn { display: none; }
+        
+        .sidebar.collapsed .nav-chevron { display: none; }
+        .sidebar.collapsed .nav-group-header { justify-content: center; }
+        .sidebar.collapsed .nav-group-content { display: none !important; }
 
         .theme-toggle-wrap { padding: 0 0 20px 0; display: flex; justify-content: center; width: 100%; }
         .theme-toggle {
@@ -213,23 +245,12 @@
 
         .sidebar-header-row {
             display: flex; justify-content: space-between; align-items: center;
-            margin: 15px 12px 5px 16px;
+            margin: 15px 12px 10px 16px;
         }
         .eyebrow-text {
             font-family: var(--font-mono); color: var(--color-fog); font-size: 11px;
             letter-spacing: 0.1em; text-transform: uppercase; margin: 0;
         }
-        
-        /* Springboard "Show All" Button */
-        #showAllTablesBtn {
-            background: rgba(255, 255, 255, 0.05); color: var(--color-electric-iris); 
-            border: 1px solid var(--glass-border); border-radius: 4px; padding: 2px 6px;
-            font-size: 10px; cursor: pointer; display: none; font-family: var(--font-ui);
-            transition: all 0.2s;
-        }
-        #showAllTablesBtn:hover { background: var(--color-electric-iris); color: white; border-color: var(--color-electric-iris); }
-        html.light-mode #showAllTablesBtn { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.1); }
-        html.light-mode #showAllTablesBtn:hover { background: var(--color-electric-iris); color: white; }
     </style>
 
     <script>
@@ -258,46 +279,82 @@
                 setTimeout(() => toast.remove(), 4000);
             };
 
-            // Oracle Springboard Navigation Logic
-            window.filterSidebarByModule = function(moduleName) {
-                sessionStorage.setItem('sidebarModuleFilter', moduleName);
+            // Expand/Collapse individual Folders (Bento Box Accordion logic)
+            window.toggleNavGroup = function(groupKey) {
+                const sidebar = document.getElementById('sidebar');
                 
-                // Clear the search bar if they explicitly clicked a module
+                // Smart Expand: If collapsed, clicking an icon pops open the sidebar to show the folder contents!
+                if (sidebar && sidebar.classList.contains('collapsed')) {
+                    window.toggleSidebar();
+                }
+
+                const groupEl = document.querySelector(`.nav-group[data-group="${groupKey}"]`);
+                if(groupEl) {
+                    groupEl.classList.toggle('expanded');
+                    
+                    // Save expanded state to memory
+                    let expandedGroups = JSON.parse(sessionStorage.getItem('expandedNavGroups') || '[]');
+                    if(groupEl.classList.contains('expanded')) {
+                        if(!expandedGroups.includes(groupKey)) expandedGroups.push(groupKey);
+                    } else {
+                        expandedGroups = expandedGroups.filter(k => k !== groupKey);
+                    }
+                    sessionStorage.setItem('expandedNavGroups', JSON.stringify(expandedGroups));
+                }
+            };
+
+            // Called by the Dashboard Bento Boxes to jump straight to a folder
+            window.filterSidebarByModule = function(moduleName) {
                 const searchInput = document.getElementById("sidebarSearch");
                 if(searchInput) searchInput.value = "";
                 sessionStorage.setItem('sidebarSearchQuery', "");
                 
-                window.applySidebarFilters();
-            };
-
-            window.applySidebarFilters = function() {
-                const searchInput = document.getElementById("sidebarSearch");
-                let searchFilter = searchInput ? searchInput.value.toLowerCase() : "";
-                let moduleFilter = sessionStorage.getItem('sidebarModuleFilter') || 'ALL';
-
-                const showAllBtn = document.getElementById("showAllTablesBtn");
-                if(showAllBtn) {
-                    showAllBtn.style.display = (moduleFilter !== 'ALL') ? 'inline-block' : 'none';
+                // Clear all expanded groups and only expand the targeted one
+                if (moduleName !== 'ALL') {
+                    sessionStorage.setItem('expandedNavGroups', JSON.stringify([moduleName]));
+                } else {
+                    sessionStorage.setItem('expandedNavGroups', JSON.stringify([]));
                 }
-
-                document.querySelectorAll('.nav-menu .nav-item[data-search]').forEach(item => {
-                    let matchSearch = item.getAttribute('data-search').includes(searchFilter);
-                    let matchModule = (moduleFilter === 'ALL') || (item.getAttribute('data-module') === moduleFilter);
-                    
-                    item.style.display = (matchSearch && matchModule) ? "flex" : "none";
-                });
+                
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar && sidebar.classList.contains('collapsed')) {
+                    window.toggleSidebar();
+                }
+                
+                window.filterSidebar();
             };
 
+            // Global Search & State Restorer
             window.filterSidebar = function() {
                 const searchInput = document.getElementById("sidebarSearch");
-                if(searchInput && searchInput.value.trim() !== '') {
-                    // Typing instantly breaks out of the module filter to search globally
-                    sessionStorage.setItem('sidebarModuleFilter', 'ALL');
-                }
-                if (searchInput) {
-                    sessionStorage.setItem('sidebarSearchQuery', searchInput.value.toLowerCase());
-                }
-                window.applySidebarFilters();
+                let searchFilter = searchInput ? searchInput.value.toLowerCase().trim() : "";
+                sessionStorage.setItem('sidebarSearchQuery', searchFilter);
+
+                let expandedGroups = JSON.parse(sessionStorage.getItem('expandedNavGroups') || '[]');
+
+                document.querySelectorAll('.nav-group').forEach(group => {
+                    let hasVisibleItem = false;
+                    const items = group.querySelectorAll('.nav-item[data-search]');
+                    
+                    items.forEach(item => {
+                        let matchSearch = item.getAttribute('data-search').includes(searchFilter);
+                        item.style.display = matchSearch ? "flex" : "none";
+                        if (matchSearch) hasVisibleItem = true;
+                    });
+
+                    // Auto-expand everything if searching, else respect user memory
+                    if (searchFilter !== "") {
+                        group.style.display = hasVisibleItem ? "block" : "none";
+                        group.classList.add('expanded');
+                    } else {
+                        group.style.display = "block";
+                        if (expandedGroups.includes(group.getAttribute('data-group'))) {
+                            group.classList.add('expanded');
+                        } else {
+                            group.classList.remove('expanded');
+                        }
+                    }
+                });
             };
 
             window.applySidebarState = function() {
@@ -320,13 +377,23 @@
                     const savedQuery = sessionStorage.getItem('sidebarSearchQuery');
                     if (savedQuery) {
                         const searchInput = document.getElementById("sidebarSearch");
-                        if (searchInput) {
-                            searchInput.value = savedQuery;
-                        }
+                        if (searchInput) searchInput.value = savedQuery;
                     }
                 }
 
-                window.applySidebarFilters(); // Run the Oracle Springboard filters on load
+                // If user loads a table directly, automatically expand its parent folder
+                const activeItem = document.querySelector('.nav-item.active');
+                if (activeItem && activeItem.closest('.nav-group')) {
+                    const parentGroup = activeItem.closest('.nav-group');
+                    let groupKey = parentGroup.getAttribute('data-group');
+                    let expandedGroups = JSON.parse(sessionStorage.getItem('expandedNavGroups') || '[]');
+                    if(!expandedGroups.includes(groupKey)) {
+                        expandedGroups.push(groupKey);
+                        sessionStorage.setItem('expandedNavGroups', JSON.stringify(expandedGroups));
+                    }
+                }
+
+                window.filterSidebar();
 
                 const pendingToast = sessionStorage.getItem('pendingToast');
                 if (pendingToast) {
@@ -396,7 +463,8 @@
         </header>
         
         <nav class="nav-menu" id="sidebarMenu">
-            <a href="/" class="nav-item {% if not table_name %}active{% endif %}" onclick="filterSidebarByModule('ALL')">
+            <!-- Root Dashboard Link -->
+            <a href="/" class="nav-item {% if not table_name %}active{% endif %}" onclick="filterSidebarByModule('ALL')" style="margin-bottom: 12px; font-weight: 500;">
                 <i data-lucide="layout-dashboard"></i> <span class="nav-text">Dashboard</span>
             </a>
 
@@ -405,20 +473,61 @@
                 <input type="text" id="sidebarSearch" placeholder="Find table..." onkeyup="filterSidebar()">
             </div>
 
-            <!-- Oracle Springboard "Show All" Sub-header -->
             <div class="sidebar-header-row">
-                <span class="eyebrow-text">Data Tables</span>
-                <button id="showAllTablesBtn" onclick="filterSidebarByModule('ALL')">Show All</button>
+                <span class="eyebrow-text">Enterprise Modules</span>
             </div>
             
-            <!-- Tables rendered with data-module attribute from Python Backend -->
-            {% for tbl in all_tables %}
-            {% set clean_name = tbl.split('_', 1)[-1].replace('_t', '').replace('_', ' ').title() %}
-            {% set module_cat = table_modules.get(tbl, 'Other') if table_modules else 'ALL' %}
-            
-            <a href="/table/{{ tbl }}" class="nav-item {% if table_name == tbl %}active{% endif %}" data-search="{{ clean_name.lower() }}" data-module="{{ module_cat }}">
-                <i data-lucide="database"></i> <span class="nav-text">{{ clean_name }}</span>
-            </a>
+            <!-- Accordion List of Oracle Modules -->
+            {% set modules = [
+                ('Ledger', 'book-open', 'General Ledger'),
+                ('Receivables', 'receipt', 'Receivables'),
+                ('Payables', 'credit-card', 'Payables'),
+                ('Procurement', 'shopping-cart', 'Procurement'),
+                ('OrderMgmt', 'package-open', 'Order Management'),
+                ('Project', 'briefcase', 'Project Accounting'),
+                ('Product', 'boxes', 'Inventory'),
+                ('MasterData', 'database', 'Master Data'),
+                ('CustomerSetup', 'users', 'Customers & Vendors'),
+                ('Employee', 'users-round', 'Employees'),
+                ('AppSetup', 'settings', 'App Setup'),
+                ('Other', 'folder', 'Other')
+            ] %}
+
+            {% for mod_key, icon, mod_label in modules %}
+                {# Check if this user actually has any allowed tables within this specific module #}
+                {% set has_tables = namespace(value=false) %}
+                {% for tbl in all_tables %}
+                    {% set t_mod = table_modules.get(tbl, 'Other') if table_modules else 'Other' %}
+                    {% if t_mod == mod_key %}{% set has_tables.value = true %}{% endif %}
+                {% endfor %}
+
+                {% if has_tables.value %}
+                    <div class="nav-group" data-group="{{ mod_key }}">
+                        
+                        <!-- Accordion Header (Click to Expand) -->
+                        <div class="nav-group-header" onclick="toggleNavGroup('{{ mod_key }}')">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <i data-lucide="{{ icon }}"></i>
+                                <span class="nav-text">{{ mod_label }}</span>
+                            </div>
+                            <i data-lucide="chevron-down" class="nav-chevron"></i>
+                        </div>
+                        
+                        <!-- Accordion Content (List of specific Tables) -->
+                        <div class="nav-group-content" id="group-content-{{ mod_key }}">
+                            {% for tbl in all_tables %}
+                                {% set t_mod = table_modules.get(tbl, 'Other') if table_modules else 'Other' %}
+                                {% if t_mod == mod_key %}
+                                    {% set clean_name = tbl.split('_', 1)[-1].replace('_t', '').replace('_', ' ').title() %}
+                                    <a href="/table/{{ tbl }}" class="nav-item {% if table_name == tbl %}active{% endif %}" data-search="{{ clean_name.lower() }}">
+                                        <div class="nav-bullet"></div>
+                                        <span class="nav-text">{{ clean_name }}</span>
+                                    </a>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
             {% endfor %}
         </nav>
         
