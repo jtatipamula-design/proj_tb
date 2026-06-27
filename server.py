@@ -49,6 +49,80 @@ SCHEMA_CACHE = {
 AUTH_CACHE = {} 
 RBAC_CACHE = {}
 
+# PHASE 4: Enterprise Module Routing (Oracle Fusion Style)
+MODULE_MAPPING = {
+    'phc_apps_t': 'AppSetup',
+    'phc_role_screen_assignment_t': 'AppSetup',
+    'phc_roles_t': 'AppSetup',
+    'phc_screens_t': 'AppSetup',
+    'phc_user_roles_assignment_t': 'AppSetup',
+    'phc_users_t': 'AppSetup',
+    'phc_user_log_t': 'AppSetup',
+    
+    'pmd_accounts_t': 'CustomerSetup',
+    'pmd_acct_sites_t': 'CustomerSetup',
+    'pmd_locations_t': 'CustomerSetup',
+    'pmd_parties_t': 'CustomerSetup',
+    'pmd_person_profiles_t': 'CustomerSetup',
+    
+    'phc_emp_t': 'Employee',
+    
+    'pgl_acc_periods_t': 'Ledger',
+    'pgl_balances_t': 'Ledger',
+    'pgl_batches_t': 'Ledger',
+    'pgl_code_combinations_t': 'Ledger',
+    'pgl_daily_rates_t': 'Ledger',
+    'pgl_headers_t': 'Ledger',
+    'pgl_lines_t': 'Ledger',
+    'pgl_period_sets_t': 'Ledger',
+    'pgl_sources_t': 'Ledger',
+    
+    'phc_companies_t': 'MasterData',
+    'phc_cost_centers_t': 'MasterData',
+    'phc_cost_center_t': 'MasterData',
+    'phc_dept_t': 'MasterData',
+    'phc_locations_t': 'MasterData',
+    'phc_orgs_t': 'MasterData',
+    'phc_services_t': 'MasterData',
+    'phc_user_groups_t': 'MasterData',
+    
+    'poe_order_headers_t': 'OrderMgmt',
+    'poe_order_lines_t': 'OrderMgmt',
+    'poe_order_sources_t': 'OrderMgmt',
+    'poe_transaction_types_t': 'OrderMgmt',
+    
+    'ap_invoice_distributions_t': 'Payables',
+    'ap_invoices_t': 'Payables',
+    'ap_payments_schedules_t': 'Payables',
+    
+    'po_distributions_t': 'Procurement',
+    'po_headers_t': 'Procurement',
+    'po_lines_t': 'Procurement',
+    'po_req_distributions_t': 'Procurement',
+    'po_requisition_headers_t': 'Procurement',
+    'po_requisition_lines_t': 'Procurement',
+    
+    'mtl_item_locations_t': 'Product',
+    'mtl_system_items_t': 'Product',
+    
+    'pa_expenditure_items_t': 'Project',
+    'pa_expenditures_t': 'Project',
+    'pa_projects_t': 'Project',
+    'pa_resource_assignments_t': 'Project',
+    'pa_tasks_t': 'Project',
+    
+    'par_batch_sources_t': 'Receivables',
+    'par_payment_schedules_t': 'Receivables',
+    'par_periods_t': 'Receivables',
+    'par_period_types_t': 'Receivables',
+    'par_terms_t': 'Receivables',
+    'par_vat_tax_t': 'Receivables',
+    'pra_cust_trx_line_dist_t': 'Receivables',
+    'pra_cust_trx_types_t': 'Receivables',
+    'pra_customer_trx_lines_t': 'Receivables',
+    'pra_customer_trx_t': 'Receivables'
+}
+
 KEYWORD_MAP = {
     'company': 'phc_companies_t', 'dept': 'phc_dept_t', 'department': 'phc_dept_t',
     'user': 'phc_users_t', 'emp': 'phc_emp_t', 'employee': 'phc_emp_t',
@@ -232,9 +306,7 @@ def make_human_readable(text):
     return text.replace("_", " ").title()
 
 
-# --- DRY Helper Function for Table/Export Sorting ---
 def get_column_sort_priority(pk_column, c_name):
-    """Helper to standardize column order across all UI tables and CSV exports."""
     name = c_name.lower()
     if c_name == pk_column: return 0
     if name.endswith('status'): return 1
@@ -458,6 +530,7 @@ async def dashboard(request):
     return await render("dashboard.html", context={
         "stats": stats, 
         "all_tables": allowed, 
+        "table_modules": MODULE_MAPPING, # Passed for Sidebar Data-Attributes
         "username": request.ctx.username, 
         "user_id": request.ctx.user_id,
         "csrf_token": request.ctx.csrf_token 
@@ -527,6 +600,7 @@ async def show_table(request, table_name):
                 "columns": columns, 
                 "rows": rows_dict, 
                 "all_tables": allowed, 
+                "table_modules": MODULE_MAPPING, # Passed for Sidebar Data-Attributes
                 "pk_column": pk_column, 
                 "user_id": request.ctx.user_id,
                 "username": request.ctx.username,
@@ -655,6 +729,7 @@ async def show_edit_form(request, table_name, pk_val):
                 "table_title": f"Edit {make_human_readable(table_name)}", 
                 "columns": columns, 
                 "all_tables": allowed, 
+                "table_modules": MODULE_MAPPING, 
                 "pk_val": pk_val, 
                 "mode": "edit", 
                 "user_id": request.ctx.user_id,
@@ -712,6 +787,7 @@ async def show_add_form(request, table_name):
                 "table_title": f"New {make_human_readable(table_name)}", 
                 "columns": columns, 
                 "all_tables": allowed, 
+                "table_modules": MODULE_MAPPING, 
                 "mode": "create", 
                 "user_id": request.ctx.user_id,
                 "username": request.ctx.username,
