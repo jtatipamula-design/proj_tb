@@ -938,13 +938,16 @@ async def save_data(request, table_name, pk_val=None):
                     prs_pk_col = await get_pk_column(conn, 'phc_role_screen_assignment_t')
                     max_prs = await conn.fetchval(f"SELECT MAX({prs_pk_col}) FROM phc_role_screen_assignment_t") if prs_pk_col else 0
                     next_prs = (int(max_prs) + 1) if max_prs else 1
-                    for s_id in virtual_screens.split(','):
-                        if s_id.strip() and prs_pk_col:
+                    
+                    # FIX: Handle both Lists and Comma-Separated Strings safely
+                    v_screens_list = virtual_screens if isinstance(virtual_screens, list) else str(virtual_screens).split(',')
+                    for s_id in v_screens_list:
+                        if str(s_id).strip() and prs_pk_col:
                             await conn.execute("""
                                 INSERT INTO phc_role_screen_assignment_t 
                                 ({0}, prs_company_id, prs_role_id, prs_screen_id, prs_start_date, prs_status, prs_created_by, prs_modified_by, prs_created, prs_modified) 
                                 VALUES ($1, $2, $3, $4, CURRENT_DATE, 'ACT', $5, $5, NOW(), NOW())
-                            """.format(prs_pk_col), next_prs, company_id, target_id, int(s_id), str(current_user_id))
+                            """.format(prs_pk_col), next_prs, company_id, target_id, int(str(s_id).strip()), str(current_user_id))
                             next_prs += 1
 
             if table_name == 'phc_users_t' and virtual_roles is not None:
@@ -953,13 +956,16 @@ async def save_data(request, table_name, pk_val=None):
                     pua_pk_col = await get_pk_column(conn, 'phc_user_roles_assignment_t')
                     max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pk_col else 0
                     next_pua = (int(max_pua) + 1) if max_pua else 1
-                    for r_id in virtual_roles.split(','):
-                        if r_id.strip() and pua_pk_col:
+                    
+                    # FIX: Handle both Lists and Comma-Separated Strings safely
+                    v_roles_list = virtual_roles if isinstance(virtual_roles, list) else str(virtual_roles).split(',')
+                    for r_id in v_roles_list:
+                        if str(r_id).strip() and pua_pk_col:
                             await conn.execute("""
                                 INSERT INTO phc_user_roles_assignment_t 
                                 ({0}, pua_company_id, pua_user_id, pua_role_id, pua_start_date, pua_status, pua_created_by, pua_modified_by, pua_created, pua_modified) 
                                 VALUES ($1, $2, $3, $4, CURRENT_DATE, 'ACT', $5, $5, NOW(), NOW())
-                            """.format(pua_pk_col), next_pua, company_id, target_id, int(r_id), str(current_user_id))
+                            """.format(pua_pk_col), next_pua, company_id, target_id, int(str(r_id).strip()), str(current_user_id))
                             next_pua += 1
 
         if request.headers.get("HX-Request"):
