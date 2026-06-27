@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- PHASE 1 SECURITY: Injecting the dynamic CSRF token into the DOM -->
     <meta name="csrf-token" content="{{ csrf_token }}">
     
     <title>Nexus ERP</title>
@@ -125,7 +124,8 @@
         .sidebar.collapsed { width: 78px; }
         .sidebar.collapsed .brand-text, .sidebar.collapsed .nav-text, 
         .sidebar.collapsed .sidebar-search-wrap, .sidebar.collapsed .eyebrow-text, 
-        .sidebar.collapsed .user-profile-info, .sidebar.collapsed .theme-toggle-wrap, .sidebar.collapsed .logout-btn { display: none; }
+        .sidebar.collapsed .user-profile-info, .sidebar.collapsed .theme-toggle-wrap, .sidebar.collapsed .logout-btn,
+        .sidebar.collapsed #showAllTablesBtn { display: none; }
 
         .sidebar-toggle {
             position: absolute; right: -14px; top: 34px; width: 28px; height: 28px;
@@ -211,16 +211,29 @@
         }
         .sidebar-search-wrap i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--color-fog); width: 16px; height: 16px; }
 
-        .eyebrow-text {
-            font-family: var(--font-mono); color: var(--color-fog); font-size: 14px;
-            letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;
+        .sidebar-header-row {
+            display: flex; justify-content: space-between; align-items: center;
+            margin: 15px 12px 5px 16px;
         }
+        .eyebrow-text {
+            font-family: var(--font-mono); color: var(--color-fog); font-size: 11px;
+            letter-spacing: 0.1em; text-transform: uppercase; margin: 0;
+        }
+        
+        /* Springboard "Show All" Button */
+        #showAllTablesBtn {
+            background: rgba(255, 255, 255, 0.05); color: var(--color-electric-iris); 
+            border: 1px solid var(--glass-border); border-radius: 4px; padding: 2px 6px;
+            font-size: 10px; cursor: pointer; display: none; font-family: var(--font-ui);
+            transition: all 0.2s;
+        }
+        #showAllTablesBtn:hover { background: var(--color-electric-iris); color: white; border-color: var(--color-electric-iris); }
+        html.light-mode #showAllTablesBtn { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.1); }
+        html.light-mode #showAllTablesBtn:hover { background: var(--color-electric-iris); color: white; }
     </style>
 
-    <!-- PHASE 1 SECURITY: Scripts moved to the <head> to prevent memory leaks from duplicating event listeners during HTMX body swaps -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Register UI Functions globally
             window.toggleTheme = function() {
                 const html = document.documentElement;
                 const isLight = html.classList.toggle('light-mode');
@@ -245,15 +258,46 @@
                 setTimeout(() => toast.remove(), 4000);
             };
 
+            // Oracle Springboard Navigation Logic
+            window.filterSidebarByModule = function(moduleName) {
+                sessionStorage.setItem('sidebarModuleFilter', moduleName);
+                
+                // Clear the search bar if they explicitly clicked a module
+                const searchInput = document.getElementById("sidebarSearch");
+                if(searchInput) searchInput.value = "";
+                sessionStorage.setItem('sidebarSearchQuery', "");
+                
+                window.applySidebarFilters();
+            };
+
+            window.applySidebarFilters = function() {
+                const searchInput = document.getElementById("sidebarSearch");
+                let searchFilter = searchInput ? searchInput.value.toLowerCase() : "";
+                let moduleFilter = sessionStorage.getItem('sidebarModuleFilter') || 'ALL';
+
+                const showAllBtn = document.getElementById("showAllTablesBtn");
+                if(showAllBtn) {
+                    showAllBtn.style.display = (moduleFilter !== 'ALL') ? 'inline-block' : 'none';
+                }
+
+                document.querySelectorAll('.nav-menu .nav-item[data-search]').forEach(item => {
+                    let matchSearch = item.getAttribute('data-search').includes(searchFilter);
+                    let matchModule = (moduleFilter === 'ALL') || (item.getAttribute('data-module') === moduleFilter);
+                    
+                    item.style.display = (matchSearch && matchModule) ? "flex" : "none";
+                });
+            };
+
             window.filterSidebar = function() {
                 const searchInput = document.getElementById("sidebarSearch");
-                if(!searchInput) return;
-                let filter = searchInput.value.toLowerCase();
-                sessionStorage.setItem('sidebarSearchQuery', filter);
-                
-                document.querySelectorAll('.nav-menu .nav-item[data-search]').forEach(item => {
-                    item.style.display = item.getAttribute('data-search').includes(filter) ? "flex" : "none";
-                });
+                if(searchInput && searchInput.value.trim() !== '') {
+                    // Typing instantly breaks out of the module filter to search globally
+                    sessionStorage.setItem('sidebarModuleFilter', 'ALL');
+                }
+                if (searchInput) {
+                    sessionStorage.setItem('sidebarSearchQuery', searchInput.value.toLowerCase());
+                }
+                window.applySidebarFilters();
             };
 
             window.applySidebarState = function() {
@@ -278,10 +322,11 @@
                         const searchInput = document.getElementById("sidebarSearch");
                         if (searchInput) {
                             searchInput.value = savedQuery;
-                            window.filterSidebar();
                         }
                     }
                 }
+
+                window.applySidebarFilters(); // Run the Oracle Springboard filters on load
 
                 const pendingToast = sessionStorage.getItem('pendingToast');
                 if (pendingToast) {
@@ -291,9 +336,7 @@
                 }
             };
 
-            // Global HTMX Request Configuration
             document.body.addEventListener('htmx:configRequest', function(evt) {
-                // PHASE 1 SECURITY: Inject CSRF Token into every API request automatically
                 const csrfToken = document.querySelector('meta[name="csrf-token"]');
                 if (csrfToken) {
                     evt.detail.headers['X-CSRFToken'] = csrfToken.content;
@@ -329,7 +372,6 @@
                 window.applySidebarState();
             });
 
-            // Trigger initial state
             window.applySidebarState();
         });
     </script>
@@ -354,7 +396,7 @@
         </header>
         
         <nav class="nav-menu" id="sidebarMenu">
-            <a href="/" class="nav-item {% if not table_name %}active{% endif %}">
+            <a href="/" class="nav-item {% if not table_name %}active{% endif %}" onclick="filterSidebarByModule('ALL')">
                 <i data-lucide="layout-dashboard"></i> <span class="nav-text">Dashboard</span>
             </a>
 
@@ -363,11 +405,18 @@
                 <input type="text" id="sidebarSearch" placeholder="Find table..." onkeyup="filterSidebar()">
             </div>
 
-            <div class="eyebrow-text" style="margin: 15px 0 5px 16px; font-size: 11px;">Data Tables</div>
+            <!-- Oracle Springboard "Show All" Sub-header -->
+            <div class="sidebar-header-row">
+                <span class="eyebrow-text">Data Tables</span>
+                <button id="showAllTablesBtn" onclick="filterSidebarByModule('ALL')">Show All</button>
+            </div>
             
+            <!-- Tables rendered with data-module attribute from Python Backend -->
             {% for tbl in all_tables %}
             {% set clean_name = tbl.split('_', 1)[-1].replace('_t', '').replace('_', ' ').title() %}
-            <a href="/table/{{ tbl }}" class="nav-item {% if table_name == tbl %}active{% endif %}" data-search="{{ clean_name.lower() }}">
+            {% set module_cat = table_modules.get(tbl, 'Other') if table_modules else 'ALL' %}
+            
+            <a href="/table/{{ tbl }}" class="nav-item {% if table_name == tbl %}active{% endif %}" data-search="{{ clean_name.lower() }}" data-module="{{ module_cat }}">
                 <i data-lucide="database"></i> <span class="nav-text">{{ clean_name }}</span>
             </a>
             {% endfor %}
