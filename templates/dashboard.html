@@ -2,99 +2,176 @@
 
 {% block content %}
 <style>
-    .dashboard-header {
-        margin-bottom: 40px;
-    }
-    .dashboard-header h1 {
-        font-size: 32px;
-        font-weight: 600;
-        color: var(--color-glacier);
-        margin-top: 8px;
+    .dashboard-wrapper {
+        width: 100%;
+        max-width: 1100px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
     }
 
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 24px;
+    .welcome-section { margin-bottom: 40px; animation: slideDown 0.5s ease-out; text-align: left; }
+    .welcome-section h1 { font-size: 40px; font-weight: 500; color: #ffffff; margin-bottom: 12px; }
+    .welcome-section p { color: var(--color-pebble); font-size: 16px; font-weight: 400; }
+
+    /* The Module Launcher / Springboard Grid */
+    .module-grid { 
+        display: grid; 
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); 
+        gap: 20px; 
+        width: 100%;
+        animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    .stat-card {
+    .module-card {
         background: var(--glass-surface);
         backdrop-filter: blur(24px);
         -webkit-backdrop-filter: blur(24px);
         border: 1px solid var(--glass-border);
         border-radius: 16px;
         padding: 24px;
-        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.2);
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex; flex-direction: column; align-items: flex-start; gap: 16px;
+        cursor: pointer;
+        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.3);
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
+    .module-card:hover { transform: translateY(-4px); background: rgba(186, 215, 247, 0.08); border-color: var(--color-frost-link); }
+    html.light-mode .module-card:hover { background: rgba(0, 0, 0, 0.04); border-color: var(--color-pebble); }
 
-    .stat-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 15px 35px -10px rgba(0,0,0,0.3);
+    .module-icon-wrap {
+        width: 48px; height: 48px; border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
+        color: var(--color-electric-iris);
+        transition: all 0.3s;
     }
+    html.light-mode .module-icon-wrap { background: rgba(255,255,255,0.8); }
+    
+    .module-card:hover .module-icon-wrap { background: var(--color-electric-iris); color: white; border-color: transparent; box-shadow: 0 4px 12px rgba(102, 58, 243, 0.4); }
 
-    .stat-icon {
-        width: 48px;
-        height: 48px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
+    .module-details { display: flex; flex-direction: column; gap: 4px; }
+    .module-title { font-size: 16px; font-weight: 500; color: var(--color-glacier); }
+    html.light-mode .module-title { color: var(--color-midnight-ink); }
+    .module-desc { font-size: 12px; color: var(--color-fog); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; }
 
-    .icon-blue { background: rgba(59, 130, 246, 0.15); color: #3B82F6; }
-    .icon-purple { background: rgba(139, 92, 246, 0.15); color: #8B5CF6; }
-    .icon-green { background: rgba(16, 185, 129, 0.15); color: #10B981; }
-    .icon-orange { background: rgba(249, 115, 22, 0.15); color: #F97316; }
+    @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
 
-    .stat-value {
-        font-size: 36px;
-        font-weight: 700;
-        color: var(--color-glacier);
-        font-family: var(--font-mono);
-    }
-
-    .stat-label {
-        font-size: 14px;
-        color: var(--color-fog);
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-    }
+    /* Module specific accent colors for the icons */
+    .icon-ledger { color: #10B981; }
+    .icon-payables { color: #F43F5E; }
+    .icon-receivables { color: #3B82F6; }
+    .icon-procurement { color: #F59E0B; }
+    .icon-master { color: #8B5CF6; }
 </style>
 
-<header class="dashboard-header">
-    <p class="eyebrow-text">Overview</p>
-    <h1>Welcome back, {{ username.title() if username else 'Admin' }}</h1>
-</header>
+<div class="dashboard-wrapper">
+    <div class="welcome-section">
+        <div class="eyebrow-text" style="font-family: var(--font-mono); color: var(--color-fog); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">ENTERPRISE SPRINGBOARD</div>
+        <h1>Good morning, {{ username.title() if username else 'Admin' }}</h1>
+        <p>Select an enterprise module below to filter your workspace.</p>
+    </div>
 
-<section class="stats-grid">
-    <article class="stat-card">
-        <div class="stat-icon icon-blue"><i data-lucide="users"></i></div>
-        <div class="stat-value">{{ stats.emp_count }}</div>
-        <div class="stat-label">Total Employees</div>
-    </article>
+    <div class="module-grid">
+        <!-- 1. General Ledger -->
+        <div class="module-card" onclick="filterSidebarByModule('Ledger')">
+            <div class="module-icon-wrap"><i data-lucide="book-open" class="icon-ledger"></i></div>
+            <div class="module-details">
+                <div class="module-title">General Ledger</div>
+                <div class="module-desc">Financial Core</div>
+            </div>
+        </div>
 
-    <article class="stat-card">
-        <div class="stat-icon icon-purple"><i data-lucide="building-2"></i></div>
-        <div class="stat-value">{{ stats.comp_count }}</div>
-        <div class="stat-label">Active Companies</div>
-    </article>
+        <!-- 2. Receivables -->
+        <div class="module-card" onclick="filterSidebarByModule('Receivables')">
+            <div class="module-icon-wrap"><i data-lucide="receipt" class="icon-receivables"></i></div>
+            <div class="module-details">
+                <div class="module-title">Receivables</div>
+                <div class="module-desc">Income Tracking</div>
+            </div>
+        </div>
 
-    <article class="stat-card">
-        <div class="stat-icon icon-green"><i data-lucide="network"></i></div>
-        <div class="stat-value">{{ stats.dept_count }}</div>
-        <div class="stat-label">Departments</div>
-    </article>
+        <!-- 3. Payables -->
+        <div class="module-card" onclick="filterSidebarByModule('Payables')">
+            <div class="module-icon-wrap"><i data-lucide="credit-card" class="icon-payables"></i></div>
+            <div class="module-details">
+                <div class="module-title">Payables</div>
+                <div class="module-desc">Outgoing Money</div>
+            </div>
+        </div>
 
-    <article class="stat-card">
-        <div class="stat-icon icon-orange"><i data-lucide="blocks"></i></div>
-        <div class="stat-value">{{ stats.app_count }}</div>
-        <div class="stat-label">Integrated Apps</div>
-    </article>
-</section>
+        <!-- 4. Procurement -->
+        <div class="module-card" onclick="filterSidebarByModule('Procurement')">
+            <div class="module-icon-wrap"><i data-lucide="shopping-cart" class="icon-procurement"></i></div>
+            <div class="module-details">
+                <div class="module-title">Procurement</div>
+                <div class="module-desc">Vendor Requisitions</div>
+            </div>
+        </div>
+
+        <!-- 5. Order Management -->
+        <div class="module-card" onclick="filterSidebarByModule('OrderMgmt')">
+            <div class="module-icon-wrap"><i data-lucide="package-open"></i></div>
+            <div class="module-details">
+                <div class="module-title">Order Management</div>
+                <div class="module-desc">Sales Orders</div>
+            </div>
+        </div>
+
+        <!-- 6. Project Accounting -->
+        <div class="module-card" onclick="filterSidebarByModule('Project')">
+            <div class="module-icon-wrap"><i data-lucide="briefcase"></i></div>
+            <div class="module-details">
+                <div class="module-title">Project Accounting</div>
+                <div class="module-desc">Time & Cost</div>
+            </div>
+        </div>
+
+        <!-- 7. Inventory/Product -->
+        <div class="module-card" onclick="filterSidebarByModule('Product')">
+            <div class="module-icon-wrap"><i data-lucide="boxes"></i></div>
+            <div class="module-details">
+                <div class="module-title">Inventory</div>
+                <div class="module-desc">Materials & Stock</div>
+            </div>
+        </div>
+
+        <!-- 8. Master Data -->
+        <div class="module-card" onclick="filterSidebarByModule('MasterData')">
+            <div class="module-icon-wrap"><i data-lucide="database" class="icon-master"></i></div>
+            <div class="module-details">
+                <div class="module-title">Master Data</div>
+                <div class="module-desc">Central Registry</div>
+            </div>
+        </div>
+
+        <!-- 9. Customers/Vendors -->
+        <div class="module-card" onclick="filterSidebarByModule('CustomerSetup')">
+            <div class="module-icon-wrap"><i data-lucide="users"></i></div>
+            <div class="module-details">
+                <div class="module-title">Customers & Vendors</div>
+                <div class="module-desc">Entity Setup</div>
+            </div>
+        </div>
+
+        <!-- 10. Employees -->
+        <div class="module-card" onclick="filterSidebarByModule('Employee')">
+            <div class="module-icon-wrap"><i data-lucide="users-round"></i></div>
+            <div class="module-details">
+                <div class="module-title">Employees</div>
+                <div class="module-desc">HR Roster</div>
+            </div>
+        </div>
+
+        <!-- 11. App Setup -->
+        <div class="module-card" onclick="filterSidebarByModule('AppSetup')">
+            <div class="module-icon-wrap"><i data-lucide="settings"></i></div>
+            <div class="module-details">
+                <div class="module-title">App Setup</div>
+                <div class="module-desc">Security & RBAC</div>
+            </div>
+        </div>
+
+    </div>
+</div>
 {% endblock %}
