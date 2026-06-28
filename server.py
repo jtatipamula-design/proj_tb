@@ -1041,52 +1041,52 @@ async def save_data(request, table_name, pk_val=None):
 async def delete_data(request, table_name, pk_val):
     
     provided_csrf = request.headers.get("X-CSRFToken")
-        if not provided_csrf or provided_csrf != request.ctx.csrf_token:
-            return response.json({"error": "Missing or Invalid CSRF Token. Are you a hacker?"}, status=403)
+    if not provided_csrf or provided_csrf != request.ctx.csrf_token:
+        return response.json({"error": "Missing or Invalid CSRF Token. Are you a hacker?"}, status=403)
 
-        current_user_id = request.ctx.user_id
-        user_type = request.ctx.user_type
-        company_id = int(request.ctx.company_id)
-        
-        if user_type != 'ADM':
-            admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']
-            if table_name in admin_only_tables:
-                return response.json({"error": "Unauthorized to delete from security configuration tables."}, status=403)
-            if table_name == 'phc_users_t' and str(pk_val) != str(current_user_id):
-                return response.json({"error": "Unauthorized to delete other users."}, status=403)
+    current_user_id = request.ctx.user_id
+    user_type = request.ctx.user_type
+    company_id = int(request.ctx.company_id)
+    
+    if user_type != 'ADM':
+        admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']
+        if table_name in admin_only_tables:
+            return response.json({"error": "Unauthorized to delete from security configuration tables."}, status=403)
+        if table_name == 'phc_users_t' and str(pk_val) != str(current_user_id):
+            return response.json({"error": "Unauthorized to delete other users."}, status=403)
 
-        async with app.ctx.pool.acquire() as conn:
-            allowed = await get_allowed_tables(conn, current_user_id, user_type)
-            if table_name not in allowed:
-                return response.json({"error": "Unauthorized API Access"}, status=403)
+    async with app.ctx.pool.acquire() as conn:
+        allowed = await get_allowed_tables(conn, current_user_id, user_type)
+        if table_name not in allowed:
+            return response.json({"error": "Unauthorized API Access"}, status=403)
 
-            pk_column = await get_pk_column(conn, table_name)
-            schema_rows = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1", table_name)
-            pk_type = next((r['data_type'] for r in schema_rows if r['column_name'] == pk_column), 'integer')
-            target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
+        pk_column = await get_pk_column(conn, table_name)
+        schema_rows = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1", table_name)
+        pk_type = next((r['data_type'] for r in schema_rows if r['column_name'] == pk_column), 'integer')
+        target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
 
-            company_col = next((c for c in schema_rows if c['column_name'].lower().endswith('company_id')), None)
-            status_col = next((c for c in schema_rows if c['column_name'].lower().endswith('status')), None)
+        company_col = next((c for c in schema_rows if c['column_name'].lower().endswith('company_id')), None)
+        status_col = next((c for c in schema_rows if c['column_name'].lower().endswith('status')), None)
 
-            async with conn.transaction():
-                if company_col:
-                    owner_check = await conn.fetchval(f"SELECT 1 FROM {table_name} WHERE {pk_column} = $1 AND {company_col} = $2", target_id, company_id)
-                    if not owner_check:
-                        return response.json({"error": "Tenant violation. Record does not belong to your company."}, status=403)
+        async with conn.transaction():
+            if company_col:
+                owner_check = await conn.fetchval(f"SELECT 1 FROM {table_name} WHERE {pk_column} = $1 AND {company_col} = $2", target_id, company_id)
+                if not owner_check:
+                    return response.json({"error": "Tenant violation. Record does not belong to your company."}, status=403)
 
-                if table_name in ['phc_role_screen_assignment_t', 'phc_user_roles_assignment_t']:
-                    await conn.execute(f"DELETE FROM {table_name} WHERE {pk_column} = $1", target_id)
-                    msg = "Record deleted permanently."
-                elif status_col:
-                    status_name = status_col['column_name']
-                    await conn.execute(f"UPDATE {table_name} SET {status_name} = 'INA' WHERE {pk_column} = $1", target_id)
-                    msg = "Record successfully archived (Soft Delete)."
-                else:
-                    return response.json({"error": "Hard deletions disabled for SOX compliance. Table lacks a status column."}, status=403)
+            if table_name in ['phc_role_screen_assignment_t', 'phc_user_roles_assignment_t']:
+                await conn.execute(f"DELETE FROM {table_name} WHERE {pk_column} = $1", target_id)
+                msg = "Record deleted permanently."
+            elif status_col:
+                status_name = status_col['column_name']
+                await conn.execute(f"UPDATE {table_name} SET {status_name} = 'INA' WHERE {pk_column} = $1", target_id)
+                msg = "Record successfully archived (Soft Delete)."
+            else:
+                return response.json({"error": "Hard deletions disabled for SOX compliance. Table lacks a status column."}, status=403)
 
-                await log_action(conn, current_user_id, f"Archived/Deleted record {target_id} from {table_name}")
+            await log_action(conn, current_user_id, f"Archived/Deleted record {target_id} from {table_name}")
 
-            if request.headers.get("HX-Request"):
+        if request.headers.get("HX-Request"):
             return response.html(f"""
                 <div id="toast-container" hx-swap-oob="beforeend">
                     <div class="toast" style="animation: slideIn Toast 0.4s ease, fadeOutToast 0.4s ease 3.5s forwards;">
