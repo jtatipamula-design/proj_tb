@@ -117,8 +117,8 @@
     </div>
 
     <div class="form-container">
-        <!-- FIX: Added 'context' so the macro can safely access 'current_user_type' and 'table_modules' -->
-        {% macro render_field(col) context %}
+        <!-- FIX: Explicitly pass context variables to the macro to satisfy Jinja2 syntax -->
+        {% macro render_field(col, current_user_type, table_modules, mode) %}
         <div class="form-group">
             <label>
                 {{ col.label }} 
@@ -133,14 +133,12 @@
                     <div class="ui-btn" id="btn_ina_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'INA')">Inactive</div>
                 </div>
             {% elif col.column_name.lower() == 'enabled_flag' %}
-                <!-- Oracle Active/Inactive Flag -->
                 <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'Y' }}">
                 <div class="btn-group-wrap">
                     <div class="ui-btn" id="btn_y_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'Y')">Active</div>
                     <div class="ui-btn" id="btn_n_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'N')">Inactive</div>
                 </div>
             {% elif col.column_name.lower().endswith('flag') %}
-                <!-- Oracle Yes/No Flag -->
                 <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'Y' }}">
                 <div class="btn-group-wrap">
                     <div class="ui-btn" id="btn_y_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'Y')">Yes</div>
@@ -165,7 +163,7 @@
                     {% set selected_items = (col.value or "").split(',') %}
                     
                     {% if col.column_name == 'pr_allowed_tables' %}
-                        <!-- FIX: Replaced buggy dynamic dictionary mutation with a safe explicit loop -->
+                        <!-- FIX: Safely map table groupings directly -->
                         {% set known_modules = ['AppSetup', 'CustomerSetup', 'Employee', 'Ledger', 'MasterData', 'OrderMgmt', 'Payables', 'Procurement', 'Product', 'Project', 'Receivables', 'All Screens'] %}
                         {% set mod_labels = {'AppSetup': 'App Setup', 'CustomerSetup': 'Customers & Vendors', 'Employee': 'Employees', 'Ledger': 'General Ledger', 'MasterData': 'Master Data', 'OrderMgmt': 'Order Management', 'Payables': 'Payables', 'Procurement': 'Procurement', 'Product': 'Inventory', 'Project': 'Project Accounting', 'Receivables': 'Receivables', 'All Screens': 'Other Screens'} %}
                         
@@ -241,19 +239,19 @@
             <div class="form-grid-2-col">
                 <!-- Group IDs, Statuses, Flags and User Types together -->
                 {% for col in columns if col.is_pk or col.column_name.lower().endswith('status') or col.column_name.lower().endswith('flag') or col.column_name == 'pus_user_type' %}
-                    {{ render_field(col) }}
+                    {{ render_field(col, current_user_type, table_modules, mode) }}
                 {% endfor %}
             </div>
 
             <div class="form-grid-2-col">
                 {% for col in columns if 'start_date' in col.column_name.lower() or 'end_date' in col.column_name.lower() %}
-                    {{ render_field(col) }}
+                    {{ render_field(col, current_user_type, table_modules, mode) }}
                 {% endfor %}
             </div>
 
             <div class="form-grid">
                 {% for col in columns if not (col.is_pk or col.column_name.lower().endswith('status') or col.column_name.lower().endswith('flag') or col.column_name == 'pus_user_type' or 'start_date' in col.column_name.lower() or 'end_date' in col.column_name.lower()) %}
-                    {{ render_field(col) }}
+                    {{ render_field(col, current_user_type, table_modules, mode) }}
                 {% endfor %}
             </div>
             
