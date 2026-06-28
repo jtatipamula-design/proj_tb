@@ -51,7 +51,6 @@
     html.light-mode .checkbox-item:hover { background: rgba(0, 0, 0, 0.05); }
     .checkbox-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--color-electric-iris); border-radius: 4px; }
 
-    /* Grouped Accordion Styles for Virtual Checkboxes */
     .cb-group { border: 1px solid var(--glass-border); border-radius: 6px; margin-bottom: 8px; overflow: hidden; background: rgba(0,0,0,0.1); }
     html.light-mode .cb-group { background: rgba(255,255,255,0.5); }
     
@@ -68,27 +67,22 @@
     .cb-group.collapsed .cb-chevron { transform: rotate(-90deg); }
     .cb-chevron { transition: transform 0.2s; color: var(--color-fog); }
 
-    /* Generic UI Buttons Group */
     .btn-group-wrap { display: flex; gap: 8px; }
     .ui-btn { flex: 1; padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px; color: var(--color-moonlight); transition: all 0.2s; background: transparent; border: 1px solid var(--glass-border); }
     .ui-btn:hover { border-color: var(--color-pebble); }
     
-    /* Specific Selected States */
     .active-selected { background: rgba(38, 150, 132, 0.15); color: var(--color-cipher-mint); border-color: var(--color-cipher-mint); }
     .inactive-selected { background: rgba(228, 109, 76, 0.15); color: var(--color-ember); border-color: var(--color-ember); }
     .adm-selected { background: rgba(102, 58, 243, 0.15); color: var(--color-electric-iris); border-color: var(--color-electric-iris); }
     .std-selected { background: rgba(255, 255, 255, 0.05); color: var(--color-glacier); border-color: var(--color-moonlight); }
     html.light-mode .std-selected { background: rgba(0, 0, 0, 0.05); color: var(--color-midnight-ink); border-color: var(--color-fog); }
     
-    /* Security Lockdown CSS */
     .disabled-btn { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
     .hidden-input { display: none; }
 
     .form-divider { height: 1px; width: 100%; background: var(--glass-border); margin: 32px 0; }
 
-    .form-actions {
-        display: flex; gap: 12px; align-items: center; justify-content: flex-end;
-    }
+    .form-actions { display: flex; gap: 12px; align-items: center; justify-content: flex-end; }
     .btn-submit {
         display: inline-flex; align-items: center; justify-content: center; gap: 8px;
         padding: 10px 24px; border-radius: 6px;
@@ -137,6 +131,20 @@
                     <div class="ui-btn" id="btn_act_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'ACT')">Active</div>
                     <div class="ui-btn" id="btn_ina_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'INA')">Inactive</div>
                 </div>
+            {% elif col.column_name.lower() == 'enabled_flag' %}
+                <!-- Oracle Active/Inactive Flag -->
+                <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'Y' }}">
+                <div class="btn-group-wrap">
+                    <div class="ui-btn" id="btn_y_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'Y')">Active</div>
+                    <div class="ui-btn" id="btn_n_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'N')">Inactive</div>
+                </div>
+            {% elif col.column_name.lower().endswith('flag') %}
+                <!-- Oracle Yes/No Flag -->
+                <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'Y' }}">
+                <div class="btn-group-wrap">
+                    <div class="ui-btn" id="btn_y_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'Y')">Yes</div>
+                    <div class="ui-btn" id="btn_n_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'N')">No</div>
+                </div>
             {% elif col.column_name == 'pus_user_type' %}
                 <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'STD' }}">
                 <div class="btn-group-wrap">
@@ -147,7 +155,6 @@
                 <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else 'Pending...' }}" class="readonly-input" readonly tabindex="-1">
             
             {% elif col.data_type == 'virtual_checkbox' %}
-                <!-- GLOBAL SELECT ALL FOR CHECKBOXES -->
                 <div style="display: flex; gap: 8px; margin-bottom: 8px;">
                     <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', true){% endif %}">Select Global All</button>
                     <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', false){% endif %}">Deselect Global All</button>
@@ -157,7 +164,6 @@
                     {% set selected_items = (col.value or "").split(',') %}
                     
                     {% if col.column_name == 'pr_allowed_tables' %}
-                        <!-- ORACLE MODULE ACCORDION FOR SCREENS -->
                         {% set groups = {} %}
                         {% for opt in col.options %}
                             {% set mod = table_modules.get(opt.code, 'All Screens') if opt.code else 'All Screens' %}
@@ -190,7 +196,6 @@
                             </div>
                         {% endfor %}
                     {% else %}
-                        <!-- STANDARD FLAT LIST FOR ROLES/OTHER -->
                         {% for opt in col.options %}
                             <label class="checkbox-item {% if current_user_type != 'ADM' %}disabled-btn{% endif %}">
                                 <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %} {% if current_user_type != 'ADM' %}disabled{% endif %}>
@@ -228,8 +233,8 @@
               id="recordForm">
             
             <div class="form-grid-2-col">
-                <!-- Group IDs, Statuses, and User Types together -->
-                {% for col in columns if col.is_pk or col.column_name.lower().endswith('status') or col.column_name == 'pus_user_type' %}
+                <!-- Group IDs, Statuses, Flags and User Types together -->
+                {% for col in columns if col.is_pk or col.column_name.lower().endswith('status') or col.column_name.lower().endswith('flag') or col.column_name == 'pus_user_type' %}
                     {{ render_field(col) }}
                 {% endfor %}
             </div>
@@ -241,7 +246,7 @@
             </div>
 
             <div class="form-grid">
-                {% for col in columns if not (col.is_pk or col.column_name.lower().endswith('status') or col.column_name == 'pus_user_type' or 'start_date' in col.column_name.lower() or 'end_date' in col.column_name.lower()) %}
+                {% for col in columns if not (col.is_pk or col.column_name.lower().endswith('status') or col.column_name.lower().endswith('flag') or col.column_name == 'pus_user_type' or 'start_date' in col.column_name.lower() or 'end_date' in col.column_name.lower()) %}
                     {{ render_field(col) }}
                 {% endfor %}
             </div>
@@ -279,6 +284,23 @@
             btnIna.className = 'ui-btn'; 
             if(value !== 'ACT' && value !== 'AIU') btnIna.classList.add('inactive-selected'); 
         }
+        if (typeof saveDraft === 'function') saveDraft();
+    }
+
+    function setFlag(colName, value) {
+        let inputEl = document.getElementById('input_' + colName);
+        if (inputEl) inputEl.value = value;
+        const btnY = document.getElementById('btn_y_' + colName);
+        const btnN = document.getElementById('btn_n_' + colName);
+        if(btnY) { 
+            btnY.className = 'ui-btn'; 
+            if(value === 'Y') btnY.classList.add('active-selected'); 
+        }
+        if(btnN) { 
+            btnN.className = 'ui-btn'; 
+            if(value === 'N') btnN.classList.add('inactive-selected'); 
+        }
+        if (typeof saveDraft === 'function') saveDraft();
     }
 
     function setUserType(colName, value) {
@@ -294,10 +316,9 @@
             btnStd.className = 'ui-btn'; 
             if(value !== 'ADM') btnStd.classList.add('std-selected'); 
         }
-        saveDraft(); 
+        if (typeof saveDraft === 'function') saveDraft();
     }
 
-    // Interactive Accordion Functions for Grouped Virtual Checkboxes
     function toggleCbGroup(headerEl) {
         const group = headerEl.closest('.cb-group');
         group.classList.toggle('collapsed');
@@ -322,6 +343,8 @@
         document.querySelectorAll('.hidden-input').forEach(el => {
             if (el.name.toLowerCase().endsWith('status')) {
                 setStatus(el.name, el.value || 'ACT');
+            } else if (el.name.toLowerCase().endswith('flag')) {
+                setFlag(el.name, el.value || 'Y');
             } else if (el.name === 'pus_user_type') {
                 setUserType(el.name, el.value || 'STD');
             }
@@ -338,6 +361,7 @@
                     if (el && el.type !== 'file') {
                         el.value = draft[key];
                         if (key.toLowerCase().endsWith('status')) setStatus(key, draft[key]);
+                        if (key.toLowerCase().endswith('flag')) setFlag(key, draft[key]);
                         if (key === 'pus_user_type') setUserType(key, draft[key]);
                     }
                 });
@@ -373,6 +397,7 @@
         localStorage.removeItem(draftKey);
         document.querySelectorAll('.hidden-input').forEach(el => {
             if(el.name.toLowerCase().endsWith('status')) setStatus(el.name, 'ACT');
+            if(el.name.toLowerCase().endswith('flag')) setFlag(el.name, 'Y');
             if(el.name === 'pus_user_type') setUserType(el.name, 'STD');
         });
     }
