@@ -584,7 +584,8 @@
                     <div style="font-size: 11px; color: var(--color-fog);">Edit Profile</div>
                 </div>
             </a>
-            <a href="/logout" class="logout-btn" title="Logout"><i data-lucide="log-out" style="width: 18px;"></i></a>
+            <!-- FIX: hx-boost="false" prevents HTMX from hijacking the logout redirect, solving the random JSON error! -->
+            <a href="/logout" class="logout-btn" title="Logout" hx-boost="false"><i data-lucide="log-out" style="width: 18px;"></i></a>
         </section>
     </aside>
 
