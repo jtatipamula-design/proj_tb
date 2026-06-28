@@ -68,7 +68,10 @@
 <div class="dashboard-wrapper">
     <div class="welcome-section">
         <div class="eyebrow-text" style="font-family: var(--font-mono); color: var(--color-fog); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">ENTERPRISE SPRINGBOARD</div>
-        <h1>Good morning, {{ username.title() if username else 'Admin' }}</h1>
+        
+        <!-- The greeting text is wrapped in a span so JavaScript can target it dynamically -->
+        <h1><span id="dynamicGreeting">Good morning</span>, {{ username.title() if username else 'Admin' }}</h1>
+        
         <p>Select an enterprise module below to filter your workspace.</p>
     </div>
 
@@ -174,4 +177,23 @@
 
     </div>
 </div>
+
+<script>
+    // Self-invoking function to instantly update the greeting based on local time
+    (function() {
+        const hour = new Date().getHours();
+        let greeting = 'Good evening';
+        
+        if (hour >= 5 && hour < 12) {
+            greeting = 'Good morning';
+        } else if (hour >= 12 && hour < 17) {
+            greeting = 'Good afternoon';
+        }
+        
+        const greetingEl = document.getElementById('dynamicGreeting');
+        if (greetingEl) {
+            greetingEl.textContent = greeting;
+        }
+    })();
+</script>
 {% endblock %}
