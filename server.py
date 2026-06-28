@@ -714,7 +714,7 @@ async def show_edit_form(request, table_name, pk_val):
                 })
 
             if table_name == 'phc_roles_t':
-                screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
+                screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_code as code, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
                 assignments = await conn.fetch("SELECT prs_screen_id FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", parsed_pk)
                 assigned_val = ",".join([str(a['prs_screen_id']) for a in assignments])
                 columns.append({"column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False, "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in screens], "is_pk": False})
@@ -777,7 +777,7 @@ async def show_add_form(request, table_name):
                 })
 
             if table_name == 'phc_roles_t':
-                screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
+                screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_code as code, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
                 columns.append({"column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False, "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in screens], "is_pk": False})
 
             if table_name == 'phc_users_t':
