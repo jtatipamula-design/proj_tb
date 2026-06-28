@@ -117,7 +117,8 @@
     </div>
 
     <div class="form-container">
-        {% macro render_field(col) %}
+        <!-- FIX: Added 'context' so the macro can safely access 'current_user_type' and 'table_modules' -->
+        {% macro render_field(col) context %}
         <div class="form-group">
             <label>
                 {{ col.label }} 
@@ -164,36 +165,41 @@
                     {% set selected_items = (col.value or "").split(',') %}
                     
                     {% if col.column_name == 'pr_allowed_tables' %}
-                        {% set groups = {} %}
-                        {% for opt in col.options %}
-                            {% set mod = table_modules.get(opt.code, 'All Screens') if opt.code else 'All Screens' %}
-                            {% if mod not in groups %}
-                                {% set _ = groups.update({mod: []}) %}
-                            {% endif %}
-                            {% set _ = groups[mod].append(opt) %}
-                        {% endfor %}
+                        <!-- FIX: Replaced buggy dynamic dictionary mutation with a safe explicit loop -->
+                        {% set known_modules = ['AppSetup', 'CustomerSetup', 'Employee', 'Ledger', 'MasterData', 'OrderMgmt', 'Payables', 'Procurement', 'Product', 'Project', 'Receivables', 'All Screens'] %}
+                        {% set mod_labels = {'AppSetup': 'App Setup', 'CustomerSetup': 'Customers & Vendors', 'Employee': 'Employees', 'Ledger': 'General Ledger', 'MasterData': 'Master Data', 'OrderMgmt': 'Order Management', 'Payables': 'Payables', 'Procurement': 'Procurement', 'Product': 'Inventory', 'Project': 'Project Accounting', 'Receivables': 'Receivables', 'All Screens': 'Other Screens'} %}
                         
-                        {% for mod_name, opts in groups.items() %}
-                            <div class="cb-group collapsed">
-                                <div class="cb-group-header" onclick="toggleCbGroup(this)">
-                                    <div style="display:flex; align-items:center; gap:8px;">
-                                        <i data-lucide="chevron-down" class="cb-chevron" style="width:16px;"></i>
-                                        <span style="font-weight:600; font-size: 15px; color:var(--color-glacier);">{{ mod_name }}</span>
+                        {% for mod_key in known_modules %}
+                            {% set opts_in_mod = [] %}
+                            {% for opt in col.options %}
+                                {% set opt_mod = table_modules.get(opt.code, 'All Screens') if opt.code else 'All Screens' %}
+                                {% if opt_mod == mod_key %}
+                                    {% set _ = opts_in_mod.append(opt) %}
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if opts_in_mod|length > 0 %}
+                                <div class="cb-group collapsed">
+                                    <div class="cb-group-header" onclick="toggleCbGroup(this)">
+                                        <div style="display:flex; align-items:center; gap:8px;">
+                                            <i data-lucide="chevron-down" class="cb-chevron" style="width:16px;"></i>
+                                            <span style="font-weight:600; font-size: 15px; color:var(--color-glacier);">{{ mod_labels.get(mod_key, mod_key) }}</span>
+                                        </div>
+                                        <div style="display:flex; gap: 6px;">
+                                            <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 2px 8px; font-size: 11px; border-color: rgba(255,255,255,0.1);" onclick="event.stopPropagation(); {% if current_user_type == 'ADM' %}selectGroupCheckboxes(this, '{{ col.column_name }}', true){% endif %}">Select All</button>
+                                            <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 2px 8px; font-size: 11px; border-color: rgba(255,255,255,0.1);" onclick="event.stopPropagation(); {% if current_user_type == 'ADM' %}selectGroupCheckboxes(this, '{{ col.column_name }}', false){% endif %}">Clear</button>
+                                        </div>
                                     </div>
-                                    <div style="display:flex; gap: 6px;">
-                                        <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 2px 8px; font-size: 11px; border-color: rgba(255,255,255,0.1);" onclick="event.stopPropagation(); {% if current_user_type == 'ADM' %}selectGroupCheckboxes(this, '{{ col.column_name }}', true){% endif %}">Select All</button>
-                                        <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 2px 8px; font-size: 11px; border-color: rgba(255,255,255,0.1);" onclick="event.stopPropagation(); {% if current_user_type == 'ADM' %}selectGroupCheckboxes(this, '{{ col.column_name }}', false){% endif %}">Clear</button>
+                                    <div class="cb-group-content">
+                                        {% for opt in opts_in_mod %}
+                                            <label class="checkbox-item {% if current_user_type != 'ADM' %}disabled-btn{% endif %}">
+                                                <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %} {% if current_user_type != 'ADM' %}disabled{% endif %}>
+                                                <span>{{ opt.name }}</span>
+                                            </label>
+                                        {% endfor %}
                                     </div>
                                 </div>
-                                <div class="cb-group-content">
-                                    {% for opt in opts %}
-                                        <label class="checkbox-item {% if current_user_type != 'ADM' %}disabled-btn{% endif %}">
-                                            <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %} {% if current_user_type != 'ADM' %}disabled{% endif %}>
-                                            <span>{{ opt.name }}</span>
-                                        </label>
-                                    {% endfor %}
-                                </div>
-                            </div>
+                            {% endif %}
                         {% endfor %}
                     {% else %}
                         {% for opt in col.options %}
@@ -343,7 +349,7 @@
         document.querySelectorAll('.hidden-input').forEach(el => {
             if (el.name.toLowerCase().endsWith('status')) {
                 setStatus(el.name, el.value || 'ACT');
-            } else if (el.name.toLowerCase().endswith('flag')) {
+            } else if (el.name.toLowerCase().endsWith('flag')) {
                 setFlag(el.name, el.value || 'Y');
             } else if (el.name === 'pus_user_type') {
                 setUserType(el.name, el.value || 'STD');
@@ -361,7 +367,7 @@
                     if (el && el.type !== 'file') {
                         el.value = draft[key];
                         if (key.toLowerCase().endsWith('status')) setStatus(key, draft[key]);
-                        if (key.toLowerCase().endswith('flag')) setFlag(key, draft[key]);
+                        if (key.toLowerCase().endsWith('flag')) setFlag(key, draft[key]);
                         if (key === 'pus_user_type') setUserType(key, draft[key]);
                     }
                 });
@@ -397,7 +403,7 @@
         localStorage.removeItem(draftKey);
         document.querySelectorAll('.hidden-input').forEach(el => {
             if(el.name.toLowerCase().endsWith('status')) setStatus(el.name, 'ACT');
-            if(el.name.toLowerCase().endswith('flag')) setFlag(el.name, 'Y');
+            if(el.name.toLowerCase().endsWith('flag')) setFlag(el.name, 'Y');
             if(el.name === 'pus_user_type') setUserType(el.name, 'STD');
         });
     }
