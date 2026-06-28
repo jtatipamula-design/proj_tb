@@ -1035,12 +1035,12 @@ async def save_data(request, table_name, pk_val=None):
         return response.json({"status": "success"})
 
 
-    # HTMX DELETE ROUTE
-    @app.delete("/api/<table_name>/<pk_val>", name="delete_row")
-    @login_required
-    async def delete_data(request, table_name, pk_val):
-        
-        provided_csrf = request.headers.get("X-CSRFToken")
+# HTMX DELETE ROUTE
+@app.delete("/api/<table_name>/<pk_val>", name="delete_row")
+@login_required
+async def delete_data(request, table_name, pk_val):
+    
+    provided_csrf = request.headers.get("X-CSRFToken")
         if not provided_csrf or provided_csrf != request.ctx.csrf_token:
             return response.json({"error": "Missing or Invalid CSRF Token. Are you a hacker?"}, status=403)
 
@@ -1087,17 +1087,17 @@ async def save_data(request, table_name, pk_val=None):
                 await log_action(conn, current_user_id, f"Archived/Deleted record {target_id} from {table_name}")
 
             if request.headers.get("HX-Request"):
-                return response.html(f"""
-                    <div id="toast-container" hx-swap-oob="beforeend">
-                        <div class="toast" style="animation: slideIn Toast 0.4s ease, fadeOutToast 0.4s ease 3.5s forwards;">
-                            <i data-lucide="check-circle-2" style="color: var(--color-cipher-mint)"></i> {msg}
-                        </div>
+            return response.html(f"""
+                <div id="toast-container" hx-swap-oob="beforeend">
+                    <div class="toast" style="animation: slideIn Toast 0.4s ease, fadeOutToast 0.4s ease 3.5s forwards;">
+                        <i data-lucide="check-circle-2" style="color: var(--color-cipher-mint)"></i> {msg}
                     </div>
-                """)
-                
-            return response.json({"status": "success"})
+                </div>
+            """)
+            
+        return response.json({"status": "success"})
 
 
-    if __name__ == "__main__":
-        port = int(os.environ.get("PORT", 8000))
-        app.run(host="0.0.0.0", port=port, debug=is_development, single_process=True)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="0.0.0.0", port=port, debug=is_development, single_process=True)
