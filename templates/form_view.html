@@ -50,11 +50,20 @@
     html.light-mode .checkbox-item:hover { background: rgba(0, 0, 0, 0.05); }
     .checkbox-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--color-electric-iris); border-radius: 4px; }
 
-    .status-group { display: flex; gap: 8px; }
-    .status-btn { flex: 1; padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px; color: var(--color-moonlight); transition: all 0.2s; background: transparent; border: 1px solid var(--glass-border); }
+    /* Generic UI Buttons Group */
+    .btn-group-wrap { display: flex; gap: 8px; }
+    .ui-btn { flex: 1; padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px; color: var(--color-moonlight); transition: all 0.2s; background: transparent; border: 1px solid var(--glass-border); }
+    .ui-btn:hover { border-color: var(--color-pebble); }
+    
+    /* Specific Selected States */
     .active-selected { background: rgba(38, 150, 132, 0.15); color: var(--color-cipher-mint); border-color: var(--color-cipher-mint); }
     .inactive-selected { background: rgba(228, 109, 76, 0.15); color: var(--color-ember); border-color: var(--color-ember); }
-    .status-btn:hover:not(.active-selected):not(.inactive-selected) { border-color: var(--color-pebble); }
+    .adm-selected { background: rgba(102, 58, 243, 0.15); color: var(--color-electric-iris); border-color: var(--color-electric-iris); }
+    .std-selected { background: rgba(255, 255, 255, 0.05); color: var(--color-glacier); border-color: var(--color-moonlight); }
+    html.light-mode .std-selected { background: rgba(0, 0, 0, 0.05); color: var(--color-midnight-ink); border-color: var(--color-fog); }
+    
+    /* Security Lockdown CSS */
+    .disabled-btn { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
     .hidden-input { display: none; }
 
     .form-divider { height: 1px; width: 100%; background: var(--glass-border); margin: 32px 0; }
@@ -106,28 +115,37 @@
             
             {% if col.column_name.lower().endswith('status') %}
                 <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'ACT' }}">
-                <div class="status-group">
-                    <div class="status-btn" id="btn_act_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'ACT')">Active</div>
-                    <div class="status-btn" id="btn_ina_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'INA')">Inactive</div>
+                <div class="btn-group-wrap">
+                    <div class="ui-btn" id="btn_act_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'ACT')">Active</div>
+                    <div class="ui-btn" id="btn_ina_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'INA')">Inactive</div>
+                </div>
+            {% elif col.column_name == 'pus_user_type' %}
+                <!-- Admin vs Standard User Button Toggle -->
+                <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'STD' }}">
+                <div class="btn-group-wrap">
+                    <div class="ui-btn {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" id="btn_adm_{{ col.column_name }}" onclick="{% if current_user_type == 'ADM' %}setUserType('{{ col.column_name }}', 'ADM'){% endif %}">Admin (ADM)</div>
+                    <div class="ui-btn {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" id="btn_std_{{ col.column_name }}" onclick="{% if current_user_type == 'ADM' %}setUserType('{{ col.column_name }}', 'STD'){% endif %}">Standard (STD)</div>
                 </div>
             {% elif col.is_pk %}
                 <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else 'Pending...' }}" class="readonly-input" readonly tabindex="-1">
             {% elif col.data_type == 'virtual_checkbox' %}
                 <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" class="btn-cancel" style="padding: 4px 8px; font-size: 11px;" onclick="selectAllCheckboxes('{{ col.column_name }}', true)">Select All</button>
-                    <button type="button" class="btn-cancel" style="padding: 4px 8px; font-size: 11px;" onclick="selectAllCheckboxes('{{ col.column_name }}', false)">Deselect All</button>
+                    <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', true){% endif %}">Select All</button>
+                    <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', false){% endif %}">Deselect All</button>
                 </div>
                 <div class="checkbox-scroll-box">
                     {% set selected_items = (col.value or "").split(',') %}
                     {% for opt in col.options %}
-                        <label class="checkbox-item">
-                            <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %}>
+                        <!-- Disable interaction entirely if not ADM -->
+                        <label class="checkbox-item {% if current_user_type != 'ADM' %}disabled-btn{% endif %}">
+                            <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %} {% if current_user_type != 'ADM' %}disabled{% endif %}>
                             <span>{{ opt.name }}</span>
                         </label>
                     {% endfor %}
                 </div>
             {% elif col.options %}
-                <select name="{{ col.column_name }}" {% if col.required %}required{% endif %}>
+                <!-- Render standard selects, disable strict company fields if standard user -->
+                <select name="{{ col.column_name }}" {% if col.required %}required{% endif %} {% if current_user_type != 'ADM' and col.column_name == 'pus_company_id' %}disabled class="readonly-input"{% endif %}>
                     <option value="">-- Select --</option>
                     {% for opt in col.options %}
                         <option value="{{ opt.id }}" {% if col.value|string == opt.id|string %}selected{% endif %}>{{ opt.name }}</option>
@@ -143,7 +161,6 @@
         </div>
         {% endmacro %}
 
-        <!-- FIXED HTMX BEHAVIOR: Swapped to 'beforeend' on the body so the redirect script executes! -->
         <form hx-ext="json-enc" 
               hx-swap="beforeend"
               hx-target="body"
@@ -155,7 +172,8 @@
               id="recordForm">
             
             <div class="form-grid-2-col">
-                {% for col in columns if col.is_pk or col.column_name.lower().endswith('status') %}
+                <!-- Group IDs, Statuses, and User Types together -->
+                {% for col in columns if col.is_pk or col.column_name.lower().endswith('status') or col.column_name == 'pus_user_type' %}
                     {{ render_field(col) }}
                 {% endfor %}
             </div>
@@ -167,7 +185,7 @@
             </div>
 
             <div class="form-grid">
-                {% for col in columns if not (col.is_pk or col.column_name.lower().endswith('status') or 'start_date' in col.column_name.lower() or 'end_date' in col.column_name.lower()) %}
+                {% for col in columns if not (col.is_pk or col.column_name.lower().endswith('status') or col.column_name == 'pus_user_type' or 'start_date' in col.column_name.lower() or 'end_date' in col.column_name.lower()) %}
                     {{ render_field(col) }}
                 {% endfor %}
             </div>
@@ -192,21 +210,44 @@
 </div>
 
 <script>
-    // FIXED: Properly encapsulated logic so it executes instantly on HTMX swaps 
     function setStatus(colName, value) {
         let inputEl = document.getElementById('input_' + colName);
         if (inputEl) inputEl.value = value;
         const btnAct = document.getElementById('btn_act_' + colName);
         const btnIna = document.getElementById('btn_ina_' + colName);
-        if(btnAct) { btnAct.className = 'status-btn'; if(value === 'ACT' || value === 'AIU') btnAct.classList.add('active-selected'); }
-        if(btnIna) { btnIna.className = 'status-btn'; if(value !== 'ACT' && value !== 'AIU') btnIna.classList.add('inactive-selected'); }
+        if(btnAct) { 
+            btnAct.className = 'ui-btn'; 
+            if(value === 'ACT' || value === 'AIU') btnAct.classList.add('active-selected'); 
+        }
+        if(btnIna) { 
+            btnIna.className = 'ui-btn'; 
+            if(value !== 'ACT' && value !== 'AIU') btnIna.classList.add('inactive-selected'); 
+        }
+    }
+
+    // New Javascript function strictly for the Admin/Standard toggle buttons
+    function setUserType(colName, value) {
+        let inputEl = document.getElementById('input_' + colName);
+        if (inputEl) inputEl.value = value;
+        const btnAdm = document.getElementById('btn_adm_' + colName);
+        const btnStd = document.getElementById('btn_std_' + colName);
+        if(btnAdm) { 
+            btnAdm.className = 'ui-btn'; 
+            if(value === 'ADM') btnAdm.classList.add('adm-selected'); 
+        }
+        if(btnStd) { 
+            btnStd.className = 'ui-btn'; 
+            if(value !== 'ADM') btnStd.classList.add('std-selected'); 
+        }
+        saveDraft(); // Instantly update draft memory
     }
 
     function initFormUI() {
-        // FIXED: Using valid JavaScript `.endsWith()` instead of Python's `.endswith()`
         document.querySelectorAll('.hidden-input').forEach(el => {
             if (el.name.toLowerCase().endsWith('status')) {
                 setStatus(el.name, el.value || 'ACT');
+            } else if (el.name === 'pus_user_type') {
+                setUserType(el.name, el.value || 'STD');
             }
         });
 
@@ -220,15 +261,14 @@
                     const el = document.querySelector(`[name="${key}"]`);
                     if (el && el.type !== 'file') {
                         el.value = draft[key];
-                        // FIXED: Re-applying the JS typo fix here too
                         if (key.toLowerCase().endsWith('status')) setStatus(key, draft[key]);
+                        if (key === 'pus_user_type') setUserType(key, draft[key]);
                     }
                 });
             }
         }
     }
 
-    // Call instantly since the DOM above is fully parsed
     initFormUI();
 
     const formId = "recordForm";
@@ -257,6 +297,7 @@
         localStorage.removeItem(draftKey);
         document.querySelectorAll('.hidden-input').forEach(el => {
             if(el.name.toLowerCase().endsWith('status')) setStatus(el.name, 'ACT');
+            if(el.name === 'pus_user_type') setUserType(el.name, 'STD');
         });
     }
 
