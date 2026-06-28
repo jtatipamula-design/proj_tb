@@ -43,12 +43,30 @@
     .readonly-input { opacity: 0.6; cursor: not-allowed; background-color: rgba(0,0,0,0.3) !important; pointer-events: none; }
     html.light-mode .readonly-input { background-color: rgba(0,0,0,0.05) !important; }
 
-    .checkbox-scroll-box { max-height: 250px; overflow-y: auto; padding: 12px; border-radius: 6px; background-color: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); }
+    .checkbox-scroll-box { max-height: 350px; overflow-y: auto; padding: 12px; border-radius: 6px; background-color: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); }
     html.light-mode .checkbox-scroll-box { background-color: rgba(255,255,255,0.6); }
+    
     .checkbox-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 4px; cursor: pointer; transition: background 0.2s; font-weight: 400; font-size: 14px; color: var(--color-moonlight); }
     .checkbox-item:hover { background: rgba(255, 255, 255, 0.05); }
     html.light-mode .checkbox-item:hover { background: rgba(0, 0, 0, 0.05); }
     .checkbox-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--color-electric-iris); border-radius: 4px; }
+
+    /* Grouped Accordion Styles for Virtual Checkboxes */
+    .cb-group { border: 1px solid var(--glass-border); border-radius: 6px; margin-bottom: 8px; overflow: hidden; background: rgba(0,0,0,0.1); }
+    html.light-mode .cb-group { background: rgba(255,255,255,0.5); }
+    
+    .cb-group-header { 
+        background: rgba(0,0,0,0.3); padding: 10px 14px; display: flex; justify-content: space-between; 
+        align-items: center; cursor: pointer; user-select: none; transition: background 0.2s;
+    }
+    .cb-group-header:hover { background: rgba(186, 215, 247, 0.08); }
+    html.light-mode .cb-group-header { background: rgba(0,0,0,0.05); }
+    html.light-mode .cb-group-header:hover { background: rgba(0,0,0,0.08); }
+    
+    .cb-group-content { padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+    .cb-group.collapsed .cb-group-content { display: none; }
+    .cb-group.collapsed .cb-chevron { transform: rotate(-90deg); }
+    .cb-chevron { transition: transform 0.2s; color: var(--color-fog); }
 
     /* Generic UI Buttons Group */
     .btn-group-wrap { display: flex; gap: 8px; }
@@ -120,7 +138,6 @@
                     <div class="ui-btn" id="btn_ina_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'INA')">Inactive</div>
                 </div>
             {% elif col.column_name == 'pus_user_type' %}
-                <!-- Admin vs Standard User Button Toggle -->
                 <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'STD' }}">
                 <div class="btn-group-wrap">
                     <div class="ui-btn {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" id="btn_adm_{{ col.column_name }}" onclick="{% if current_user_type == 'ADM' %}setUserType('{{ col.column_name }}', 'ADM'){% endif %}">Admin (ADM)</div>
@@ -128,23 +145,62 @@
                 </div>
             {% elif col.is_pk %}
                 <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else 'Pending...' }}" class="readonly-input" readonly tabindex="-1">
+            
             {% elif col.data_type == 'virtual_checkbox' %}
+                <!-- GLOBAL SELECT ALL FOR CHECKBOXES -->
                 <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', true){% endif %}">Select All</button>
-                    <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', false){% endif %}">Deselect All</button>
+                    <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', true){% endif %}">Select Global All</button>
+                    <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', false){% endif %}">Deselect Global All</button>
                 </div>
+                
                 <div class="checkbox-scroll-box">
                     {% set selected_items = (col.value or "").split(',') %}
-                    {% for opt in col.options %}
-                        <!-- Disable interaction entirely if not ADM -->
-                        <label class="checkbox-item {% if current_user_type != 'ADM' %}disabled-btn{% endif %}">
-                            <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %} {% if current_user_type != 'ADM' %}disabled{% endif %}>
-                            <span>{{ opt.name }}</span>
-                        </label>
-                    {% endfor %}
+                    
+                    {% if col.column_name == 'pr_allowed_tables' %}
+                        <!-- ORACLE MODULE ACCORDION FOR SCREENS -->
+                        {% set groups = {} %}
+                        {% for opt in col.options %}
+                            {% set mod = table_modules.get(opt.code, 'All Screens') if opt.code else 'All Screens' %}
+                            {% if mod not in groups %}
+                                {% set _ = groups.update({mod: []}) %}
+                            {% endif %}
+                            {% set _ = groups[mod].append(opt) %}
+                        {% endfor %}
+                        
+                        {% for mod_name, opts in groups.items() %}
+                            <div class="cb-group collapsed">
+                                <div class="cb-group-header" onclick="toggleCbGroup(this)">
+                                    <div style="display:flex; align-items:center; gap:8px;">
+                                        <i data-lucide="chevron-down" class="cb-chevron" style="width:16px;"></i>
+                                        <span style="font-weight:600; font-size: 15px; color:var(--color-glacier);">{{ mod_name }}</span>
+                                    </div>
+                                    <div style="display:flex; gap: 6px;">
+                                        <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 2px 8px; font-size: 11px; border-color: rgba(255,255,255,0.1);" onclick="event.stopPropagation(); {% if current_user_type == 'ADM' %}selectGroupCheckboxes(this, '{{ col.column_name }}', true){% endif %}">Select All</button>
+                                        <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 2px 8px; font-size: 11px; border-color: rgba(255,255,255,0.1);" onclick="event.stopPropagation(); {% if current_user_type == 'ADM' %}selectGroupCheckboxes(this, '{{ col.column_name }}', false){% endif %}">Clear</button>
+                                    </div>
+                                </div>
+                                <div class="cb-group-content">
+                                    {% for opt in opts %}
+                                        <label class="checkbox-item {% if current_user_type != 'ADM' %}disabled-btn{% endif %}">
+                                            <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %} {% if current_user_type != 'ADM' %}disabled{% endif %}>
+                                            <span>{{ opt.name }}</span>
+                                        </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <!-- STANDARD FLAT LIST FOR ROLES/OTHER -->
+                        {% for opt in col.options %}
+                            <label class="checkbox-item {% if current_user_type != 'ADM' %}disabled-btn{% endif %}">
+                                <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %} {% if current_user_type != 'ADM' %}disabled{% endif %}>
+                                <span>{{ opt.name }}</span>
+                            </label>
+                        {% endfor %}
+                    {% endif %}
                 </div>
+            
             {% elif col.options %}
-                <!-- Render standard selects, disable strict company fields if standard user -->
                 <select name="{{ col.column_name }}" {% if col.required %}required{% endif %} {% if current_user_type != 'ADM' and col.column_name == 'pus_company_id' %}disabled class="readonly-input"{% endif %}>
                     <option value="">-- Select --</option>
                     {% for opt in col.options %}
@@ -225,7 +281,6 @@
         }
     }
 
-    // New Javascript function strictly for the Admin/Standard toggle buttons
     function setUserType(colName, value) {
         let inputEl = document.getElementById('input_' + colName);
         if (inputEl) inputEl.value = value;
@@ -239,7 +294,28 @@
             btnStd.className = 'ui-btn'; 
             if(value !== 'ADM') btnStd.classList.add('std-selected'); 
         }
-        saveDraft(); // Instantly update draft memory
+        saveDraft(); 
+    }
+
+    // Interactive Accordion Functions for Grouped Virtual Checkboxes
+    function toggleCbGroup(headerEl) {
+        const group = headerEl.closest('.cb-group');
+        group.classList.toggle('collapsed');
+    }
+
+    function selectGroupCheckboxes(btnEl, colName, checkStatus) {
+        const group = btnEl.closest('.cb-group');
+        group.querySelectorAll(`input[name="${colName}"]`).forEach(el => {
+            if(!el.disabled) el.checked = checkStatus;
+        });
+        saveDraft();
+    }
+
+    function selectAllCheckboxes(colName, checkStatus) {
+        document.querySelectorAll(`input[name="${colName}"]`).forEach(el => {
+            if(!el.disabled) el.checked = checkStatus;
+        });
+        saveDraft();
     }
 
     function initFormUI() {
@@ -299,11 +375,6 @@
             if(el.name.toLowerCase().endsWith('status')) setStatus(el.name, 'ACT');
             if(el.name === 'pus_user_type') setUserType(el.name, 'STD');
         });
-    }
-
-    function selectAllCheckboxes(colName, checkStatus) {
-        document.querySelectorAll(`input[name="${colName}"]`).forEach(el => el.checked = checkStatus);
-        saveDraft();
     }
 </script>
 {% endblock %}
