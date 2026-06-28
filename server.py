@@ -174,8 +174,20 @@ def login_required(wrapped):
     @wraps(wrapped)
     async def decorator(request, *args, **kwargs):
         token = request.cookies.get("auth_token")
+
+        # Safely handle HTMX redirects to prevent JSON errors on login screen
+        def force_login_redirect():
+            if request.headers.get("HX-Request"):
+                resp = response.text("Session Expired")
+                resp.headers["HX-Redirect"] = "/login"
+                resp.delete_cookie("auth_token")
+                return resp
+            resp = response.redirect("/login")
+            resp.delete_cookie("auth_token")
+            return resp
+
         if not token:
-            return response.redirect("/login")
+            return force_login_redirect()
 
         try:
             payload = jwt.decode(token, app.config.SECRET, algorithms=["HS256"])
@@ -192,9 +204,7 @@ def login_required(wrapped):
                         "SELECT pus_session_id, pus_company_id FROM phc_users_t WHERE pus_user_id = $1", int(user_id)
                     )
                     if not db_user or db_user['pus_session_id'] != session_id:
-                        resp = response.redirect("/login")
-                        resp.delete_cookie("auth_token")
-                        return resp
+                        return force_login_redirect()
                     
                     AUTH_CACHE[user_id] = {
                         'session': db_user['pus_session_id'], 
@@ -209,12 +219,12 @@ def login_required(wrapped):
             request.ctx.csrf_token = payload.get("csrf_token")
 
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
-            return response.redirect("/login")
+            return force_login_redirect()
         except asyncpg.PostgresError as e:
             print(f"DB Error during auth validation: {e}")
             if request.headers.get("HX-Request"):
-                return response.json({"error": "Internal Database Error during authentication."}, status=500)
-            return response.text("Internal Database Error", status=500)
+                return response.json({"error": "Database Error."}, status=500)
+            return response.text("Database Error", status=500)
 
         return await wrapped(request, *args, **kwargs)
     return decorator
@@ -509,7 +519,13 @@ async def handle_login(request):
 
 @app.route("/logout")
 async def logout(request):
-    resp = response.redirect("/login")
+    # Safely handles both normal clicks and HTMX clicks avoiding JSON error screen
+    if request.headers.get("HX-Request"):
+        resp = response.text("Logging out...")
+        resp.headers["HX-Redirect"] = "/login"
+    else:
+        resp = response.redirect("/login")
+        
     resp.delete_cookie("auth_token")
     return resp
 
@@ -714,6 +730,7 @@ async def show_edit_form(request, table_name, pk_val):
                 })
 
             if table_name == 'phc_roles_t':
+                # FIX: Send psn_screen_code as code so UI can sort screens into Accordions
                 screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_code as code, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
                 assignments = await conn.fetch("SELECT prs_screen_id FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", parsed_pk)
                 assigned_val = ",".join([str(a['prs_screen_id']) for a in assignments])
@@ -736,7 +753,7 @@ async def show_edit_form(request, table_name, pk_val):
                 "user_id": request.ctx.user_id,
                 "username": request.ctx.username,
                 "csrf_token": request.ctx.csrf_token,
-                "current_user_type": request.ctx.user_type # SECURITY FIX: Expose user type to Frontend UI
+                "current_user_type": request.ctx.user_type
             })
     except Exception as e:
         print(f"Error loading edit form: {e}")
@@ -777,6 +794,7 @@ async def show_add_form(request, table_name):
                 })
 
             if table_name == 'phc_roles_t':
+                # FIX: Send psn_screen_code as code so UI can sort screens into Accordions
                 screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_code as code, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
                 columns.append({"column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False, "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in screens], "is_pk": False})
 
@@ -794,7 +812,7 @@ async def show_add_form(request, table_name):
                 "user_id": request.ctx.user_id,
                 "username": request.ctx.username,
                 "csrf_token": request.ctx.csrf_token,
-                "current_user_type": request.ctx.user_type # SECURITY FIX: Expose user type to Frontend UI
+                "current_user_type": request.ctx.user_type
             })
     except Exception as e:
         print(f"Error loading create form: {e}")
@@ -891,7 +909,7 @@ async def save_data(request, table_name, pk_val=None):
     user_type = request.ctx.user_type
     company_id = int(request.ctx.company_id)
 
-    #  SECURITY FIX 1: Prevent Standard Users from Privilege Escalation
+    # 🛡️ SECURITY FIX: Prevent Standard Users from Privilege Escalation
     if user_type != 'ADM':
         # Strictly pop Admin-level and Virtual Fields from standard users
         data.pop('pus_user_type', None)
@@ -922,7 +940,7 @@ async def save_data(request, table_name, pk_val=None):
         schema_rows = await conn.fetch("SELECT column_name, data_type, character_maximum_length, is_nullable FROM information_schema.columns WHERE table_name = $1", table_name)
         schema_map = {r['column_name']: r for r in schema_rows}
         
-        #  SECURITY FIX 3: Detect if the table has a strict company/tenant separation column
+        # 🛡️ SECURITY FIX: Detect if the table has a strict company/tenant separation column
         company_col = next((k for k in schema_map.keys() if k.lower().endswith('company_id')), None)
         
         clean_data = await _sanitize_payload(data, schema_map, pk_column, current_user_id, request.method)
@@ -967,6 +985,7 @@ async def save_data(request, table_name, pk_val=None):
                     max_prs = await conn.fetchval(f"SELECT MAX({prs_pk_col}) FROM phc_role_screen_assignment_t") if prs_pk_col else 0
                     next_prs = (int(max_prs) + 1) if max_prs else 1
                     
+                    # FIX: List vs String Array handling for virtual screens
                     v_screens_list = virtual_screens if isinstance(virtual_screens, list) else str(virtual_screens).split(',')
                     for s_id in v_screens_list:
                         if str(s_id).strip() and prs_pk_col:
@@ -981,9 +1000,11 @@ async def save_data(request, table_name, pk_val=None):
                 await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
                 if virtual_roles:
                     pua_pk_col = await get_pk_column(conn, 'phc_user_roles_assignment_t')
+                    # FIX: Typo from pua_pua to pua_pk_col
                     max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pk_col else 0
                     next_pua = (int(max_pua) + 1) if max_pua else 1
                     
+                    # FIX: List vs String Array handling for virtual roles
                     v_roles_list = virtual_roles if isinstance(virtual_roles, list) else str(virtual_roles).split(',')
                     for r_id in v_roles_list:
                         if str(r_id).strip() and pua_pk_col:
@@ -1019,7 +1040,7 @@ async def delete_data(request, table_name, pk_val):
     user_type = request.ctx.user_type
     company_id = int(request.ctx.company_id)
     
-    # SECURITY FIX: Block standard users from deleting security tables!
+    # 🛡️ SECURITY FIX: Block standard users from deleting security tables!
     if user_type != 'ADM':
         admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']
         if table_name in admin_only_tables:
@@ -1037,7 +1058,7 @@ async def delete_data(request, table_name, pk_val):
         pk_type = next((r['data_type'] for r in schema_rows if r['column_name'] == pk_column), 'integer')
         target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
 
-        # 🛡️ SECURITY FIX 2 & 3: Soft-Deletes for Auditing, Tenant Scoping Check
+        # 🛡️ SECURITY FIX: Soft-Deletes for Auditing, Tenant Scoping Check
         company_col = next((c for c in schema_rows if c['column_name'].lower().endswith('company_id')), None)
         status_col = next((c for c in schema_rows if c['column_name'].lower().endswith('status')), None)
 
