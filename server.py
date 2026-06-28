@@ -58,6 +58,9 @@ MODULE_MAPPING = {
     'phc_user_roles_assignment_t': 'AppSetup',
     'phc_users_t': 'AppSetup',
     'phc_user_log_t': 'AppSetup',
+    'phc_lookup_codes_t': 'AppSetup',     # Moved from 'Other'
+    'phc_lookup_values_t': 'AppSetup',    # Moved from 'Other'
+    'phc_user_groups_t': 'AppSetup',      # Re-mapped to AppSetup
     
     'pmd_accounts_t': 'CustomerSetup',
     'pmd_acct_sites_t': 'CustomerSetup',
@@ -84,7 +87,6 @@ MODULE_MAPPING = {
     'phc_locations_t': 'MasterData',
     'phc_orgs_t': 'MasterData',
     'phc_services_t': 'MasterData',
-    'phc_user_groups_t': 'MasterData',
     
     'poe_order_headers_t': 'OrderMgmt',
     'poe_order_lines_t': 'OrderMgmt',
@@ -129,7 +131,7 @@ KEYWORD_MAP = {
     'app': 'phc_apps_t', 'org': 'phc_orgs_t', 'organization': 'phc_orgs_t',
     'role': 'phc_roles_t', 'screen': 'phc_screens_t',
     'location': 'phc_locations_t', 'service': 'phc_services_t',
-    'group': 'phc_user_groups_t', 'center': 'phc_cost_centers_t'
+    'center': 'phc_cost_centers_t'
 }
 
 WHO_COLS = {'creation_date', 'created_by', 'last_update_date', 'last_updated_by'}
@@ -161,6 +163,15 @@ async def add_security_headers(request, resp):
         resp.headers['X-Content-Type-Options'] = 'nosniff'
         resp.headers['X-XSS-Protection'] = '1; mode=block'
         resp.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        
+        # 🛡️ P1 SECURITY FIX: CLOUD PROXY CACHE LOCKDOWN 🛡️
+        # 'private' prevents Cloudflare/Render from caching the page for other users.
+        # 'Vary: Cookie' ensures the CDN knows every user's session is completely unique.
+        resp.headers['Cache-Control'] = 'private, no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
+        resp.headers['Vary'] = 'Cookie, Authorization'
+        
         resp.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://unpkg.com; "
@@ -175,7 +186,6 @@ def login_required(wrapped):
     async def decorator(request, *args, **kwargs):
         token = request.cookies.get("auth_token")
 
-        # Safely handle HTMX redirects to prevent JSON errors on login screen
         def force_login_redirect():
             if request.headers.get("HX-Request"):
                 resp = response.text("Session Expired")
@@ -320,6 +330,7 @@ def get_column_sort_priority(pk_column, c_name):
     name = c_name.lower()
     if c_name == pk_column: return 0
     if name.endswith('status'): return 1
+    if name.endswith('flag'): return 2
     
     if name in ('created_by', 'creation_date', 'last_update_date', 'last_updated_by', 'last_update_login') or \
        name.endswith('_created_by') or name.endswith('_modified_by') or \
@@ -391,7 +402,17 @@ def mask_sensitive_data(col_name, val, user_type):
 
 
 async def find_target_table(conn, column_name):
-    if not column_name.endswith('_id'):
+    col_lower = column_name.lower()
+    
+    # --- ORACLE FUSION LOOKUP ENGINE ---
+    # Automatically wire these specific IDs directly to their lookup tables 
+    # to populate human-readable dropdown menus instantly.
+    if col_lower == 'lookup_code_id':
+        return 'phc_lookup_codes_t'
+    if col_lower == 'item_category_id':
+        return 'phc_lookup_values_t'
+
+    if not col_lower.endswith('_id'):
         return None
 
     if SCHEMA_CACHE["tables"] is None:
@@ -401,10 +422,10 @@ async def find_target_table(conn, column_name):
     all_tables = SCHEMA_CACHE["tables"]
 
     for key, table in KEYWORD_MAP.items():
-        if key in column_name and table in all_tables:
+        if key in col_lower and table in all_tables:
             return table
 
-    parts = column_name.split('_')
+    parts = col_lower.split('_')
     if len(parts) >= 3:
         base_name = parts[-2]
         for pt in [f"phc_{base_name}_t", f"phc_{base_name}s_t", f"phc_{base_name}es_t"]:
@@ -485,7 +506,6 @@ async def handle_login(request):
                     None, partial(bcrypt.checkpw, password.encode('utf-8'), stored_pwd.encode('utf-8'))
                 )
             except ValueError:
-                # Catch invalid salt from older plain-text passwords
                 if password == stored_pwd:
                     is_valid = True
                     new_hashed = await loop.run_in_executor(None, partial(bcrypt.hashpw, password.encode('utf-8'), bcrypt.gensalt()))
@@ -519,7 +539,6 @@ async def handle_login(request):
 
 @app.route("/logout")
 async def logout(request):
-    # Safely handles both normal clicks and HTMX clicks avoiding JSON error screen
     if request.headers.get("HX-Request"):
         resp = response.text("Logging out...")
         resp.headers["HX-Redirect"] = "/login"
@@ -730,7 +749,6 @@ async def show_edit_form(request, table_name, pk_val):
                 })
 
             if table_name == 'phc_roles_t':
-                # FIX: Send psn_screen_code as code so UI can sort screens into Accordions
                 screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_code as code, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
                 assignments = await conn.fetch("SELECT prs_screen_id FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", parsed_pk)
                 assigned_val = ",".join([str(a['prs_screen_id']) for a in assignments])
@@ -794,7 +812,6 @@ async def show_add_form(request, table_name):
                 })
 
             if table_name == 'phc_roles_t':
-                # FIX: Send psn_screen_code as code so UI can sort screens into Accordions
                 screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_code as code, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
                 columns.append({"column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False, "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in screens], "is_pk": False})
 
@@ -909,16 +926,13 @@ async def save_data(request, table_name, pk_val=None):
     user_type = request.ctx.user_type
     company_id = int(request.ctx.company_id)
 
-    # 🛡️ SECURITY FIX: Prevent Standard Users from Privilege Escalation
     if user_type != 'ADM':
-        # Strictly pop Admin-level and Virtual Fields from standard users
         data.pop('pus_user_type', None)
         data.pop('pus_status', None)
         data.pop('pus_company_id', None)
         data.pop('pu_assigned_roles', None)
         data.pop('pr_allowed_tables', None)
         
-        # Completely block standard users from touching the RBAC/Security tables
         admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']
         if table_name in admin_only_tables:
             return response.json({"error": "Unauthorized. Security configuration tables are strictly for Administrators."}, status=403)
@@ -940,14 +954,12 @@ async def save_data(request, table_name, pk_val=None):
         schema_rows = await conn.fetch("SELECT column_name, data_type, character_maximum_length, is_nullable FROM information_schema.columns WHERE table_name = $1", table_name)
         schema_map = {r['column_name']: r for r in schema_rows}
         
-        # 🛡️ SECURITY FIX: Detect if the table has a strict company/tenant separation column
         company_col = next((k for k in schema_map.keys() if k.lower().endswith('company_id')), None)
         
         clean_data = await _sanitize_payload(data, schema_map, pk_column, current_user_id, request.method)
 
         async with conn.transaction():
             if request.method == "POST":
-                # Ensure the created record strictly belongs to their company
                 if company_col:
                     clean_data[company_col] = company_id
                 
@@ -969,7 +981,6 @@ async def save_data(request, table_name, pk_val=None):
                 vals = list(clean_data.values())
                 
                 if set_clauses:
-                    # Tenant scoped UPDATE - prevents modifying another company's records!
                     if company_col:
                         vals.append(company_id)
                         tenant_idx = len(vals) + 1
@@ -985,7 +996,6 @@ async def save_data(request, table_name, pk_val=None):
                     max_prs = await conn.fetchval(f"SELECT MAX({prs_pk_col}) FROM phc_role_screen_assignment_t") if prs_pk_col else 0
                     next_prs = (int(max_prs) + 1) if max_prs else 1
                     
-                    # FIX: List vs String Array handling for virtual screens
                     v_screens_list = virtual_screens if isinstance(virtual_screens, list) else str(virtual_screens).split(',')
                     for s_id in v_screens_list:
                         if str(s_id).strip() and prs_pk_col:
@@ -1000,11 +1010,9 @@ async def save_data(request, table_name, pk_val=None):
                 await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
                 if virtual_roles:
                     pua_pk_col = await get_pk_column(conn, 'phc_user_roles_assignment_t')
-                    # FIX: Typo from pua_pua to pua_pk_col
                     max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pk_col else 0
                     next_pua = (int(max_pua) + 1) if max_pua else 1
                     
-                    # FIX: List vs String Array handling for virtual roles
                     v_roles_list = virtual_roles if isinstance(virtual_roles, list) else str(virtual_roles).split(',')
                     for r_id in v_roles_list:
                         if str(r_id).strip() and pua_pk_col:
@@ -1027,74 +1035,69 @@ async def save_data(request, table_name, pk_val=None):
         return response.json({"status": "success"})
 
 
-# HTMX DELETE ROUTE
-@app.delete("/api/<table_name>/<pk_val>", name="delete_row")
-@login_required
-async def delete_data(request, table_name, pk_val):
-    
-    provided_csrf = request.headers.get("X-CSRFToken")
-    if not provided_csrf or provided_csrf != request.ctx.csrf_token:
-        return response.json({"error": "Missing or Invalid CSRF Token. Are you a hacker?"}, status=403)
+    # HTMX DELETE ROUTE
+    @app.delete("/api/<table_name>/<pk_val>", name="delete_row")
+    @login_required
+    async def delete_data(request, table_name, pk_val):
+        
+        provided_csrf = request.headers.get("X-CSRFToken")
+        if not provided_csrf or provided_csrf != request.ctx.csrf_token:
+            return response.json({"error": "Missing or Invalid CSRF Token. Are you a hacker?"}, status=403)
 
-    current_user_id = request.ctx.user_id
-    user_type = request.ctx.user_type
-    company_id = int(request.ctx.company_id)
-    
-    # 🛡️ SECURITY FIX: Block standard users from deleting security tables!
-    if user_type != 'ADM':
-        admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']
-        if table_name in admin_only_tables:
-            return response.json({"error": "Unauthorized to delete from security configuration tables."}, status=403)
-        if table_name == 'phc_users_t' and str(pk_val) != str(current_user_id):
-            return response.json({"error": "Unauthorized to delete other users."}, status=403)
+        current_user_id = request.ctx.user_id
+        user_type = request.ctx.user_type
+        company_id = int(request.ctx.company_id)
+        
+        if user_type != 'ADM':
+            admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']
+            if table_name in admin_only_tables:
+                return response.json({"error": "Unauthorized to delete from security configuration tables."}, status=403)
+            if table_name == 'phc_users_t' and str(pk_val) != str(current_user_id):
+                return response.json({"error": "Unauthorized to delete other users."}, status=403)
 
-    async with app.ctx.pool.acquire() as conn:
-        allowed = await get_allowed_tables(conn, current_user_id, user_type)
-        if table_name not in allowed:
-            return response.json({"error": "Unauthorized API Access"}, status=403)
+        async with app.ctx.pool.acquire() as conn:
+            allowed = await get_allowed_tables(conn, current_user_id, user_type)
+            if table_name not in allowed:
+                return response.json({"error": "Unauthorized API Access"}, status=403)
 
-        pk_column = await get_pk_column(conn, table_name)
-        schema_rows = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1", table_name)
-        pk_type = next((r['data_type'] for r in schema_rows if r['column_name'] == pk_column), 'integer')
-        target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
+            pk_column = await get_pk_column(conn, table_name)
+            schema_rows = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1", table_name)
+            pk_type = next((r['data_type'] for r in schema_rows if r['column_name'] == pk_column), 'integer')
+            target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
 
-        # 🛡️ SECURITY FIX: Soft-Deletes for Auditing, Tenant Scoping Check
-        company_col = next((c for c in schema_rows if c['column_name'].lower().endswith('company_id')), None)
-        status_col = next((c for c in schema_rows if c['column_name'].lower().endswith('status')), None)
+            company_col = next((c for c in schema_rows if c['column_name'].lower().endswith('company_id')), None)
+            status_col = next((c for c in schema_rows if c['column_name'].lower().endswith('status')), None)
 
-        async with conn.transaction():
-            # Check tenant ownership before deleting
-            if company_col:
-                owner_check = await conn.fetchval(f"SELECT 1 FROM {table_name} WHERE {pk_column} = $1 AND {company_col} = $2", target_id, company_id)
-                if not owner_check:
-                    return response.json({"error": "Tenant violation. Record does not belong to your company."}, status=403)
+            async with conn.transaction():
+                if company_col:
+                    owner_check = await conn.fetchval(f"SELECT 1 FROM {table_name} WHERE {pk_column} = $1 AND {company_col} = $2", target_id, company_id)
+                    if not owner_check:
+                        return response.json({"error": "Tenant violation. Record does not belong to your company."}, status=403)
 
-            # Assignment tables are safe to hard-delete
-            if table_name in ['phc_role_screen_assignment_t', 'phc_user_roles_assignment_t']:
-                await conn.execute(f"DELETE FROM {table_name} WHERE {pk_column} = $1", target_id)
-                msg = "Record deleted permanently."
-            # Soft Delete for compliance
-            elif status_col:
-                status_name = status_col['column_name']
-                await conn.execute(f"UPDATE {table_name} SET {status_name} = 'INA' WHERE {pk_column} = $1", target_id)
-                msg = "Record successfully archived (Soft Delete)."
-            else:
-                return response.json({"error": "Hard deletions disabled for SOX compliance. Table lacks a status column."}, status=403)
+                if table_name in ['phc_role_screen_assignment_t', 'phc_user_roles_assignment_t']:
+                    await conn.execute(f"DELETE FROM {table_name} WHERE {pk_column} = $1", target_id)
+                    msg = "Record deleted permanently."
+                elif status_col:
+                    status_name = status_col['column_name']
+                    await conn.execute(f"UPDATE {table_name} SET {status_name} = 'INA' WHERE {pk_column} = $1", target_id)
+                    msg = "Record successfully archived (Soft Delete)."
+                else:
+                    return response.json({"error": "Hard deletions disabled for SOX compliance. Table lacks a status column."}, status=403)
 
-            await log_action(conn, current_user_id, f"Archived/Deleted record {target_id} from {table_name}")
+                await log_action(conn, current_user_id, f"Archived/Deleted record {target_id} from {table_name}")
 
-        if request.headers.get("HX-Request"):
-            return response.html(f"""
-                <div id="toast-container" hx-swap-oob="beforeend">
-                    <div class="toast" style="animation: slideIn Toast 0.4s ease, fadeOutToast 0.4s ease 3.5s forwards;">
-                        <i data-lucide="check-circle-2" style="color: var(--color-cipher-mint)"></i> {msg}
+            if request.headers.get("HX-Request"):
+                return response.html(f"""
+                    <div id="toast-container" hx-swap-oob="beforeend">
+                        <div class="toast" style="animation: slideIn Toast 0.4s ease, fadeOutToast 0.4s ease 3.5s forwards;">
+                            <i data-lucide="check-circle-2" style="color: var(--color-cipher-mint)"></i> {msg}
+                        </div>
                     </div>
-                </div>
-            """)
-            
-        return response.json({"status": "success"})
+                """)
+                
+            return response.json({"status": "success"})
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    app.run(host="0.0.0.0", port=port, debug=is_development, single_process=True)
+    if __name__ == "__main__":
+        port = int(os.environ.get("PORT", 8000))
+        app.run(host="0.0.0.0", port=port, debug=is_development, single_process=True)
