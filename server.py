@@ -49,7 +49,7 @@ SCHEMA_CACHE = {
 AUTH_CACHE = {} 
 RBAC_CACHE = {}
 
-# PHASE 4: Enterprise Module Routing (Oracle Fusion Style)
+# Oracle Fusion Style Module Routing
 MODULE_MAPPING = {
     'phc_apps_t': 'AppSetup',
     'phc_role_screen_assignment_t': 'AppSetup',
@@ -453,33 +453,34 @@ async def get_dropdown_options(conn, column_name):
 # ==========================================
 #  AUTH ROUTES
 # ==========================================
-@app.route("/login", methods=["GET", "POST"])
+@app.route('/login', methods=['GET', 'POST'])
 async def handle_login(request):
     if request.method == "GET":
         return await render("login.html")
-
+        
     data = request.json
     username = data.get("username", "")
     password = data.get("password", "")
-
+    
     async with app.ctx.pool.acquire() as conn:
         user = await conn.fetchrow("SELECT * FROM phc_users_t WHERE pus_user_name = $1", username)
-
+        
         if user:
             stored_pwd = user['pus_pwd']
             is_valid = False
             loop = asyncio.get_running_loop()
-
+            
             try:
                 is_valid = await loop.run_in_executor(
                     None, partial(bcrypt.checkpw, password.encode('utf-8'), stored_pwd.encode('utf-8'))
                 )
             except ValueError:
+                # Catch invalid salt from older plain-text passwords
                 if password == stored_pwd:
                     is_valid = True
-                    new_hashed_bytes = await loop.run_in_executor(None, partial(bcrypt.hashpw, password.encode('utf-8'), bcrypt.gensalt()))
-                    await conn.execute("UPDATE phc_users_t SET pus_pwd = $1 WHERE pus_user_id = $2", new_hashed_bytes.decode('utf-8'), user['pus_user_id'])
-
+                    new_hashed = await loop.run_in_executor(None, partial(bcrypt.hashpw, password.encode('utf-8'), bcrypt.gensalt()))
+                    await conn.execute("UPDATE phc_users_t SET pus_pwd = $1 WHERE pus_user_id = $2", new_hashed.decode('utf-8'), user['pus_user_id'])
+                    
             if is_valid:
                 session_id = str(uuid.uuid4())
                 await conn.execute("UPDATE phc_users_t SET pus_session_id = $1 WHERE pus_user_id = $2", session_id, user['pus_user_id'])
@@ -502,8 +503,8 @@ async def handle_login(request):
 
                 await log_action(conn, user['pus_user_id'], "User logged in")
                 return resp
-
-    return response.json({"error": "Invalid Creds"}, status=401)
+        
+        return response.json({"error": "Invalid credentials"}, status=401)
 
 
 @app.route("/logout")
@@ -530,7 +531,7 @@ async def dashboard(request):
     return await render("dashboard.html", context={
         "stats": stats, 
         "all_tables": allowed, 
-        "table_modules": MODULE_MAPPING, # Passed for Sidebar Data-Attributes
+        "table_modules": MODULE_MAPPING,
         "username": request.ctx.username, 
         "user_id": request.ctx.user_id,
         "csrf_token": request.ctx.csrf_token 
@@ -600,7 +601,7 @@ async def show_table(request, table_name):
                 "columns": columns, 
                 "rows": rows_dict, 
                 "all_tables": allowed, 
-                "table_modules": MODULE_MAPPING, # Passed for Sidebar Data-Attributes
+                "table_modules": MODULE_MAPPING,
                 "pk_column": pk_column, 
                 "user_id": request.ctx.user_id,
                 "username": request.ctx.username,
@@ -734,7 +735,8 @@ async def show_edit_form(request, table_name, pk_val):
                 "mode": "edit", 
                 "user_id": request.ctx.user_id,
                 "username": request.ctx.username,
-                "csrf_token": request.ctx.csrf_token 
+                "csrf_token": request.ctx.csrf_token,
+                "current_user_type": request.ctx.user_type # SECURITY FIX: Expose user type to Frontend UI
             })
     except Exception as e:
         print(f"Error loading edit form: {e}")
@@ -791,7 +793,8 @@ async def show_add_form(request, table_name):
                 "mode": "create", 
                 "user_id": request.ctx.user_id,
                 "username": request.ctx.username,
-                "csrf_token": request.ctx.csrf_token 
+                "csrf_token": request.ctx.csrf_token,
+                "current_user_type": request.ctx.user_type # SECURITY FIX: Expose user type to Frontend UI
             })
     except Exception as e:
         print(f"Error loading create form: {e}")
@@ -824,8 +827,8 @@ async def _sanitize_payload(data, schema_map, pk_column, current_user_id, reques
             continue
 
         if k == 'pus_pwd':
-            pwd_bytes = v.encode('utf-8')
-            hashed_bytes = await loop.run_in_executor(None, partial(bcrypt.hashpw, pwd_bytes, bcrypt.gensalt()))
+            salt = bcrypt.gensalt()
+            hashed_bytes = await loop.run_in_executor(None, partial(bcrypt.hashpw, v.encode('utf-8'), salt))
             v = hashed_bytes.decode('utf-8')
 
         col_info = schema_map.get(k, {})
@@ -881,17 +884,27 @@ async def save_data(request, table_name, pk_val=None):
     
     provided_csrf = request.headers.get("X-CSRFToken")
     if not provided_csrf or provided_csrf != request.ctx.csrf_token:
-        return response.json({"error": "Missing or Invalid CSRF Token. Are you a hacker?"}, status=403)
+        return response.json({"error": "Missing or Invalid CSRF Token. Session rejected."}, status=403)
 
     data = request.json
     current_user_id = request.ctx.user_id
     user_type = request.ctx.user_type
     company_id = int(request.ctx.company_id)
 
+    # 🛡️ SECURITY FIX 1: Prevent Standard Users from Privilege Escalation
     if user_type != 'ADM':
+        # Strictly pop Admin-level and Virtual Fields from standard users
         data.pop('pus_user_type', None)
         data.pop('pus_status', None)
         data.pop('pus_company_id', None)
+        data.pop('pu_assigned_roles', None)
+        data.pop('pr_allowed_tables', None)
+        
+        # Completely block standard users from touching the RBAC/Security tables
+        admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']
+        if table_name in admin_only_tables:
+            return response.json({"error": "Unauthorized. Security configuration tables are strictly for Administrators."}, status=403)
+
         if table_name == 'phc_users_t' and request.method == "PUT" and str(pk_val) != str(current_user_id):
             return response.json({"error": "Unauthorized to edit other users' profiles."}, status=403)
         if table_name == 'phc_users_t' and request.method == "PUT":
@@ -909,10 +922,17 @@ async def save_data(request, table_name, pk_val=None):
         schema_rows = await conn.fetch("SELECT column_name, data_type, character_maximum_length, is_nullable FROM information_schema.columns WHERE table_name = $1", table_name)
         schema_map = {r['column_name']: r for r in schema_rows}
         
+        # 🛡️ SECURITY FIX 3: Detect if the table has a strict company/tenant separation column
+        company_col = next((k for k in schema_map.keys() if k.lower().endswith('company_id')), None)
+        
         clean_data = await _sanitize_payload(data, schema_map, pk_column, current_user_id, request.method)
 
         async with conn.transaction():
             if request.method == "POST":
+                # Ensure the created record strictly belongs to their company
+                if company_col:
+                    clean_data[company_col] = company_id
+                
                 max_val = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
                 target_id = (int(max_val) + 1) if max_val else 1
                 pk_type = schema_map.get(pk_column, {}).get('data_type', '')
@@ -929,8 +949,16 @@ async def save_data(request, table_name, pk_val=None):
                 
                 set_clauses = [f"{k} = ${i+2}" for i, k in enumerate(clean_data.keys())]
                 vals = list(clean_data.values())
+                
                 if set_clauses:
-                    await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {pk_column} = $1", target_id, *vals)
+                    # Tenant scoped UPDATE - prevents modifying another company's records!
+                    if company_col:
+                        vals.append(company_id)
+                        tenant_idx = len(vals) + 1
+                        where_clause = f"WHERE {pk_column} = $1 AND {company_col} = ${tenant_idx}"
+                        await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} {where_clause}", target_id, *vals)
+                    else:
+                        await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {pk_column} = $1", target_id, *vals)
 
             if table_name == 'phc_roles_t' and virtual_screens is not None:
                 await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
@@ -939,7 +967,6 @@ async def save_data(request, table_name, pk_val=None):
                     max_prs = await conn.fetchval(f"SELECT MAX({prs_pk_col}) FROM phc_role_screen_assignment_t") if prs_pk_col else 0
                     next_prs = (int(max_prs) + 1) if max_prs else 1
                     
-                    # FIX: Handle both Lists and Comma-Separated Strings safely
                     v_screens_list = virtual_screens if isinstance(virtual_screens, list) else str(virtual_screens).split(',')
                     for s_id in v_screens_list:
                         if str(s_id).strip() and prs_pk_col:
@@ -954,10 +981,9 @@ async def save_data(request, table_name, pk_val=None):
                 await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
                 if virtual_roles:
                     pua_pk_col = await get_pk_column(conn, 'phc_user_roles_assignment_t')
-                    max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pk_col else 0
+                    max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pua else 0
                     next_pua = (int(max_pua) + 1) if max_pua else 1
                     
-                    # FIX: Handle both Lists and Comma-Separated Strings safely
                     v_roles_list = virtual_roles if isinstance(virtual_roles, list) else str(virtual_roles).split(',')
                     for r_id in v_roles_list:
                         if str(r_id).strip() and pua_pk_col:
@@ -991,9 +1017,15 @@ async def delete_data(request, table_name, pk_val):
 
     current_user_id = request.ctx.user_id
     user_type = request.ctx.user_type
+    company_id = int(request.ctx.company_id)
     
-    if user_type != 'ADM' and table_name == 'phc_users_t' and str(pk_val) != str(current_user_id):
-        return response.json({"error": "Unauthorized to delete other users."}, status=403)
+    # SECURITY FIX: Block standard users from deleting security tables!
+    if user_type != 'ADM':
+        admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']
+        if table_name in admin_only_tables:
+            return response.json({"error": "Unauthorized to delete from security configuration tables."}, status=403)
+        if table_name == 'phc_users_t' and str(pk_val) != str(current_user_id):
+            return response.json({"error": "Unauthorized to delete other users."}, status=403)
 
     async with app.ctx.pool.acquire() as conn:
         allowed = await get_allowed_tables(conn, current_user_id, user_type)
@@ -1005,20 +1037,36 @@ async def delete_data(request, table_name, pk_val):
         pk_type = next((r['data_type'] for r in schema_rows if r['column_name'] == pk_column), 'integer')
         target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
 
-        async with conn.transaction():
-            if table_name == 'phc_roles_t':
-                await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
-            if table_name == 'phc_users_t':
-                await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
+        # 🛡️ SECURITY FIX 2 & 3: Soft-Deletes for Auditing, Tenant Scoping Check
+        company_col = next((c for c in schema_rows if c['column_name'].lower().endswith('company_id')), None)
+        status_col = next((c for c in schema_rows if c['column_name'].lower().endswith('status')), None)
 
-            await conn.execute(f"DELETE FROM {table_name} WHERE {pk_column} = $1", target_id)
-            await log_action(conn, current_user_id, f"Deleted record {target_id} from {table_name}")
+        async with conn.transaction():
+            # Check tenant ownership before deleting
+            if company_col:
+                owner_check = await conn.fetchval(f"SELECT 1 FROM {table_name} WHERE {pk_column} = $1 AND {company_col} = $2", target_id, company_id)
+                if not owner_check:
+                    return response.json({"error": "Tenant violation. Record does not belong to your company."}, status=403)
+
+            # Assignment tables are safe to hard-delete
+            if table_name in ['phc_role_screen_assignment_t', 'phc_user_roles_assignment_t']:
+                await conn.execute(f"DELETE FROM {table_name} WHERE {pk_column} = $1", target_id)
+                msg = "Record deleted permanently."
+            # Soft Delete for compliance
+            elif status_col:
+                status_name = status_col['column_name']
+                await conn.execute(f"UPDATE {table_name} SET {status_name} = 'INA' WHERE {pk_column} = $1", target_id)
+                msg = "Record successfully archived (Soft Delete)."
+            else:
+                return response.json({"error": "Hard deletions disabled for SOX compliance. Table lacks a status column."}, status=403)
+
+            await log_action(conn, current_user_id, f"Archived/Deleted record {target_id} from {table_name}")
 
         if request.headers.get("HX-Request"):
             return response.html(f"""
                 <div id="toast-container" hx-swap-oob="beforeend">
                     <div class="toast" style="animation: slideIn Toast 0.4s ease, fadeOutToast 0.4s ease 3.5s forwards;">
-                        <i data-lucide="check-circle-2" style="color: var(--color-cipher-mint)"></i> Record deleted successfully.
+                        <i data-lucide="check-circle-2" style="color: var(--color-cipher-mint)"></i> {msg}
                     </div>
                 </div>
             """)
