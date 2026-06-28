@@ -891,7 +891,7 @@ async def save_data(request, table_name, pk_val=None):
     user_type = request.ctx.user_type
     company_id = int(request.ctx.company_id)
 
-    # 🛡️ SECURITY FIX 1: Prevent Standard Users from Privilege Escalation
+    #  SECURITY FIX 1: Prevent Standard Users from Privilege Escalation
     if user_type != 'ADM':
         # Strictly pop Admin-level and Virtual Fields from standard users
         data.pop('pus_user_type', None)
@@ -922,7 +922,7 @@ async def save_data(request, table_name, pk_val=None):
         schema_rows = await conn.fetch("SELECT column_name, data_type, character_maximum_length, is_nullable FROM information_schema.columns WHERE table_name = $1", table_name)
         schema_map = {r['column_name']: r for r in schema_rows}
         
-        # 🛡️ SECURITY FIX 3: Detect if the table has a strict company/tenant separation column
+        #  SECURITY FIX 3: Detect if the table has a strict company/tenant separation column
         company_col = next((k for k in schema_map.keys() if k.lower().endswith('company_id')), None)
         
         clean_data = await _sanitize_payload(data, schema_map, pk_column, current_user_id, request.method)
@@ -981,7 +981,7 @@ async def save_data(request, table_name, pk_val=None):
                 await conn.execute("DELETE FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", target_id)
                 if virtual_roles:
                     pua_pk_col = await get_pk_column(conn, 'phc_user_roles_assignment_t')
-                    max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pua else 0
+                    max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pk_col else 0
                     next_pua = (int(max_pua) + 1) if max_pua else 1
                     
                     v_roles_list = virtual_roles if isinstance(virtual_roles, list) else str(virtual_roles).split(',')
