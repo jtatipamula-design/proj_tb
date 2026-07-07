@@ -58,9 +58,17 @@ MODULE_MAPPING = {
     'phc_user_roles_assignment_t': 'AppSetup',
     'phc_users_t': 'AppSetup',
     'phc_user_log_t': 'AppSetup',
-    'phc_lookup_codes_t': 'AppSetup',     # Moved from 'Other'
-    'phc_lookup_values_t': 'AppSetup',    # Moved from 'Other'
-    'phc_user_groups_t': 'AppSetup',      # Re-mapped to AppSetup
+    'phc_user_groups_t': 'AppSetup',
+    
+    'cv_product_registration_t': 'Cleaning',
+    'cv_pde_t': 'Cleaning',
+    'cv_mdd_t': 'Cleaning',
+    'cv_solubility_t': 'Cleaning',
+    'cv_cleanability_t': 'Cleaning',
+    'cv_method_t': 'Cleaning',
+    'cv_batch_size_t': 'Cleaning',
+    'cv_equipment_registration_t': 'Cleaning',
+    'cv_equipment_surface_area_t': 'Cleaning',
     
     'pmd_accounts_t': 'CustomerSetup',
     'pmd_acct_sites_t': 'CustomerSetup',
@@ -131,7 +139,9 @@ KEYWORD_MAP = {
     'app': 'phc_apps_t', 'org': 'phc_orgs_t', 'organization': 'phc_orgs_t',
     'role': 'phc_roles_t', 'screen': 'phc_screens_t',
     'location': 'phc_locations_t', 'service': 'phc_services_t',
-    'center': 'phc_cost_centers_t'
+    'center': 'phc_cost_centers_t',
+    'product': 'cv_product_registration_t',
+    'equipment': 'cv_equipment_registration_t'
 }
 
 WHO_COLS = {'creation_date', 'created_by', 'last_update_date', 'last_updated_by'}
@@ -407,9 +417,7 @@ async def find_target_table(conn, column_name):
     # --- ORACLE FUSION LOOKUP ENGINE ---
     # Automatically wire these specific IDs directly to their lookup tables 
     # to populate human-readable dropdown menus instantly.
-    if col_lower == 'lookup_code_id':
-        return 'phc_lookup_codes_t'
-    if col_lower == 'item_category_id':
+    if col_lower in ('lookup_code_id', 'item_category_id', 'dosage_form_id', 'solubility_water_id'):
         return 'phc_lookup_values_t'
 
     if not col_lower.endswith('_id'):
