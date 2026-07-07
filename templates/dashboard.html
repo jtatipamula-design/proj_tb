@@ -2,198 +2,200 @@
 
 {% block content %}
 <style>
-    .dashboard-wrapper {
-        width: 100%;
-        max-width: 1100px;
-        margin: 0 auto;
-        display: flex;
-        flex-direction: column;
+    .welcome-section { margin-bottom: 32px; }
+    .welcome-section h1 { font-size: 28px; font-weight: 600; color: var(--color-glacier); margin-bottom: 8px; }
+    .welcome-section p { color: var(--color-fog); font-size: 15px; }
+
+    /* Bento Box Grid */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 24px;
+        margin-bottom: 40px;
     }
 
-    .welcome-section { margin-bottom: 40px; animation: slideDown 0.5s ease-out; text-align: left; }
-    .welcome-section h1 { font-size: 40px; font-weight: 500; color: #ffffff; margin-bottom: 12px; }
-    .welcome-section p { color: var(--color-pebble); font-size: 16px; font-weight: 400; }
+    .stat-card {
+        background: var(--glass-surface); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+        border: 1px solid var(--glass-border); border-radius: 24px; padding: 24px;
+        display: flex; flex-direction: column; justify-content: space-between;
+        position: relative; overflow: hidden;
+        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.3);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .stat-card:hover { transform: translateY(-4px); box-shadow: 0 15px 40px -10px rgba(0, 0, 0, 0.5); }
+    
+    .stat-card-title { font-size: 14px; font-weight: 500; color: var(--color-fog); margin-bottom: 12px; z-index: 2; }
+    .stat-card-value { font-size: 36px; font-weight: 600; color: var(--color-glacier); z-index: 2; }
+    .stat-card-icon {
+        position: absolute; right: 20px; top: 24px; color: var(--color-electric-iris); opacity: 0.2;
+        width: 48px; height: 48px; z-index: 1;
+    }
 
-    /* The Module Launcher / Springboard Grid */
-    .module-grid { 
-        display: grid; 
-        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); 
-        gap: 20px; 
-        width: 100%;
-        animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    .modules-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 16px;
     }
 
     .module-card {
-        background: var(--glass-surface);
-        backdrop-filter: blur(24px);
-        -webkit-backdrop-filter: blur(24px);
-        border: 1px solid var(--glass-border);
-        border-radius: 16px;
-        padding: 24px;
-        display: flex; flex-direction: column; align-items: flex-start; gap: 16px;
-        cursor: pointer;
-        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.3);
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border);
+        border-radius: 16px; padding: 16px; display: flex; align-items: center; gap: 16px;
+        cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .module-card:hover { transform: translateY(-4px); background: rgba(186, 215, 247, 0.08); border-color: var(--color-frost-link); }
-    html.light-mode .module-card:hover { background: rgba(0, 0, 0, 0.04); border-color: var(--color-pebble); }
+    html.light-mode .module-card { background: rgba(0, 0, 0, 0.02); }
+    .module-card:hover { background: rgba(186, 215, 247, 0.08); border-color: var(--color-electric-iris); transform: translateY(-2px); box-shadow: 0 10px 20px -10px rgba(102, 58, 243, 0.3); }
+    html.light-mode .module-card:hover { background: rgba(0, 0, 0, 0.05); }
 
     .module-icon-wrap {
-        width: 48px; height: 48px; border-radius: 12px;
-        display: flex; align-items: center; justify-content: center;
-        background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
-        color: var(--color-electric-iris);
-        transition: all 0.3s;
+        width: 48px; height: 48px; border-radius: 12px; background: rgba(0,0,0,0.2);
+        display: flex; align-items: center; justify-content: center; color: var(--color-moonlight);
     }
     html.light-mode .module-icon-wrap { background: rgba(255,255,255,0.8); }
-    
-    .module-card:hover .module-icon-wrap { background: var(--color-electric-iris); color: white; border-color: transparent; box-shadow: 0 4px 12px rgba(102, 58, 243, 0.4); }
+    .module-card:hover .module-icon-wrap { color: var(--color-electric-iris); }
 
-    .module-details { display: flex; flex-direction: column; gap: 4px; }
-    .module-title { font-size: 16px; font-weight: 500; color: var(--color-glacier); }
-    html.light-mode .module-title { color: var(--color-midnight-ink); }
-    .module-desc { font-size: 12px; color: var(--color-fog); font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em; }
+    .module-title { font-weight: 600; font-size: 15px; color: var(--color-glacier); margin-bottom: 2px; }
+    .module-desc { font-size: 12px; color: var(--color-fog); }
 
-    @keyframes slideDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes slideUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
-
-    /* Module specific accent colors for the icons */
-    .icon-ledger { color: #10B981; }
-    .icon-payables { color: #F43F5E; }
-    .icon-receivables { color: #3B82F6; }
-    .icon-procurement { color: #F59E0B; }
-    .icon-master { color: #8B5CF6; }
+    .section-title { font-family: var(--font-mono); color: var(--color-fog); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 16px; margin-top: 32px; }
 </style>
 
-<div class="dashboard-wrapper">
-    <div class="welcome-section">
-        <div class="eyebrow-text" style="font-family: var(--font-mono); color: var(--color-fog); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">ENTERPRISE SPRINGBOARD</div>
-        
-        <!-- The greeting text is wrapped in a span so JavaScript can target it dynamically -->
-        <h1><span id="dynamicGreeting">Good morning</span>, {{ username.title() if username else 'Admin' }}</h1>
-        
-        <p>Select an enterprise module below to filter your workspace.</p>
+<div class="welcome-section">
+    <h1>Hello, {{ username.title() }} 👋</h1>
+    <p>Welcome to your ERP Control Center. Here is what is happening today.</p>
+</div>
+
+<div class="section-title">System Overview</div>
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-card-title">Total Employees</div>
+        <div class="stat-card-value">{{ stats.emp_count | default('0') }}</div>
+        <i data-lucide="users" class="stat-card-icon"></i>
     </div>
-
-    <div class="module-grid">
-        <!-- 1. General Ledger -->
-        <div class="module-card" onclick="filterSidebarByModule('Ledger')">
-            <div class="module-icon-wrap"><i data-lucide="book-open" class="icon-ledger"></i></div>
-            <div class="module-details">
-                <div class="module-title">General Ledger</div>
-                <div class="module-desc">Financial Core</div>
-            </div>
-        </div>
-
-        <!-- 2. Receivables -->
-        <div class="module-card" onclick="filterSidebarByModule('Receivables')">
-            <div class="module-icon-wrap"><i data-lucide="receipt" class="icon-receivables"></i></div>
-            <div class="module-details">
-                <div class="module-title">Receivables</div>
-                <div class="module-desc">Income Tracking</div>
-            </div>
-        </div>
-
-        <!-- 3. Payables -->
-        <div class="module-card" onclick="filterSidebarByModule('Payables')">
-            <div class="module-icon-wrap"><i data-lucide="credit-card" class="icon-payables"></i></div>
-            <div class="module-details">
-                <div class="module-title">Payables</div>
-                <div class="module-desc">Outgoing Money</div>
-            </div>
-        </div>
-
-        <!-- 4. Procurement -->
-        <div class="module-card" onclick="filterSidebarByModule('Procurement')">
-            <div class="module-icon-wrap"><i data-lucide="shopping-cart" class="icon-procurement"></i></div>
-            <div class="module-details">
-                <div class="module-title">Procurement</div>
-                <div class="module-desc">Vendor Requisitions</div>
-            </div>
-        </div>
-
-        <!-- 5. Order Management -->
-        <div class="module-card" onclick="filterSidebarByModule('OrderMgmt')">
-            <div class="module-icon-wrap"><i data-lucide="package-open"></i></div>
-            <div class="module-details">
-                <div class="module-title">Order Management</div>
-                <div class="module-desc">Sales Orders</div>
-            </div>
-        </div>
-
-        <!-- 6. Project Accounting -->
-        <div class="module-card" onclick="filterSidebarByModule('Project')">
-            <div class="module-icon-wrap"><i data-lucide="briefcase"></i></div>
-            <div class="module-details">
-                <div class="module-title">Project Accounting</div>
-                <div class="module-desc">Time & Cost</div>
-            </div>
-        </div>
-
-        <!-- 7. Inventory/Product -->
-        <div class="module-card" onclick="filterSidebarByModule('Product')">
-            <div class="module-icon-wrap"><i data-lucide="boxes"></i></div>
-            <div class="module-details">
-                <div class="module-title">Inventory</div>
-                <div class="module-desc">Materials & Stock</div>
-            </div>
-        </div>
-
-        <!-- 8. Master Data -->
-        <div class="module-card" onclick="filterSidebarByModule('MasterData')">
-            <div class="module-icon-wrap"><i data-lucide="database" class="icon-master"></i></div>
-            <div class="module-details">
-                <div class="module-title">Master Data</div>
-                <div class="module-desc">Central Registry</div>
-            </div>
-        </div>
-
-        <!-- 9. Customers/Vendors -->
-        <div class="module-card" onclick="filterSidebarByModule('CustomerSetup')">
-            <div class="module-icon-wrap"><i data-lucide="users"></i></div>
-            <div class="module-details">
-                <div class="module-title">Customers & Vendors</div>
-                <div class="module-desc">Entity Setup</div>
-            </div>
-        </div>
-
-        <!-- 10. Employees -->
-        <div class="module-card" onclick="filterSidebarByModule('Employee')">
-            <div class="module-icon-wrap"><i data-lucide="users-round"></i></div>
-            <div class="module-details">
-                <div class="module-title">Employees</div>
-                <div class="module-desc">HR Roster</div>
-            </div>
-        </div>
-
-        <!-- 11. App Setup -->
-        <div class="module-card" onclick="filterSidebarByModule('AppSetup')">
-            <div class="module-icon-wrap"><i data-lucide="settings"></i></div>
-            <div class="module-details">
-                <div class="module-title">App Setup</div>
-                <div class="module-desc">Security & RBAC</div>
-            </div>
-        </div>
-
+    <div class="stat-card">
+        <div class="stat-card-title">Active Companies</div>
+        <div class="stat-card-value">{{ stats.comp_count | default('0') }}</div>
+        <i data-lucide="building-2" class="stat-card-icon"></i>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-title">Departments</div>
+        <div class="stat-card-value">{{ stats.dept_count | default('0') }}</div>
+        <i data-lucide="network" class="stat-card-icon"></i>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card-title">System Apps</div>
+        <div class="stat-card-value">{{ stats.app_count | default('0') }}</div>
+        <i data-lucide="layout-grid" class="stat-card-icon"></i>
     </div>
 </div>
 
-<script>
-    // Self-invoking function to instantly update the greeting based on local time
-    (function() {
-        const hour = new Date().getHours();
-        let greeting = 'Good evening';
-        
-        if (hour >= 5 && hour < 12) {
-            greeting = 'Good morning';
-        } else if (hour >= 12 && hour < 17) {
-            greeting = 'Good afternoon';
-        }
-        
-        const greetingEl = document.getElementById('dynamicGreeting');
-        if (greetingEl) {
-            greetingEl.textContent = greeting;
-        }
-    })();
-</script>
+<div class="section-title">Enterprise Modules</div>
+<div class="modules-grid">
+    <!-- 1. General Ledger -->
+    <div class="module-card" onclick="filterSidebarByModule('Ledger')">
+        <div class="module-icon-wrap"><i data-lucide="book-open"></i></div>
+        <div class="module-details">
+            <div class="module-title">General Ledger</div>
+            <div class="module-desc">Financial Core</div>
+        </div>
+    </div>
+
+    <!-- 2. Receivables -->
+    <div class="module-card" onclick="filterSidebarByModule('Receivables')">
+        <div class="module-icon-wrap"><i data-lucide="receipt"></i></div>
+        <div class="module-details">
+            <div class="module-title">Receivables</div>
+            <div class="module-desc">Income Tracking</div>
+        </div>
+    </div>
+
+    <!-- 3. Payables -->
+    <div class="module-card" onclick="filterSidebarByModule('Payables')">
+        <div class="module-icon-wrap"><i data-lucide="credit-card"></i></div>
+        <div class="module-details">
+            <div class="module-title">Payables</div>
+            <div class="module-desc">Outgoing Money</div>
+        </div>
+    </div>
+
+    <!-- 4. Procurement -->
+    <div class="module-card" onclick="filterSidebarByModule('Procurement')">
+        <div class="module-icon-wrap"><i data-lucide="shopping-cart"></i></div>
+        <div class="module-details">
+            <div class="module-title">Procurement</div>
+            <div class="module-desc">Purchasing</div>
+        </div>
+    </div>
+
+    <!-- 5. Order Management -->
+    <div class="module-card" onclick="filterSidebarByModule('OrderMgmt')">
+        <div class="module-icon-wrap"><i data-lucide="package-open"></i></div>
+        <div class="module-details">
+            <div class="module-title">Order Mgmt</div>
+            <div class="module-desc">Sales Orders</div>
+        </div>
+    </div>
+
+    <!-- 6. Project Accounting -->
+    <div class="module-card" onclick="filterSidebarByModule('Project')">
+        <div class="module-icon-wrap"><i data-lucide="briefcase"></i></div>
+        <div class="module-details">
+            <div class="module-title">Projects</div>
+            <div class="module-desc">Time & Costs</div>
+        </div>
+    </div>
+
+    <!-- 7. Inventory -->
+    <div class="module-card" onclick="filterSidebarByModule('Product')">
+        <div class="module-icon-wrap"><i data-lucide="boxes"></i></div>
+        <div class="module-details">
+            <div class="module-title">Inventory</div>
+            <div class="module-desc">Materials Mgmt</div>
+        </div>
+    </div>
+
+    <!-- 8. Master Data -->
+    <div class="module-card" onclick="filterSidebarByModule('MasterData')">
+        <div class="module-icon-wrap"><i data-lucide="database"></i></div>
+        <div class="module-details">
+            <div class="module-title">Master Data</div>
+            <div class="module-desc">Central Entities</div>
+        </div>
+    </div>
+
+    <!-- 9. Customers & Vendors -->
+    <div class="module-card" onclick="filterSidebarByModule('CustomerSetup')">
+        <div class="module-icon-wrap"><i data-lucide="users"></i></div>
+        <div class="module-details">
+            <div class="module-title">Partners</div>
+            <div class="module-desc">Customers/Vendors</div>
+        </div>
+    </div>
+
+    <!-- 10. Employees -->
+    <div class="module-card" onclick="filterSidebarByModule('Employee')">
+        <div class="module-icon-wrap"><i data-lucide="users-round"></i></div>
+        <div class="module-details">
+            <div class="module-title">Employees</div>
+            <div class="module-desc">HR Roster</div>
+        </div>
+    </div>
+
+    <!-- 11. Cleaning Validation -->
+    <div class="module-card" onclick="filterSidebarByModule('Cleaning')">
+        <div class="module-icon-wrap"><i data-lucide="flask-conical" style="color: #06b6d4;"></i></div>
+        <div class="module-details">
+            <div class="module-title">Cleaning Validation</div>
+            <div class="module-desc">Hygiene & Safety</div>
+        </div>
+    </div>
+
+    <!-- 12. App Setup -->
+    <div class="module-card" onclick="filterSidebarByModule('AppSetup')">
+        <div class="module-icon-wrap"><i data-lucide="settings"></i></div>
+        <div class="module-details">
+            <div class="module-title">App Setup</div>
+            <div class="module-desc">Security & RBAC</div>
+        </div>
+    </div>
+</div>
 {% endblock %}
