@@ -90,16 +90,112 @@
 
 <div class="section-title">Enterprise Modules</div>
 <div class="modules-grid">
-    
-    {% for folder in menus %}
-    <div class="module-card" onclick="filterSidebarByModule('{{ folder.name|replace(' ', '') }}')">
-        <div class="module-icon-wrap"><i data-lucide="{{ folder.icon }}" style="color: {% if folder.name == 'Cleaning Validation' %}#06b6d4{% else %}inherit{% endif %};"></i></div>
+    <!-- 1. General Ledger -->
+    <div class="module-card" onclick="filterSidebarByModule('Ledger')">
+        <div class="module-icon-wrap"><i data-lucide="book-open"></i></div>
         <div class="module-details">
-            <div class="module-title">{{ folder.name }}</div>
-            <div class="module-desc">{{ folder.screens|length }} Screens Available</div>
+            <div class="module-title">General Ledger</div>
+            <div class="module-desc">Financial Core</div>
         </div>
     </div>
-    {% endfor %}
 
+    <!-- 2. Receivables -->
+    <div class="module-card" onclick="filterSidebarByModule('Receivables')">
+        <div class="module-icon-wrap"><i data-lucide="receipt"></i></div>
+        <div class="module-details">
+            <div class="module-title">Receivables</div>
+            <div class="module-desc">Income Tracking</div>
+        </div>
+    </div>
+
+    <!-- 3. Payables -->
+    <div class="module-card" onclick="filterSidebarByModule('Payables')">
+        <div class="module-icon-wrap"><i data-lucide="credit-card"></i></div>
+        <div class="module-details">
+            <div class="module-title">Payables</div>
+            <div class="module-desc">Outgoing Money</div>
+        </div>
+    </div>
+
+    <!-- 4. Procurement -->
+    <div class="module-card" onclick="filterSidebarByModule('Procurement')">
+        <div class="module-icon-wrap"><i data-lucide="shopping-cart"></i></div>
+        <div class="module-details">
+            <div class="module-title">Procurement</div>
+            <div class="module-desc">Purchasing</div>
+        </div>
+    </div>
+
+    <!-- 5. Order Management -->
+    <div class="module-card" onclick="filterSidebarByModule('OrderMgmt')">
+        <div class="module-icon-wrap"><i data-lucide="package-open"></i></div>
+        <div class="module-details">
+            <div class="module-title">Order Mgmt</div>
+            <div class="module-desc">Sales Orders</div>
+        </div>
+    </div>
+
+    <!-- 6. Project Accounting -->
+    <div class="module-card" onclick="filterSidebarByModule('Project')">
+        <div class="module-icon-wrap"><i data-lucide="briefcase"></i></div>
+        <div class="module-details">
+            <div class="module-title">Projects</div>
+            <div class="module-desc">Time & Costs</div>
+        </div>
+    </div>
+
+    <!-- 7. Inventory -->
+    <div class="module-card" onclick="filterSidebarByModule('Product')">
+        <div class="module-icon-wrap"><i data-lucide="boxes"></i></div>
+        <div class="module-details">
+            <div class="module-title">Inventory</div>
+            <div class="module-desc">Materials Mgmt</div>
+        </div>
+    </div>
+
+    <!-- 8. Master Data -->
+    <div class="module-card" onclick="filterSidebarByModule('MasterData')">
+        <div class="module-icon-wrap"><i data-lucide="database"></i></div>
+        <div class="module-details">
+            <div class="module-title">Master Data</div>
+            <div class="module-desc">Central Entities</div>
+        </div>
+    </div>
+
+    <!-- 9. Customers & Vendors -->
+    <div class="module-card" onclick="filterSidebarByModule('CustomerSetup')">
+        <div class="module-icon-wrap"><i data-lucide="users"></i></div>
+        <div class="module-details">
+            <div class="module-title">Partners</div>
+            <div class="module-desc">Customers/Vendors</div>
+        </div>
+    </div>
+
+    <!-- 10. Employees -->
+    <div class="module-card" onclick="filterSidebarByModule('Employee')">
+        <div class="module-icon-wrap"><i data-lucide="users-round"></i></div>
+        <div class="module-details">
+            <div class="module-title">Employees</div>
+            <div class="module-desc">HR Roster</div>
+        </div>
+    </div>
+
+    <!-- 11. Cleaning Validation -->
+    <div class="module-card" onclick="filterSidebarByModule('Cleaning')">
+        <div class="module-icon-wrap"><i data-lucide="flask-conical" style="color: #06b6d4;"></i></div>
+        <div class="module-details">
+            <div class="module-title">Cleaning Validation</div>
+            <div class="module-desc">Hygiene & Safety</div>
+        </div>
+    </div>
+
+    <!-- 12. App Setup -->
+    <div class="module-card" onclick="filterSidebarByModule('AppSetup')">
+        <div class="module-icon-wrap"><i data-lucide="settings"></i></div>
+        <div class="module-details">
+            <div class="module-title">App Setup</div>
+            <div class="module-desc">Security & RBAC</div>
+        </div>
+    </div>
 </div>
 {% endblock %}
