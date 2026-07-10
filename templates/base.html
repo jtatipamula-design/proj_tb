@@ -515,34 +515,58 @@
                 <button id="showAllTablesBtn" onclick="filterSidebarByModule('ALL')">Show All Modules</button>
             </div>
             
-            {% for folder in menus %}
-                <div class="nav-group" data-group="{{ folder.name|replace(' ', '') }}">
-                    
-                    <div class="nav-group-header" onclick="toggleNavGroup('{{ folder.name|replace(' ', '') }}')">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <i data-lucide="{{ folder.icon }}"></i>
-                            <span class="nav-text">{{ folder.name }}</span>
-                        </div>
-                        <i data-lucide="chevron-down" class="nav-chevron"></i>
-                    </div>
-                    
-                    <div class="nav-group-content" id="group-content-{{ folder.id }}">
-                        {% for screen in folder.screens %}
-                            <a href="/table/{{ screen.code }}" class="nav-item {% if table_name == screen.code %}active{% endif %}" data-search="{{ screen.name.lower() }}">
-                                <div class="nav-bullet"></div>
-                                <span class="nav-text">{{ screen.name }}</span>
-                            </a>
-                        {% endfor %}
-                    </div>
-                </div>
-            {% endfor %}
+            <!-- Accordion List of Oracle Modules -->
+            {% set modules = [
+                ('Ledger', 'book-open', 'General Ledger'),
+                ('Receivables', 'receipt', 'Receivables'),
+                ('Payables', 'credit-card', 'Payables'),
+                ('Procurement', 'shopping-cart', 'Procurement'),
+                ('OrderMgmt', 'package-open', 'Order Management'),
+                ('Project', 'briefcase', 'Project Accounting'),
+                ('Product', 'boxes', 'Inventory'),
+                ('MasterData', 'database', 'Master Data'),
+                ('CustomerSetup', 'users', 'Customers & Vendors'),
+                ('Employee', 'users-round', 'Employees'),
+                ('Cleaning', 'flask-conical', 'Cleaning Validation'),
+                ('AppSetup', 'settings', 'App Setup'),
+                ('Other', 'folder', 'Other')
+            ] %}
 
-            <!-- Admin Only: Menu Builder Link -->
-            <div class="nav-group always-top" style="margin-top: 24px;">
-                <a href="/app-setup/menu-builder" class="nav-item" style="color: var(--color-electric-iris);">
-                    <i data-lucide="blocks"></i> <span class="nav-text">Menu Builder</span>
-                </a>
-            </div>
+            {% for mod_key, icon, mod_label in modules %}
+                {% set has_tables = namespace(value=false) %}
+                {% for tbl in all_tables %}
+                    {% set t_mod = table_modules.get(tbl, 'Other') if table_modules else 'Other' %}
+                    {% if t_mod == mod_key %}{% set has_tables.value = true %}{% endif %}
+                {% endfor %}
+
+                {% if has_tables.value %}
+                    <div class="nav-group" data-group="{{ mod_key }}">
+                        
+                        <!-- Accordion Header (Click to Expand & Pin) -->
+                        <div class="nav-group-header" onclick="toggleNavGroup('{{ mod_key }}')">
+                            <div style="display: flex; align-items: center; gap: 12px;">
+                                <i data-lucide="{{ icon }}"></i>
+                                <span class="nav-text">{{ mod_label }}</span>
+                            </div>
+                            <i data-lucide="chevron-down" class="nav-chevron"></i>
+                        </div>
+                        
+                        <!-- Accordion Content (List of specific Tables) -->
+                        <div class="nav-group-content" id="group-content-{{ mod_key }}">
+                            {% for tbl in all_tables %}
+                                {% set t_mod = table_modules.get(tbl, 'Other') if table_modules else 'Other' %}
+                                {% if t_mod == mod_key %}
+                                    {% set clean_name = tbl.split('_', 1)[-1].replace('_t', '').replace('_', ' ').title() %}
+                                    <a href="/table/{{ tbl }}" class="nav-item {% if table_name == tbl %}active{% endif %}" data-search="{{ clean_name.lower() }}">
+                                        <div class="nav-bullet"></div>
+                                        <span class="nav-text">{{ clean_name }}</span>
+                                    </a>
+                                {% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
         </nav>
         
         <div class="theme-toggle-wrap">
