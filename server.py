@@ -49,89 +49,8 @@ SCHEMA_CACHE = {
 AUTH_CACHE = {} 
 RBAC_CACHE = {}
 
-# Oracle Fusion Style Module Routing
-MODULE_MAPPING = {
-    'phc_apps_t': 'AppSetup',
-    'phc_role_screen_assignment_t': 'AppSetup',
-    'phc_roles_t': 'AppSetup',
-    'phc_screens_t': 'AppSetup',
-    'phc_user_roles_assignment_t': 'AppSetup',
-    'phc_users_t': 'AppSetup',
-    'phc_user_log_t': 'AppSetup',
-    'phc_user_groups_t': 'AppSetup',
-    
-    'cv_product_registration_t': 'Cleaning',
-    'cv_pde_t': 'Cleaning',
-    'cv_mdd_t': 'Cleaning',
-    'cv_solubility_t': 'Cleaning',
-    'cv_cleanability_t': 'Cleaning',
-    'cv_method_t': 'Cleaning',
-    'cv_batch_size_t': 'Cleaning',
-    'cv_equipment_registration_t': 'Cleaning',
-    'cv_equipment_surface_area_t': 'Cleaning',
-    
-    'pmd_accounts_t': 'CustomerSetup',
-    'pmd_acct_sites_t': 'CustomerSetup',
-    'pmd_locations_t': 'CustomerSetup',
-    'pmd_parties_t': 'CustomerSetup',
-    'pmd_person_profiles_t': 'CustomerSetup',
-    
-    'phc_emp_t': 'Employee',
-    
-    'pgl_acc_periods_t': 'Ledger',
-    'pgl_balances_t': 'Ledger',
-    'pgl_batches_t': 'Ledger',
-    'pgl_code_combinations_t': 'Ledger',
-    'pgl_daily_rates_t': 'Ledger',
-    'pgl_headers_t': 'Ledger',
-    'pgl_lines_t': 'Ledger',
-    'pgl_period_sets_t': 'Ledger',
-    'pgl_sources_t': 'Ledger',
-    
-    'phc_companies_t': 'MasterData',
-    'phc_cost_centers_t': 'MasterData',
-    'phc_cost_center_t': 'MasterData',
-    'phc_dept_t': 'MasterData',
-    'phc_locations_t': 'MasterData',
-    'phc_orgs_t': 'MasterData',
-    'phc_services_t': 'MasterData',
-    
-    'poe_order_headers_t': 'OrderMgmt',
-    'poe_order_lines_t': 'OrderMgmt',
-    'poe_order_sources_t': 'OrderMgmt',
-    'poe_transaction_types_t': 'OrderMgmt',
-    
-    'ap_invoice_distributions_t': 'Payables',
-    'ap_invoices_t': 'Payables',
-    'ap_payments_schedules_t': 'Payables',
-    
-    'po_distributions_t': 'Procurement',
-    'po_headers_t': 'Procurement',
-    'po_lines_t': 'Procurement',
-    'po_req_distributions_t': 'Procurement',
-    'po_requisition_headers_t': 'Procurement',
-    'po_requisition_lines_t': 'Procurement',
-    
-    'mtl_item_locations_t': 'Product',
-    'mtl_system_items_t': 'Product',
-    
-    'pa_expenditure_items_t': 'Project',
-    'pa_expenditures_t': 'Project',
-    'pa_projects_t': 'Project',
-    'pa_resource_assignments_t': 'Project',
-    'pa_tasks_t': 'Project',
-    
-    'par_batch_sources_t': 'Receivables',
-    'par_payment_schedules_t': 'Receivables',
-    'par_periods_t': 'Receivables',
-    'par_period_types_t': 'Receivables',
-    'par_terms_t': 'Receivables',
-    'par_vat_tax_t': 'Receivables',
-    'pra_cust_trx_line_dist_t': 'Receivables',
-    'pra_cust_trx_types_t': 'Receivables',
-    'pra_customer_trx_lines_t': 'Receivables',
-    'pra_customer_trx_t': 'Receivables'
-}
+# Replaces the hardcoded MODULE_MAPPING
+MENU_CACHE = []
 
 KEYWORD_MAP = {
     'company': 'phc_companies_t', 'dept': 'phc_dept_t', 'department': 'phc_dept_t',
@@ -175,8 +94,6 @@ async def add_security_headers(request, resp):
         resp.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
         
         # 🛡️ P1 SECURITY FIX: CLOUD PROXY CACHE LOCKDOWN 🛡️
-        # 'private' prevents Cloudflare/Render from caching the page for other users.
-        # 'Vary: Cookie' ensures the CDN knows every user's session is completely unique.
         resp.headers['Cache-Control'] = 'private, no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
         resp.headers['Pragma'] = 'no-cache'
         resp.headers['Expires'] = '0'
@@ -266,6 +183,7 @@ async def setup_db(app_instance, loop):
             await conn.execute("SELECT pg_advisory_lock(1337)")
             try:
                 await _run_initial_migrations(conn)
+                await refresh_menu_cache(conn)
             finally:
                 await conn.execute("SELECT pg_advisory_unlock(1337)")
 
@@ -316,6 +234,33 @@ async def _run_initial_migrations(conn):
             await conn.execute(query)
         except asyncpg.exceptions.UndefinedTableError:
             pass
+
+
+async def refresh_menu_cache(conn):
+    global MENU_CACHE
+    try:
+        menus = await conn.fetch("SELECT menu_id, menu_name, icon_name FROM phc_menu_folders_t WHERE status = 'ACT' ORDER BY display_order")
+        
+        new_cache = []
+        for m in menus:
+            screens = await conn.fetch("""
+                SELECT psn_screen_code, psn_screen_name 
+                FROM phc_screens_t 
+                WHERE menu_id = $1 AND psn_status = 'ACT'
+                ORDER BY psn_screen_name
+            """, m['menu_id'])
+            
+            if screens:
+                new_cache.append({
+                    'id': m['menu_id'],
+                    'name': m['menu_name'],
+                    'icon': m['icon_name'],
+                    'screens': [{'code': s['psn_screen_code'], 'name': s['psn_screen_name']} for s in screens]
+                })
+        
+        MENU_CACHE = new_cache
+    except asyncpg.exceptions.UndefinedTableError:
+        MENU_CACHE = []
 
 
 async def log_action(conn, user_id, action_desc):
@@ -415,8 +360,6 @@ async def find_target_table(conn, column_name):
     col_lower = column_name.lower()
     
     # --- ORACLE FUSION LOOKUP ENGINE ---
-    # Automatically wire these specific IDs directly to their lookup tables 
-    # to populate human-readable dropdown menus instantly.
     if col_lower in ('lookup_code_id', 'item_category_id', 'dosage_form_id', 'solubility_water_id'):
         return 'phc_lookup_values_t'
 
@@ -574,7 +517,7 @@ async def dashboard(request):
     return await render("dashboard.html", context={
         "stats": stats, 
         "all_tables": allowed, 
-        "table_modules": MODULE_MAPPING,
+        "menus": MENU_CACHE, 
         "username": request.ctx.username, 
         "user_id": request.ctx.user_id,
         "csrf_token": request.ctx.csrf_token 
@@ -644,7 +587,7 @@ async def show_table(request, table_name):
                 "columns": columns, 
                 "rows": rows_dict, 
                 "all_tables": allowed, 
-                "table_modules": MODULE_MAPPING,
+                "menus": MENU_CACHE, 
                 "pk_column": pk_column, 
                 "user_id": request.ctx.user_id,
                 "username": request.ctx.username,
@@ -718,6 +661,54 @@ async def export_csv(request, table_name):
 
 
 # ==========================================
+#  MENU BUILDER ROUTES
+# ==========================================
+@app.route("/app-setup/menu-builder")
+@login_required
+async def menu_builder_ui(request):
+    if request.ctx.user_type != 'ADM':
+        return response.redirect("/")
+        
+    async with app.ctx.pool.acquire() as conn:
+        try:
+            folders = await conn.fetch("SELECT * FROM phc_menu_folders_t ORDER BY display_order")
+            unassigned = await conn.fetch("SELECT * FROM phc_screens_t WHERE menu_id IS NULL ORDER BY psn_screen_name")
+        except asyncpg.exceptions.UndefinedTableError:
+            folders = []
+            unassigned = []
+        
+    return await render("menu_builder.html", context={
+        "username": request.ctx.username, 
+        "menus": MENU_CACHE,
+        "folders": folders,
+        "unassigned": unassigned,
+        "user_id": request.ctx.user_id,
+        "csrf_token": request.ctx.csrf_token
+    })
+
+
+@app.post("/api/menu/assign")
+@login_required
+async def assign_menu(request):
+    if request.ctx.user_type != 'ADM': return response.json({"error": "Unauthorized"}, status=403)
+    
+    provided_csrf = request.headers.get("X-CSRFToken")
+    if not provided_csrf or provided_csrf != request.ctx.csrf_token:
+        return response.json({"error": "Missing or Invalid CSRF Token. Session rejected."}, status=403)
+        
+    data = request.json
+    screen_code = data.get("screen_code")
+    folder_id = data.get("folder_id")
+    
+    async with app.ctx.pool.acquire() as conn:
+        await conn.execute("UPDATE phc_screens_t SET menu_id = $1 WHERE psn_screen_code = $2", 
+                           int(folder_id) if folder_id else None, screen_code)
+        await refresh_menu_cache(conn)
+        
+    return response.json({"status": "success"})
+
+
+# ==========================================
 #  EDIT & CREATE ROUTES
 # ==========================================
 @app.get("/edit/<table_name>/<pk_val>")
@@ -773,7 +764,7 @@ async def show_edit_form(request, table_name, pk_val):
                 "table_title": f"Edit {make_human_readable(table_name)}", 
                 "columns": columns, 
                 "all_tables": allowed, 
-                "table_modules": MODULE_MAPPING, 
+                "menus": MENU_CACHE, 
                 "pk_val": pk_val, 
                 "mode": "edit", 
                 "user_id": request.ctx.user_id,
@@ -832,7 +823,7 @@ async def show_add_form(request, table_name):
                 "table_title": f"New {make_human_readable(table_name)}", 
                 "columns": columns, 
                 "all_tables": allowed, 
-                "table_modules": MODULE_MAPPING, 
+                "menus": MENU_CACHE, 
                 "mode": "create", 
                 "user_id": request.ctx.user_id,
                 "username": request.ctx.username,
@@ -941,7 +932,7 @@ async def save_data(request, table_name, pk_val=None):
         data.pop('pu_assigned_roles', None)
         data.pop('pr_allowed_tables', None)
         
-        admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']
+        admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t', 'phc_menu_folders_t']
         if table_name in admin_only_tables:
             return response.json({"error": "Unauthorized. Security configuration tables are strictly for Administrators."}, status=403)
 
@@ -1031,6 +1022,10 @@ async def save_data(request, table_name, pk_val=None):
                             """.format(pua_pk_col), next_pua, company_id, target_id, int(str(r_id).strip()), str(current_user_id))
                             next_pua += 1
 
+            # Automatically refresh cache if menu items or screens were updated
+            if table_name in ['phc_menu_folders_t', 'phc_screens_t']:
+                await refresh_menu_cache(conn)
+
         if request.headers.get("HX-Request"):
             return response.html(f"""
                 <script>
@@ -1057,7 +1052,7 @@ async def delete_data(request, table_name, pk_val):
     company_id = int(request.ctx.company_id)
     
     if user_type != 'ADM':
-        admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']
+        admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t', 'phc_menu_folders_t']
         if table_name in admin_only_tables:
             return response.json({"error": "Unauthorized to delete from security configuration tables."}, status=403)
         if table_name == 'phc_users_t' and str(pk_val) != str(current_user_id):
@@ -1093,6 +1088,10 @@ async def delete_data(request, table_name, pk_val):
                 return response.json({"error": "Hard deletions disabled for SOX compliance. Table lacks a status column."}, status=403)
 
             await log_action(conn, current_user_id, f"Archived/Deleted record {target_id} from {table_name}")
+
+            # Automatically refresh cache if menu items or screens were updated
+            if table_name in ['phc_menu_folders_t', 'phc_screens_t']:
+                await refresh_menu_cache(conn)
 
         if request.headers.get("HX-Request"):
             return response.html(f"""
