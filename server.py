@@ -609,8 +609,19 @@ async def show_table(request, table_name):
             if search_query and searchable_cols:
                 params.append(f"%{search_query}%")
                 cast_clauses = [f"CAST({col} AS TEXT) ILIKE $1" for col in searchable_cols]
-                where_clause = f"WHERE {' OR '.join(cast_clauses)}"
+                # SECURITY FIX: Group OR clauses inside parentheses so AND filters don't break
+                where_clause = f"WHERE ({' OR '.join(cast_clauses)})"
                 
+            # SECURITY FIX: Enforce Tenant Isolation on the Data Grid
+            company_col = next((c['column_name'] for c in SCHEMA_CACHE["columns"][table_name] if c['column_name'].lower().endswith('company_id')), None)
+            if company_col:
+                params.append(int(request.ctx.company_id))
+                tenant_filter = f"{company_col} = ${len(params)}"
+                if where_clause:
+                    where_clause += f" AND {tenant_filter}"
+                else:
+                    where_clause = f"WHERE {tenant_filter}"
+
             order_clause = f"ORDER BY {pk_column} DESC" if pk_column else "ORDER BY 1 DESC"
             
             total_count = await conn.fetchval(f"SELECT COUNT(*) FROM {table_name} {where_clause}", *params)
@@ -677,11 +688,22 @@ async def export_csv(request, table_name):
             cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
             SCHEMA_CACHE["columns"][table_name] = [dict(c) for c in cols]
 
+        # SECURITY FIX: Enforce Tenant Isolation on CSV Exports
+        company_col = next((c['column_name'] for c in SCHEMA_CACHE["columns"][table_name] if c['column_name'].lower().endswith('company_id')), None)
+        
+        where_clauses = []
         if pk_id and pk_column:
-            query += f" WHERE {pk_column} = $1"
             pk_type = next((r['data_type'] for r in SCHEMA_CACHE["columns"][table_name] if r['column_name'] == pk_column), 'integer')
             parsed_pk = pk_id if pk_type in ('character varying', 'text', 'varchar') else int(pk_id)
             params.append(parsed_pk)
+            where_clauses.append(f"{pk_column} = ${len(params)}")
+
+        if company_col:
+            params.append(int(request.ctx.company_id))
+            where_clauses.append(f"{company_col} = ${len(params)}")
+
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
 
         rows = await conn.fetch(query, *params)
         if not rows:
@@ -731,7 +753,15 @@ async def show_edit_form(request, table_name, pk_val):
             pk_type = next((r['data_type'] for r in col_rows if r['column_name'] == pk_column), 'integer')
             parsed_pk = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
             
-            record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1", parsed_pk)
+            # SECURITY FIX: Ensure the user owns the record they are trying to edit
+            company_col = next((r['column_name'] for r in col_rows if r['column_name'].lower().endswith('company_id')), None)
+            if company_col:
+                record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1 AND {company_col} = $2", parsed_pk, int(request.ctx.company_id))
+                if not record:
+                    return response.redirect(f"/table/{table_name}")
+            else:
+                record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1", parsed_pk)
+
             columns = []
 
             for r in col_rows:
@@ -807,7 +837,10 @@ async def show_add_form(request, table_name):
                 is_req = (r['is_nullable'] == 'NO') and not is_pk
                 
                 val = ""
-                if ('date' in r['data_type'] or 'timestamp' in r['data_type']) and 'end' not in c_name.lower() and not is_pk:
+                # SECURITY FIX: Pre-fill Company ID based on User Session
+                if c_name.lower().endswith('company_id'):
+                    val = int(request.ctx.company_id)
+                elif ('date' in r['data_type'] or 'timestamp' in r['data_type']) and 'end' not in c_name.lower() and not is_pk:
                     val = datetime.now().strftime('%Y-%m-%d')
                     
                 columns.append({
@@ -963,9 +996,11 @@ async def save_data(request, table_name, pk_val=None):
         clean_data = await _sanitize_payload(data, schema_map, pk_column, current_user_id, request.method)
 
         async with conn.transaction():
+            # SECURITY FIX: Forcefully overwrite ANY client-submitted company_id with their true session ID
+            if company_col:
+                clean_data[company_col] = company_id
+                
             if request.method == "POST":
-                if company_col:
-                    clean_data[company_col] = company_id
                 
                 max_val = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
                 target_id = (int(max_val) + 1) if max_val else 1
