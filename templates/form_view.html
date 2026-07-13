@@ -153,6 +153,19 @@
             {% elif col.is_pk %}
                 <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else 'Pending...' }}" class="readonly-input" readonly tabindex="-1">
             
+            {% elif col.column_name.lower().endswith('company_id') %}
+                <!-- TENANT ISOLATION: Lock company ID field strictly to current user's company -->
+                <input type="hidden" name="{{ col.column_name }}" value="{{ col.value }}">
+                <select disabled class="readonly-input">
+                    {% if col.options %}
+                        {% for opt in col.options %}
+                            <option value="{{ opt.id }}" {% if col.value|string == opt.id|string %}selected{% endif %}>{{ opt.name }}</option>
+                        {% endfor %}
+                    {% else %}
+                        <option value="{{ col.value }}" selected>Company ID: {{ col.value }}</option>
+                    {% endif %}
+                </select>
+
             {% elif col.data_type == 'virtual_checkbox' %}
                 <div style="display: flex; gap: 8px; margin-bottom: 8px;">
                     <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', true){% endif %}">Select Global All</button>
