@@ -33,9 +33,6 @@ Extend(app)
 
 CLOUD_DB_URL = os.environ.get("DB_URL")
 
-# ==========================================
-#  CONSTANTS & IN-MEMORY CACHING
-# ==========================================
 RATE_LIMIT_WINDOW = 60
 MAX_REQUESTS = 120
 
@@ -49,87 +46,43 @@ SCHEMA_CACHE = {
 AUTH_CACHE = {} 
 RBAC_CACHE = {}
 
-# Oracle Fusion Style Module Routing
-MODULE_MAPPING = {
-    'phc_apps_t': 'AppSetup',
-    'phc_role_screen_assignment_t': 'AppSetup',
-    'phc_roles_t': 'AppSetup',
-    'phc_screens_t': 'AppSetup',
-    'phc_user_roles_assignment_t': 'AppSetup',
-    'phc_users_t': 'AppSetup',
-    'phc_user_log_t': 'AppSetup',
-    'phc_user_groups_t': 'AppSetup',
+# --- DYNAMIC PREFIX ENGINE (Replaces Hardcoded MODULE_MAPPING) ---
+def get_table_modules(tables):
+    mapping = {}
+    exceptions = {
+        'phc_emp_t': 'Employee',
+        'phc_apps_t': 'AppSetup',
+        'phc_roles_t': 'AppSetup',
+        'phc_screens_t': 'AppSetup',
+        'phc_user_roles_assignment_t': 'AppSetup',
+        'phc_role_screen_assignment_t': 'AppSetup',
+        'phc_users_t': 'AppSetup',
+        'phc_user_log_t': 'AppSetup',
+        'phc_user_groups_t': 'AppSetup',
+        'phc_companies_t': 'MasterData',
+        'phc_cost_centers_t': 'MasterData',
+        'phc_cost_center_t': 'MasterData',
+        'phc_dept_t': 'MasterData',
+        'phc_locations_t': 'MasterData',
+        'phc_orgs_t': 'MasterData',
+        'phc_services_t': 'MasterData'
+    }
     
-    'cv_product_registration_t': 'Cleaning',
-    'cv_product_apis_t': 'Cleaning',
-    'cv_cleanability_t': 'Cleaning',
-    'cv_method_t': 'Cleaning',
-    'cv_batch_size_t': 'Cleaning',
-    'cv_equipment_registration_t': 'Cleaning',
-    'cv_equipment_surface_area_t': 'Cleaning',
-    
-    'pmd_accounts_t': 'CustomerSetup',
-    'pmd_acct_sites_t': 'CustomerSetup',
-    'pmd_locations_t': 'CustomerSetup',
-    'pmd_parties_t': 'CustomerSetup',
-    'pmd_person_profiles_t': 'CustomerSetup',
-    
-    'phc_emp_t': 'Employee',
-    
-    'pgl_acc_periods_t': 'Ledger',
-    'pgl_balances_t': 'Ledger',
-    'pgl_batches_t': 'Ledger',
-    'pgl_code_combinations_t': 'Ledger',
-    'pgl_daily_rates_t': 'Ledger',
-    'pgl_headers_t': 'Ledger',
-    'pgl_lines_t': 'Ledger',
-    'pgl_period_sets_t': 'Ledger',
-    'pgl_sources_t': 'Ledger',
-    
-    'phc_companies_t': 'MasterData',
-    'phc_cost_centers_t': 'MasterData',
-    'phc_cost_center_t': 'MasterData',
-    'phc_dept_t': 'MasterData',
-    'phc_locations_t': 'MasterData',
-    'phc_orgs_t': 'MasterData',
-    'phc_services_t': 'MasterData',
-    
-    'poe_order_headers_t': 'OrderMgmt',
-    'poe_order_lines_t': 'OrderMgmt',
-    'poe_order_sources_t': 'OrderMgmt',
-    'poe_transaction_types_t': 'OrderMgmt',
-    
-    'ap_invoice_distributions_t': 'Payables',
-    'ap_invoices_t': 'Payables',
-    'ap_payments_schedules_t': 'Payables',
-    
-    'po_distributions_t': 'Procurement',
-    'po_headers_t': 'Procurement',
-    'po_lines_t': 'Procurement',
-    'po_req_distributions_t': 'Procurement',
-    'po_requisition_headers_t': 'Procurement',
-    'po_requisition_lines_t': 'Procurement',
-    
-    'mtl_item_locations_t': 'Product',
-    'mtl_system_items_t': 'Product',
-    
-    'pa_expenditure_items_t': 'Project',
-    'pa_expenditures_t': 'Project',
-    'pa_projects_t': 'Project',
-    'pa_resource_assignments_t': 'Project',
-    'pa_tasks_t': 'Project',
-    
-    'par_batch_sources_t': 'Receivables',
-    'par_payment_schedules_t': 'Receivables',
-    'par_periods_t': 'Receivables',
-    'par_period_types_t': 'Receivables',
-    'par_terms_t': 'Receivables',
-    'par_vat_tax_t': 'Receivables',
-    'pra_cust_trx_line_dist_t': 'Receivables',
-    'pra_cust_trx_types_t': 'Receivables',
-    'pra_customer_trx_lines_t': 'Receivables',
-    'pra_customer_trx_t': 'Receivables'
-}
+    for table in tables:
+        if table in exceptions:
+            mapping[table] = exceptions[table]
+        elif table.startswith('cv_'): mapping[table] = 'Cleaning'
+        elif table.startswith('pmd_'): mapping[table] = 'CustomerSetup'
+        elif table.startswith('pgl_'): mapping[table] = 'Ledger'
+        elif table.startswith('poe_'): mapping[table] = 'OrderMgmt'
+        elif table.startswith('ap_'): mapping[table] = 'Payables'
+        elif table.startswith('po_'): mapping[table] = 'Procurement'
+        elif table.startswith('mtl_'): mapping[table] = 'Product'
+        elif table.startswith('pa_'): mapping[table] = 'Project'
+        elif table.startswith('par_') or table.startswith('pra_'): mapping[table] = 'Receivables'
+        else: mapping[table] = 'Other'
+        
+    return mapping
 
 KEYWORD_MAP = {
     'company': 'phc_companies_t', 'dept': 'phc_dept_t', 'department': 'phc_dept_t',
@@ -145,9 +98,6 @@ KEYWORD_MAP = {
 WHO_COLS = {'creation_date', 'created_by', 'last_update_date', 'last_updated_by'}
 
 
-# ==========================================
-#  SECURITY MIDDLEWARE
-# ==========================================
 ip_tracker = defaultdict(list)
 
 @app.on_request
@@ -185,7 +135,6 @@ async def add_security_headers(request, resp):
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data:;"
         )
-
 
 def login_required(wrapped):
     @wraps(wrapped)
@@ -246,9 +195,6 @@ def login_required(wrapped):
     return decorator
 
 
-# ==========================================
-#  DATABASE LIFECYCLE & HELPERS
-# ==========================================
 @app.before_server_start
 async def setup_db(app_instance, loop):
     try:
@@ -349,9 +295,6 @@ def get_column_sort_priority(pk_column, c_name):
     return 50
 
 
-# ==========================================
-#  DATA RESOLUTION & RBAC ENGINES
-# ==========================================
 async def get_allowed_tables(conn, user_id, user_type):
     if SCHEMA_CACHE["tables"] is None:
         rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%_t'")
@@ -483,9 +426,6 @@ async def get_dropdown_options(conn, column_name):
     return result
 
 
-# ==========================================
-#  AUTH ROUTES
-# ==========================================
 @app.route('/login', methods=['GET', 'POST'])
 async def handle_login(request):
     if request.method == "GET":
@@ -501,15 +441,15 @@ async def handle_login(request):
         if user:
             stored_pwd = user['pus_pwd']
             is_valid = False
-            loop = asyncio.get_running_loop()
             
             try:
-                is_valid = await loop.run_in_executor(
-                    None, partial(bcrypt.checkpw, password.encode('utf-8'), stored_pwd.encode('utf-8'))
-                )
+                if bcrypt.checkpw(password.encode('utf-8'), stored_pwd.encode('utf-8')):
+                    is_valid = True
             except ValueError:
+                # CATCH INVALID SALT ERROR FOR LEGACY PLAIN TEXT PASSWORDS
                 if password == stored_pwd:
                     is_valid = True
+                    loop = asyncio.get_running_loop()
                     new_hashed = await loop.run_in_executor(None, partial(bcrypt.hashpw, password.encode('utf-8'), bcrypt.gensalt()))
                     await conn.execute("UPDATE phc_users_t SET pus_pwd = $1 WHERE pus_user_id = $2", new_hashed.decode('utf-8'), user['pus_user_id'])
                     
@@ -551,14 +491,13 @@ async def logout(request):
     return resp
 
 
-# ==========================================
-#  MAIN ROUTES
-# ==========================================
 @app.route("/")
 @login_required
 async def dashboard(request):
     async with app.ctx.pool.acquire() as conn:
         allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
+        dynamic_mapping = get_table_modules(allowed)
+        
         stats = {
             "emp_count": await conn.fetchval("SELECT COUNT(*) FROM phc_emp_t") if 'phc_emp_t' in allowed else "🔒",
             "comp_count": await conn.fetchval("SELECT COUNT(*) FROM phc_companies_t WHERE pcp_status = 'ACT'") if 'phc_companies_t' in allowed else "🔒",
@@ -568,7 +507,7 @@ async def dashboard(request):
     return await render("dashboard.html", context={
         "stats": stats, 
         "all_tables": allowed, 
-        "table_modules": MODULE_MAPPING,
+        "table_modules": dynamic_mapping,
         "username": request.ctx.username, 
         "user_id": request.ctx.user_id,
         "csrf_token": request.ctx.csrf_token 
@@ -583,6 +522,8 @@ async def show_table(request, table_name):
             allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
             if table_name not in allowed:
                 return response.redirect("/")
+                
+            dynamic_mapping = get_table_modules(allowed)
 
             if table_name not in SCHEMA_CACHE["columns"]:
                 cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
@@ -598,36 +539,36 @@ async def show_table(request, table_name):
             offset = (page - 1) * limit
 
             search_query = request.args.get("q", "").strip()
-            where_clause = ""
+            where_clauses = []
             params = []
+            param_idx = 1
+            
+            # STRICT TENANT ISOLATION
+            company_col = next((c['column_name'] for c in SCHEMA_CACHE["columns"][table_name] if c['column_name'].lower().endswith('company_id')), None)
+            if company_col:
+                where_clauses.append(f"{company_col} = ${param_idx}")
+                params.append(request.ctx.company_id)
+                param_idx += 1
 
             valid_search_types = ('character varying', 'text', 'varchar', 'integer', 'bigint', 'numeric')
             searchable_cols = [c['column_name'] for c in SCHEMA_CACHE["columns"][table_name] if c.get('data_type') in valid_search_types]
 
             if search_query and searchable_cols:
                 params.append(f"%{search_query}%")
-                cast_clauses = [f"CAST({col} AS TEXT) ILIKE $1" for col in searchable_cols]
-                # SECURITY FIX: Group OR clauses inside parentheses so AND filters don't break
-                where_clause = f"WHERE ({' OR '.join(cast_clauses)})"
-                
-            # SECURITY FIX: Enforce Tenant Isolation on the Data Grid
-            company_col = next((c['column_name'] for c in SCHEMA_CACHE["columns"][table_name] if c['column_name'].lower().endswith('company_id')), None)
-            if company_col:
-                params.append(int(request.ctx.company_id))
-                tenant_filter = f"{company_col} = ${len(params)}"
-                if where_clause:
-                    where_clause += f" AND {tenant_filter}"
-                else:
-                    where_clause = f"WHERE {tenant_filter}"
+                cast_clauses = [f"CAST({col} AS TEXT) ILIKE ${param_idx}" for col in searchable_cols]
+                where_clauses.append(f"({' OR '.join(cast_clauses)})")
+                param_idx += 1
 
+            where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+                
             order_clause = f"ORDER BY {pk_column} DESC" if pk_column else "ORDER BY 1 DESC"
             
-            total_count = await conn.fetchval(f"SELECT COUNT(*) FROM {table_name} {where_clause}", *params)
+            total_count = await conn.fetchval(f"SELECT COUNT(*) FROM {table_name} {where_sql}", *params)
             total_pages = max(1, (total_count + limit - 1) // limit)
             start_row = offset + 1 if total_count > 0 else 0
             end_row = min(offset + limit, total_count)
 
-            rows = await conn.fetch(f"SELECT * FROM {table_name} {where_clause} {order_clause} LIMIT {limit} OFFSET {offset}", *params)
+            rows = await conn.fetch(f"SELECT * FROM {table_name} {where_sql} {order_clause} LIMIT {limit} OFFSET {offset}", *params)
             rows_dict = [dict(r) for r in rows]
 
             for col in columns:
@@ -649,7 +590,7 @@ async def show_table(request, table_name):
                 "columns": columns, 
                 "rows": rows_dict, 
                 "all_tables": allowed, 
-                "table_modules": MODULE_MAPPING,
+                "table_modules": dynamic_mapping,
                 "pk_column": pk_column, 
                 "user_id": request.ctx.user_id,
                 "username": request.ctx.username,
@@ -678,37 +619,38 @@ async def export_csv(request, table_name):
         if table_name not in allowed:
             return response.text("Unauthorized", status=403)
 
-        query = f"SELECT * FROM {table_name}"
-        params = []
-        pk_column = await get_pk_column(conn, table_name)
-
         if table_name not in SCHEMA_CACHE["columns"]:
             cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
             SCHEMA_CACHE["columns"][table_name] = [dict(c) for c in cols]
-
-        # SECURITY FIX: Enforce Tenant Isolation on CSV Exports
-        company_col = next((c['column_name'] for c in SCHEMA_CACHE["columns"][table_name] if c['column_name'].lower().endswith('company_id')), None)
+            
+        pk_column = await get_pk_column(conn, table_name)
         
         where_clauses = []
+        params = []
+        param_idx = 1
+        
+        # STRICT TENANT ISOLATION
+        company_col = next((c['column_name'] for c in SCHEMA_CACHE["columns"][table_name] if c['column_name'].lower().endswith('company_id')), None)
+        if company_col:
+            where_clauses.append(f"{company_col} = ${param_idx}")
+            params.append(request.ctx.company_id)
+            param_idx += 1
+
         if pk_id and pk_column:
             pk_type = next((r['data_type'] for r in SCHEMA_CACHE["columns"][table_name] if r['column_name'] == pk_column), 'integer')
             parsed_pk = pk_id if pk_type in ('character varying', 'text', 'varchar') else int(pk_id)
+            where_clauses.append(f"{pk_column} = ${param_idx}")
             params.append(parsed_pk)
-            where_clauses.append(f"{pk_column} = ${len(params)}")
-
-        if company_col:
-            params.append(int(request.ctx.company_id))
-            where_clauses.append(f"{company_col} = ${len(params)}")
-
-        if where_clauses:
-            query += " WHERE " + " AND ".join(where_clauses)
+            param_idx += 1
+            
+        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+        query = f"SELECT * FROM {table_name} {where_sql}"
 
         rows = await conn.fetch(query, *params)
         if not rows:
             return response.text("No data found")
         
         rows_dict = [dict(r) for r in rows]
-        
         sorted_cols = sorted(SCHEMA_CACHE["columns"][table_name], key=lambda c: get_column_sort_priority(pk_column, c['column_name']))
 
         for r in sorted_cols:
@@ -733,9 +675,6 @@ async def export_csv(request, table_name):
         return response.text(output.getvalue(), headers={"Content-Disposition": f'attachment; filename="{table_name}_export.csv"', "Content-Type": "text/csv"})
 
 
-# ==========================================
-#  EDIT & CREATE ROUTES
-# ==========================================
 @app.get("/edit/<table_name>/<pk_val>")
 @login_required
 async def show_edit_form(request, table_name, pk_val):
@@ -744,6 +683,8 @@ async def show_edit_form(request, table_name, pk_val):
             allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
             if table_name not in allowed:
                 return response.redirect("/")
+                
+            dynamic_mapping = get_table_modules(allowed)
 
             pk_column = await get_pk_column(conn, table_name)
             col_rows = await conn.fetch("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
@@ -751,15 +692,16 @@ async def show_edit_form(request, table_name, pk_val):
             pk_type = next((r['data_type'] for r in col_rows if r['column_name'] == pk_column), 'integer')
             parsed_pk = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
             
-            # SECURITY FIX: Ensure the user owns the record they are trying to edit
+            # STRICT TENANT ISOLATION
             company_col = next((r['column_name'] for r in col_rows if r['column_name'].lower().endswith('company_id')), None)
             if company_col:
-                record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1 AND {company_col} = $2", parsed_pk, int(request.ctx.company_id))
-                if not record:
-                    return response.redirect(f"/table/{table_name}")
+                record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1 AND {company_col} = $2", parsed_pk, request.ctx.company_id)
             else:
                 record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1", parsed_pk)
-
+                
+            if not record:
+                return response.redirect(f"/table/{table_name}")
+                
             columns = []
 
             for r in col_rows:
@@ -797,7 +739,7 @@ async def show_edit_form(request, table_name, pk_val):
                 "table_title": f"Edit {make_human_readable(table_name)}", 
                 "columns": columns, 
                 "all_tables": allowed, 
-                "table_modules": MODULE_MAPPING, 
+                "table_modules": dynamic_mapping,
                 "pk_val": pk_val, 
                 "mode": "edit", 
                 "user_id": request.ctx.user_id,
@@ -820,6 +762,8 @@ async def show_add_form(request, table_name):
             allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
             if table_name not in allowed:
                 return response.redirect("/")
+                
+            dynamic_mapping = get_table_modules(allowed)
 
             col_rows = await conn.fetch("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
             pk_column = await get_pk_column(conn, table_name)
@@ -835,10 +779,7 @@ async def show_add_form(request, table_name):
                 is_req = (r['is_nullable'] == 'NO') and not is_pk
                 
                 val = ""
-                # SECURITY FIX: Pre-fill Company ID based on User Session
-                if c_name.lower().endswith('company_id'):
-                    val = int(request.ctx.company_id)
-                elif ('date' in r['data_type'] or 'timestamp' in r['data_type']) and 'end' not in c_name.lower() and not is_pk:
+                if ('date' in r['data_type'] or 'timestamp' in r['data_type']) and 'end' not in c_name.lower() and not is_pk:
                     val = datetime.now().strftime('%Y-%m-%d')
                     
                 columns.append({
@@ -859,7 +800,7 @@ async def show_add_form(request, table_name):
                 "table_title": f"New {make_human_readable(table_name)}", 
                 "columns": columns, 
                 "all_tables": allowed, 
-                "table_modules": MODULE_MAPPING, 
+                "table_modules": dynamic_mapping,
                 "mode": "create", 
                 "user_id": request.ctx.user_id,
                 "username": request.ctx.username,
@@ -989,17 +930,15 @@ async def save_data(request, table_name, pk_val=None):
         schema_rows = await conn.fetch("SELECT column_name, data_type, character_maximum_length, is_nullable FROM information_schema.columns WHERE table_name = $1", table_name)
         schema_map = {r['column_name']: r for r in schema_rows}
         
+        # STRICT TENANT ISOLATION (Auto-inject company ID into save payload)
         company_col = next((k for k in schema_map.keys() if k.lower().endswith('company_id')), None)
+        if company_col:
+            data[company_col] = company_id
         
         clean_data = await _sanitize_payload(data, schema_map, pk_column, current_user_id, request.method)
 
         async with conn.transaction():
-            # SECURITY FIX: Forcefully overwrite ANY client-submitted company_id with their true session ID
-            if company_col:
-                clean_data[company_col] = company_id
-                
             if request.method == "POST":
-                
                 max_val = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
                 target_id = (int(max_val) + 1) if max_val else 1
                 pk_type = schema_map.get(pk_column, {}).get('data_type', '')
@@ -1019,6 +958,7 @@ async def save_data(request, table_name, pk_val=None):
                 
                 if set_clauses:
                     if company_col:
+                        # Prevent hacking via PUT - Force the WHERE clause to match the user's company
                         vals.append(company_id)
                         tenant_idx = len(vals) + 1
                         where_clause = f"WHERE {pk_column} = $1 AND {company_col} = ${tenant_idx}"
@@ -1072,7 +1012,6 @@ async def save_data(request, table_name, pk_val=None):
         return response.json({"status": "success"})
 
 
-# HTMX DELETE ROUTE
 @app.delete("/api/<table_name>/<pk_val>", name="delete_row")
 @login_required
 async def delete_data(request, table_name, pk_val):
@@ -1122,7 +1061,7 @@ async def delete_data(request, table_name, pk_val):
                 return response.json({"error": "Hard deletions disabled for SOX compliance. Table lacks a status column."}, status=403)
 
             await log_action(conn, current_user_id, f"Archived/Deleted record {target_id} from {table_name}")
-            
+
         if request.headers.get("HX-Request"):
             return response.html(f"""
                 <div id="toast-container" hx-swap-oob="beforeend">
