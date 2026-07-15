@@ -119,124 +119,117 @@
     <div class="form-container">
         <!-- FIX: Explicitly pass context variables to the macro to satisfy Jinja2 syntax -->
         {% macro render_field(col, current_user_type, table_modules, mode) %}
-        <div class="form-group">
-            <label>
-                {{ col.label }} 
-                {% if col.required and not col.is_pk %}<span style="color: var(--color-ember);">*</span>{% endif %}
-                {% if col.is_pk %}<span style="color: var(--color-fog); font-size: 12px; margin-left: 6px;">(Auto-Generated ID)</span>{% endif %}
-            </label>
-            
-            {% if col.column_name.lower().endswith('status') %}
-                <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'ACT' }}">
-                <div class="btn-group-wrap">
-                    <div class="ui-btn" id="btn_act_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'ACT')">Active</div>
-                    <div class="ui-btn" id="btn_ina_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'INA')">Inactive</div>
-                </div>
-            {% elif col.column_name.lower() == 'enabled_flag' %}
-                <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'Y' }}">
-                <div class="btn-group-wrap">
-                    <div class="ui-btn" id="btn_y_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'Y')">Active</div>
-                    <div class="ui-btn" id="btn_n_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'N')">Inactive</div>
-                </div>
-            {% elif col.column_name.lower().endswith('flag') %}
-                <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'Y' }}">
-                <div class="btn-group-wrap">
-                    <div class="ui-btn" id="btn_y_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'Y')">Yes</div>
-                    <div class="ui-btn" id="btn_n_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'N')">No</div>
-                </div>
-            {% elif col.column_name == 'pus_user_type' %}
-                <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'STD' }}">
-                <div class="btn-group-wrap">
-                    <div class="ui-btn {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" id="btn_adm_{{ col.column_name }}" onclick="{% if current_user_type == 'ADM' %}setUserType('{{ col.column_name }}', 'ADM'){% endif %}">Admin (ADM)</div>
-                    <div class="ui-btn {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" id="btn_std_{{ col.column_name }}" onclick="{% if current_user_type == 'ADM' %}setUserType('{{ col.column_name }}', 'STD'){% endif %}">Standard (STD)</div>
-                </div>
-            {% elif col.is_pk %}
-                <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else 'Pending...' }}" class="readonly-input" readonly tabindex="-1">
-            
-            {% elif col.column_name.lower().endswith('company_id') %}
-                <!-- TENANT ISOLATION: Lock company ID field strictly to current user's company -->
-                <input type="hidden" name="{{ col.column_name }}" value="{{ col.value }}">
-                <select disabled class="readonly-input">
-                    {% if col.options %}
+        
+        <!-- UI FIX: Completely hide company_id from users (unless it is the Primary Key of the company table) -->
+        {% if col.column_name.lower().endswith('company_id') and not col.is_pk %}
+            <input type="hidden" name="{{ col.column_name }}" value="{{ col.value }}">
+        {% else %}
+            <div class="form-group">
+                <label>
+                    {{ col.label }} 
+                    {% if col.required and not col.is_pk %}<span style="color: var(--color-ember);">*</span>{% endif %}
+                    {% if col.is_pk %}<span style="color: var(--color-fog); font-size: 12px; margin-left: 6px;">(Auto-Generated ID)</span>{% endif %}
+                </label>
+                
+                {% if col.column_name.lower().endswith('status') %}
+                    <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'ACT' }}">
+                    <div class="btn-group-wrap">
+                        <div class="ui-btn" id="btn_act_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'ACT')">Active</div>
+                        <div class="ui-btn" id="btn_ina_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'INA')">Inactive</div>
+                    </div>
+                {% elif col.column_name.lower() == 'enabled_flag' %}
+                    <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'Y' }}">
+                    <div class="btn-group-wrap">
+                        <div class="ui-btn" id="btn_y_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'Y')">Active</div>
+                        <div class="ui-btn" id="btn_n_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'N')">Inactive</div>
+                    </div>
+                {% elif col.column_name.lower().endswith('flag') %}
+                    <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'Y' }}">
+                    <div class="btn-group-wrap">
+                        <div class="ui-btn" id="btn_y_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'Y')">Yes</div>
+                        <div class="ui-btn" id="btn_n_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'N')">No</div>
+                    </div>
+                {% elif col.column_name == 'pus_user_type' %}
+                    <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'STD' }}">
+                    <div class="btn-group-wrap">
+                        <div class="ui-btn {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" id="btn_adm_{{ col.column_name }}" onclick="{% if current_user_type == 'ADM' %}setUserType('{{ col.column_name }}', 'ADM'){% endif %}">Admin (ADM)</div>
+                        <div class="ui-btn {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" id="btn_std_{{ col.column_name }}" onclick="{% if current_user_type == 'ADM' %}setUserType('{{ col.column_name }}', 'STD'){% endif %}">Standard (STD)</div>
+                    </div>
+                {% elif col.is_pk %}
+                    <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else 'Pending...' }}" class="readonly-input" readonly tabindex="-1">
+                
+                {% elif col.data_type == 'virtual_checkbox' %}
+                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', true){% endif %}">Select Global All</button>
+                        <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', false){% endif %}">Deselect Global All</button>
+                    </div>
+                    
+                    <div class="checkbox-scroll-box">
+                        {% set selected_items = (col.value or "").split(',') %}
+                        
+                        {% if col.column_name == 'pr_allowed_tables' %}
+                            <!-- FIX: Safely map table groupings directly -->
+                            {% set known_modules = ['AppSetup', 'CustomerSetup', 'Employee', 'Ledger', 'MasterData', 'OrderMgmt', 'Payables', 'Procurement', 'Product', 'Project', 'Receivables', 'All Screens'] %}
+                            {% set mod_labels = {'AppSetup': 'App Setup', 'CustomerSetup': 'Customers & Vendors', 'Employee': 'Employees', 'Ledger': 'General Ledger', 'MasterData': 'Master Data', 'OrderMgmt': 'Order Management', 'Payables': 'Payables', 'Procurement': 'Procurement', 'Product': 'Inventory', 'Project': 'Project Accounting', 'Receivables': 'Receivables', 'All Screens': 'Other Screens'} %}
+                            
+                            {% for mod_key in known_modules %}
+                                {% set opts_in_mod = [] %}
+                                {% for opt in col.options %}
+                                    {% set opt_mod = table_modules.get(opt.code, 'All Screens') if opt.code else 'All Screens' %}
+                                    {% if opt_mod == mod_key %}
+                                        {% set _ = opts_in_mod.append(opt) %}
+                                    {% endif %}
+                                {% endfor %}
+                                
+                                {% if opts_in_mod|length > 0 %}
+                                    <div class="cb-group collapsed">
+                                        <div class="cb-group-header" onclick="toggleCbGroup(this)">
+                                            <div style="display:flex; align-items:center; gap:8px;">
+                                                <i data-lucide="chevron-down" class="cb-chevron" style="width:16px;"></i>
+                                                <span style="font-weight:600; font-size: 15px; color:var(--color-glacier);">{{ mod_labels.get(mod_key, mod_key) }}</span>
+                                            </div>
+                                            <div style="display:flex; gap: 6px;">
+                                                <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 2px 8px; font-size: 11px; border-color: rgba(255,255,255,0.1);" onclick="event.stopPropagation(); {% if current_user_type == 'ADM' %}selectGroupCheckboxes(this, '{{ col.column_name }}', true){% endif %}">Select All</button>
+                                                <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 2px 8px; font-size: 11px; border-color: rgba(255,255,255,0.1);" onclick="event.stopPropagation(); {% if current_user_type == 'ADM' %}selectGroupCheckboxes(this, '{{ col.column_name }}', false){% endif %}">Clear</button>
+                                            </div>
+                                        </div>
+                                        <div class="cb-group-content">
+                                            {% for opt in opts_in_mod %}
+                                                <label class="checkbox-item {% if current_user_type != 'ADM' %}disabled-btn{% endif %}">
+                                                    <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %} {% if current_user_type != 'ADM' %}disabled{% endif %}>
+                                                    <span>{{ opt.name }}</span>
+                                                </label>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% else %}
+                            {% for opt in col.options %}
+                                <label class="checkbox-item {% if current_user_type != 'ADM' %}disabled-btn{% endif %}">
+                                    <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %} {% if current_user_type != 'ADM' %}disabled{% endif %}>
+                                    <span>{{ opt.name }}</span>
+                                </label>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                
+                {% elif col.options %}
+                    <select name="{{ col.column_name }}" {% if col.required %}required{% endif %}>
+                        <option value="">-- Select --</option>
                         {% for opt in col.options %}
                             <option value="{{ opt.id }}" {% if col.value|string == opt.id|string %}selected{% endif %}>{{ opt.name }}</option>
                         {% endfor %}
-                    {% else %}
-                        <option value="{{ col.value }}" selected>Company ID: {{ col.value }}</option>
-                    {% endif %}
-                </select>
-
-            {% elif col.data_type == 'virtual_checkbox' %}
-                <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', true){% endif %}">Select Global All</button>
-                    <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', false){% endif %}">Deselect Global All</button>
-                </div>
-                
-                <div class="checkbox-scroll-box">
-                    {% set selected_items = (col.value or "").split(',') %}
-                    
-                    {% if col.column_name == 'pr_allowed_tables' %}
-                        <!-- FIX: Safely map table groupings directly -->
-                        {% set known_modules = ['AppSetup', 'CustomerSetup', 'Employee', 'Ledger', 'MasterData', 'OrderMgmt', 'Payables', 'Procurement', 'Product', 'Project', 'Receivables', 'All Screens'] %}
-                        {% set mod_labels = {'AppSetup': 'App Setup', 'CustomerSetup': 'Customers & Vendors', 'Employee': 'Employees', 'Ledger': 'General Ledger', 'MasterData': 'Master Data', 'OrderMgmt': 'Order Management', 'Payables': 'Payables', 'Procurement': 'Procurement', 'Product': 'Inventory', 'Project': 'Project Accounting', 'Receivables': 'Receivables', 'All Screens': 'Other Screens'} %}
-                        
-                        {% for mod_key in known_modules %}
-                            {% set opts_in_mod = [] %}
-                            {% for opt in col.options %}
-                                {% set opt_mod = table_modules.get(opt.code, 'All Screens') if opt.code else 'All Screens' %}
-                                {% if opt_mod == mod_key %}
-                                    {% set _ = opts_in_mod.append(opt) %}
-                                {% endif %}
-                            {% endfor %}
-                            
-                            {% if opts_in_mod|length > 0 %}
-                                <div class="cb-group collapsed">
-                                    <div class="cb-group-header" onclick="toggleCbGroup(this)">
-                                        <div style="display:flex; align-items:center; gap:8px;">
-                                            <i data-lucide="chevron-down" class="cb-chevron" style="width:16px;"></i>
-                                            <span style="font-weight:600; font-size: 15px; color:var(--color-glacier);">{{ mod_labels.get(mod_key, mod_key) }}</span>
-                                        </div>
-                                        <div style="display:flex; gap: 6px;">
-                                            <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 2px 8px; font-size: 11px; border-color: rgba(255,255,255,0.1);" onclick="event.stopPropagation(); {% if current_user_type == 'ADM' %}selectGroupCheckboxes(this, '{{ col.column_name }}', true){% endif %}">Select All</button>
-                                            <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 2px 8px; font-size: 11px; border-color: rgba(255,255,255,0.1);" onclick="event.stopPropagation(); {% if current_user_type == 'ADM' %}selectGroupCheckboxes(this, '{{ col.column_name }}', false){% endif %}">Clear</button>
-                                        </div>
-                                    </div>
-                                    <div class="cb-group-content">
-                                        {% for opt in opts_in_mod %}
-                                            <label class="checkbox-item {% if current_user_type != 'ADM' %}disabled-btn{% endif %}">
-                                                <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %} {% if current_user_type != 'ADM' %}disabled{% endif %}>
-                                                <span>{{ opt.name }}</span>
-                                            </label>
-                                        {% endfor %}
-                                    </div>
-                                </div>
-                            {% endif %}
-                        {% endfor %}
-                    {% else %}
-                        {% for opt in col.options %}
-                            <label class="checkbox-item {% if current_user_type != 'ADM' %}disabled-btn{% endif %}">
-                                <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %} {% if current_user_type != 'ADM' %}disabled{% endif %}>
-                                <span>{{ opt.name }}</span>
-                            </label>
-                        {% endfor %}
-                    {% endif %}
-                </div>
-            
-            {% elif col.options %}
-                <select name="{{ col.column_name }}" {% if col.required %}required{% endif %} {% if current_user_type != 'ADM' and col.column_name == 'pus_company_id' %}disabled class="readonly-input"{% endif %}>
-                    <option value="">-- Select --</option>
-                    {% for opt in col.options %}
-                        <option value="{{ opt.id }}" {% if col.value|string == opt.id|string %}selected{% endif %}>{{ opt.name }}</option>
-                    {% endfor %}
-                </select>
-            {% elif col.data_type == 'date' or col.data_type == 'timestamp' %}
-                <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %}>
-            {% elif 'pwd' in col.column_name or 'password' in col.column_name %}
-                <input type="password" name="{{ col.column_name }}" autocomplete="new-password" placeholder="{% if mode == 'edit' %}Leave blank to keep unchanged{% else %}••••••••{% endif %}" {% if col.required and mode != 'edit' %}required{% endif %}>
-            {% else %}
-                <input type="text" name="{{ col.column_name }}" placeholder="Enter {{ col.label|lower }}" value="{{ col.value if col.value != None else '' }}" {% if col.required %}required{% endif %}>
-            {% endif %}
-        </div>
+                    </select>
+                {% elif col.data_type == 'date' or col.data_type == 'timestamp' %}
+                    <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %}>
+                {% elif 'pwd' in col.column_name or 'password' in col.column_name %}
+                    <input type="password" name="{{ col.column_name }}" autocomplete="new-password" placeholder="{% if mode == 'edit' %}Leave blank to keep unchanged{% else %}••••••••{% endif %}" {% if col.required and mode != 'edit' %}required{% endif %}>
+                {% else %}
+                    <input type="text" name="{{ col.column_name }}" placeholder="Enter {{ col.label|lower }}" value="{{ col.value if col.value != None else '' }}" {% if col.required %}required{% endif %}>
+                {% endif %}
+            </div>
+        {% endif %}
         {% endmacro %}
 
         <form hx-ext="json-enc" 
