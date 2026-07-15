@@ -61,9 +61,7 @@ MODULE_MAPPING = {
     'phc_user_groups_t': 'AppSetup',
     
     'cv_product_registration_t': 'Cleaning',
-    'cv_pde_t': 'Cleaning',
-    'cv_mdd_t': 'Cleaning',
-    'cv_solubility_t': 'Cleaning',
+    'cv_product_apis_t': 'Cleaning',
     'cv_cleanability_t': 'Cleaning',
     'cv_method_t': 'Cleaning',
     'cv_batch_size_t': 'Cleaning',
