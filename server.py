@@ -65,7 +65,9 @@ def get_table_modules(tables):
         'phc_dept_t': 'MasterData',
         'phc_locations_t': 'MasterData',
         'phc_orgs_t': 'MasterData',
-        'phc_services_t': 'MasterData'
+        'phc_services_t': 'MasterData',
+        'phc_lookup_types': 'MasterData',
+        'phc_lookup_values_t': 'MasterData'
     }
     
     for table in tables:
@@ -578,19 +580,23 @@ async def show_table(request, table_name):
                 options = await get_dropdown_options(conn, c_name)
                 lookup = {str(opt['id']): opt['name'] for opt in options} if options else None
 
-                for row in rows_dict:
-                    val = row.get(c_name)
-                    if val is not None and lookup and str(val) in lookup:
-                        row[c_name] = f"{lookup[str(val)]} (ID: {val})"
-                    row[c_name] = mask_sensitive_data(c_name, row.get(c_name), request.ctx.user_type)
+            for row in rows_dict:
+                val = row.get(c_name)
+                if val is not None and lookup and str(val) in lookup:
+                    row[c_name] = f"{lookup[str(val)]} (ID: {val})"
+                row[c_name] = mask_sensitive_data(c_name, row.get(c_name), request.ctx.user_type)
 
-            return await render("table_view.html", context={
+            # INTERCEPT THE LOOKUP TABLE TO RENDER THE SPLIT-PANE UI
+            template_to_render = "lookups_view.html" if table_name == 'phc_lookup_types' else "table_view.html"
+
+            return await render(template_to_render, context={
                 "table_name": table_name, 
                 "table_title": make_human_readable(table_name), 
                 "columns": columns, 
                 "rows": rows_dict, 
                 "all_tables": allowed, 
                 "table_modules": dynamic_mapping,
+                "menus": MENU_CACHE, 
                 "pk_column": pk_column, 
                 "user_id": request.ctx.user_id,
                 "username": request.ctx.username,
