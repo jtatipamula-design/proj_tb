@@ -674,6 +674,27 @@ async def export_csv(request, table_name):
 
         return response.text(output.getvalue(), headers={"Content-Disposition": f'attachment; filename="{table_name}_export.csv"', "Content-Type": "text/csv"})
 
+# ==========================================
+#  LOOKUP MASTER-DETAIL API
+# ==========================================
+@app.get("/api/lookup_values/<type_code>")
+@login_required
+async def get_lookup_values_api(request, type_code):
+    """Fetches the child records for a specific Lookup Type."""
+    async with app.ctx.pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT * FROM phc_lookup_values_t 
+            WHERE plv_lookup_type_code = $1 
+            ORDER BY plv_created ASC
+        """, type_code)
+        
+        return await render("lookups_partial.html", context={
+            "rows": [dict(r) for r in rows], 
+            "type_code": type_code,
+            "user_type": request.ctx.user_type
+        })
+
+
 
 @app.get("/edit/<table_name>/<pk_val>")
 @login_required
