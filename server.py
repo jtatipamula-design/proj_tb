@@ -59,7 +59,6 @@ WHO_COLS = {'creation_date', 'created_by', 'last_update_date', 'last_updated_by'
 def get_table_modules(tables):
     mapping = {}
     
-    # Phase 1: Explicit Exceptions overrides
     exceptions = {
         'phc_emp_t': 'Employee',
         'phc_apps_t': 'AppSetup',
@@ -124,13 +123,10 @@ async def add_security_headers(request, resp):
         resp.headers['X-Content-Type-Options'] = 'nosniff'
         resp.headers['X-XSS-Protection'] = '1; mode=block'
         resp.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-        
-        # 🛡️ P1 SECURITY FIX: CLOUD PROXY CACHE LOCKDOWN 🛡️
         resp.headers['Cache-Control'] = 'private, no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0'
         resp.headers['Pragma'] = 'no-cache'
         resp.headers['Expires'] = '0'
         resp.headers['Vary'] = 'Cookie, Authorization'
-        
         resp.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' https://unpkg.com; "
@@ -206,10 +202,7 @@ def login_required(wrapped):
 async def setup_db(app_instance, loop):
     try:
         dsn = CLOUD_DB_URL or f"postgres://postgres:{os.environ.get('LOCAL_DB_PASSWORD')}@localhost/tablesproj"
-        
-        app_instance.ctx.pool = await asyncpg.create_pool(
-            dsn=dsn, statement_cache_size=0, min_size=2, max_size=20
-        )
+        app_instance.ctx.pool = await asyncpg.create_pool(dsn=dsn, statement_cache_size=0, min_size=2, max_size=20)
 
         async with app_instance.ctx.pool.acquire() as conn:
             await conn.execute("SELECT pg_advisory_lock(1337)")
@@ -217,7 +210,6 @@ async def setup_db(app_instance, loop):
                 await _run_initial_migrations(conn)
             finally:
                 await conn.execute("SELECT pg_advisory_unlock(1337)")
-
     except Exception as e:
         print(f"❌ DATABASE CONNECTION FAILED: {e}")
         raise SystemExit("Fatal: Database initialization failed.")
@@ -286,36 +278,35 @@ def make_human_readable(text):
 
 
 def get_column_sort_priority(pk_column, c_name):
-    """ Phase 1: Smart Sorting Algorithm for forms """
     name = c_name.lower()
-    
-    # 1. Primary Key at the absolute top
     if c_name == pk_column: return 0
-    
-    # 2. Key identifiers (Codes, Names) pushed up
-    if name.endswith('code') or name.endswith('name') or name == 'dosage_form': 
-        return 1
-        
-    # 3. Statuses and Flags
+    if name.endswith('code') or name.endswith('name') or name == 'dosage_form': return 1
     if name.endswith('status'): return 2
     if name.endswith('flag'): return 3
-    
-    # 10. System WHO Columns at the very bottom
     if name in ('created_by', 'creation_date', 'last_update_date', 'last_updated_by', 'last_update_login') or \
        name.endswith('_created_by') or name.endswith('_modified_by') or \
        name.endswith('_created') or name.endswith('_modified'):
         return 100
-        
     if 'start_date' in name: return 80
     if 'end_date' in name: return 81
-    
-    # Everything else in the middle
     return 50
 
+# ==========================================
+#  CENTRALIZED CACHING & RESOLUTION ENGINES
+# ==========================================
 
-# ==========================================
-#  DATA RESOLUTION & RBAC ENGINES
-# ==========================================
+async def _get_cached_schema(conn, table_name):
+    """ Centralized, exhaustive schema cache to eliminate redundant DB calls. """
+    if table_name not in SCHEMA_CACHE["columns"]:
+        cols = await conn.fetch("""
+            SELECT column_name, data_type, character_maximum_length, is_nullable 
+            FROM information_schema.columns 
+            WHERE table_name = $1 
+            ORDER BY ordinal_position
+        """, table_name)
+        SCHEMA_CACHE["columns"][table_name] = [dict(c) for c in cols]
+    return SCHEMA_CACHE["columns"][table_name]
+
 async def get_allowed_tables(conn, user_id, user_type):
     if SCHEMA_CACHE["tables"] is None:
         rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%_t' OR table_name = 'phc_lookup_types'")
@@ -350,26 +341,17 @@ async def get_allowed_tables(conn, user_id, user_type):
     RBAC_CACHE[user_id] = {'tables': final_tables, 'expires': now + 300} 
     return final_tables
 
-
 def mask_sensitive_data(col_name, val, user_type):
-    if val is None or user_type == 'ADM':
-        return val
-
+    if val is None or user_type == 'ADM': return val
     k_lower = col_name.lower()
     v_str = str(val)
-
-    if 'pwd' in k_lower or 'password' in k_lower:
-        return '********'
+    if 'pwd' in k_lower or 'password' in k_lower: return '********'
     if 'email' in k_lower and '@' in v_str:
         parts = v_str.split('@')
         return f"{parts[0][0]}***@{parts[1]}" if len(parts[0]) > 1 else f"***@{parts[1]}"
-    if 'phone' in k_lower and len(v_str) >= 4:
-        return f"***-***-{v_str[-4:]}"
-    if 'account_number' in k_lower and len(v_str) >= 4:
-        return f"****-****-{v_str[-4:]}"
-
+    if 'phone' in k_lower and len(v_str) >= 4: return f"***-***-{v_str[-4:]}"
+    if 'account_number' in k_lower and len(v_str) >= 4: return f"****-****-{v_str[-4:]}"
     return val
-
 
 async def get_pk_column(conn, table_name):
     if table_name not in SCHEMA_CACHE["pks"]:
@@ -388,29 +370,18 @@ async def get_dropdown_options(conn, column_name):
     if not col_lower.endswith('_id') and not col_lower.endswith('_code'):
         return None
 
-    # Foreign Key Introspection Query
     fk_query = """
-        SELECT
-            ccu.table_name AS target_table,
-            ccu.column_name AS target_column
-        FROM
-            information_schema.table_constraints AS tc
-            JOIN information_schema.key_column_usage AS kcu
-              ON tc.constraint_name = kcu.constraint_name
-              AND tc.table_schema = kcu.table_schema
-            JOIN information_schema.constraint_column_usage AS ccu
-              ON ccu.constraint_name = tc.constraint_name
-              AND ccu.table_schema = tc.table_schema
-        WHERE tc.constraint_type = 'FOREIGN KEY' AND kcu.column_name = $1
-        LIMIT 1
+        SELECT ccu.table_name AS target_table, ccu.column_name AS target_column
+        FROM information_schema.table_constraints AS tc
+        JOIN information_schema.key_column_usage AS kcu ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema
+        JOIN information_schema.constraint_column_usage AS ccu ON ccu.constraint_name = tc.constraint_name AND ccu.table_schema = tc.table_schema
+        WHERE tc.constraint_type = 'FOREIGN KEY' AND kcu.column_name = $1 LIMIT 1
     """
     fk_row = await conn.fetchrow(fk_query, column_name)
     
     if fk_row:
-        target_table = fk_row['target_table']
-        pk_col = fk_row['target_column']
+        target_table, pk_col = fk_row['target_table'], fk_row['target_column']
     else:
-        # Fallback to basic guessing for common fields
         target_table = None
         if 'company_id' in col_lower: target_table = 'phc_companies_t'
         elif 'dept_id' in col_lower: target_table = 'phc_dept_t'
@@ -421,8 +392,7 @@ async def get_dropdown_options(conn, column_name):
         else: return None
         pk_col = await get_pk_column(conn, target_table)
 
-    if not target_table or not pk_col:
-        return None
+    if not target_table or not pk_col: return None
 
     cache_key = f"{target_table}_lookups"
     if cache_key in SCHEMA_CACHE["dropdown_lookups"]:
@@ -430,11 +400,7 @@ async def get_dropdown_options(conn, column_name):
         if time.time() - cache_entry['time'] < 3600: 
             return cache_entry['data']
 
-    if target_table not in SCHEMA_CACHE["columns"]:
-        cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", target_table)
-        SCHEMA_CACHE["columns"][target_table] = [dict(c) for c in cols]
-
-    cols = SCHEMA_CACHE["columns"][target_table]
+    cols = await _get_cached_schema(conn, target_table)
     name_col = pk_col
 
     for r in cols:
@@ -450,7 +416,6 @@ async def get_dropdown_options(conn, column_name):
         return result
     except asyncpg.exceptions.UndefinedTableError:
         return None
-
 
 # ==========================================
 #  AUTH ROUTES
@@ -473,11 +438,8 @@ async def handle_login(request):
             loop = asyncio.get_running_loop()
             
             try:
-                is_valid = await loop.run_in_executor(
-                    None, partial(bcrypt.checkpw, password.encode('utf-8'), stored_pwd.encode('utf-8'))
-                )
+                is_valid = await loop.run_in_executor(None, partial(bcrypt.checkpw, password.encode('utf-8'), stored_pwd.encode('utf-8')))
             except ValueError:
-                # Catch plain-text passwords and upgrade them to hashes safely
                 if password == stored_pwd:
                     is_valid = True
                     new_hashed = await loop.run_in_executor(None, partial(bcrypt.hashpw, password.encode('utf-8'), bcrypt.gensalt()))
@@ -486,7 +448,6 @@ async def handle_login(request):
             if is_valid:
                 session_id = str(uuid.uuid4())
                 await conn.execute("UPDATE phc_users_t SET pus_session_id = $1 WHERE pus_user_id = $2", session_id, user['pus_user_id'])
-
                 csrf_token = str(uuid.uuid4().hex)
 
                 payload = {
@@ -500,9 +461,7 @@ async def handle_login(request):
                 token = jwt.encode(payload, app.config.SECRET, algorithm="HS256")
                 
                 resp = response.json({"status": "success"})
-                is_secure = not is_development
-                resp.add_cookie("auth_token", token, httponly=True, samesite="Strict", secure=is_secure)
-
+                resp.add_cookie("auth_token", token, httponly=True, samesite="Strict", secure=not is_development)
                 await log_action(conn, user['pus_user_id'], "User logged in")
                 return resp
         
@@ -516,10 +475,8 @@ async def logout(request):
         resp.headers["HX-Redirect"] = "/login"
     else:
         resp = response.redirect("/login")
-        
     resp.delete_cookie("auth_token")
     return resp
-
 
 # ==========================================
 #  MAIN ROUTES
@@ -537,14 +494,9 @@ async def dashboard(request):
         }
         
     dynamic_mapping = get_table_modules(allowed)
-    
     return await render("dashboard.html", context={
-        "stats": stats, 
-        "all_tables": allowed, 
-        "table_modules": dynamic_mapping, 
-        "username": request.ctx.username, 
-        "user_id": request.ctx.user_id,
-        "csrf_token": request.ctx.csrf_token 
+        "stats": stats, "all_tables": allowed, "table_modules": dynamic_mapping, 
+        "username": request.ctx.username, "user_id": request.ctx.user_id, "csrf_token": request.ctx.csrf_token 
     })
 
 
@@ -554,36 +506,28 @@ async def show_table(request, table_name):
     try:
         async with app.ctx.pool.acquire() as conn:
             allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
-            if table_name not in allowed:
-                return response.redirect("/")
+            if table_name not in allowed: return response.redirect("/")
 
-            if table_name not in SCHEMA_CACHE["columns"]:
-                cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
-                SCHEMA_CACHE["columns"][table_name] = [dict(c) for c in cols]
-
-            columns = [{"raw": r['column_name'], "label": make_human_readable(r['column_name'])} for r in SCHEMA_CACHE["columns"][table_name]]
+            schema_cols = await _get_cached_schema(conn, table_name)
+            columns = [{"raw": r['column_name'], "label": make_human_readable(r['column_name'])} for r in schema_cols]
             pk_column = await get_pk_column(conn, table_name)
-
             columns = sorted(columns, key=lambda c: get_column_sort_priority(pk_column, c['raw']))
 
-            page = int(request.args.get("page", 1))
-            limit = 50
+            page, limit = int(request.args.get("page", 1)), 50
             offset = (page - 1) * limit
-
             search_query = request.args.get("q", "").strip()
-            where_clauses = []
-            params = []
+            where_clauses, params = [], []
 
-            # TENANT ISOLATION: Force Company ID filter if it exists
-            company_col = next((c['column_name'] for c in SCHEMA_CACHE["columns"][table_name] if c['column_name'].lower().endswith('company_id')), None)
+            company_col = next((c['column_name'] for c in schema_cols if c['column_name'].lower().endswith('company_id')), None)
             if company_col:
                 params.append(request.ctx.company_id)
                 where_clauses.append(f"{company_col} = $1")
 
             valid_search_types = ('character varying', 'text', 'varchar', 'integer', 'bigint', 'numeric')
-            searchable_cols = [c['column_name'] for c in SCHEMA_CACHE["columns"][table_name] if c.get('data_type') in valid_search_types]
+            searchable_cols = [c['column_name'] for c in schema_cols if c.get('data_type') in valid_search_types]
 
-            if search_query and searchable_cols:
+            # Require minimum 2 chars to search to prevent wildcard scanning slowdowns
+            if len(search_query) >= 2 and searchable_cols:
                 search_param_idx = len(params) + 1
                 params.append(f"%{search_query}%")
                 cast_clauses = [f"CAST({col} AS TEXT) ILIKE ${search_param_idx}" for col in searchable_cols]
@@ -594,51 +538,39 @@ async def show_table(request, table_name):
             
             total_count = await conn.fetchval(f"SELECT COUNT(*) FROM {table_name} {where_sql}", *params)
             total_pages = max(1, (total_count + limit - 1) // limit)
-            start_row = offset + 1 if total_count > 0 else 0
+            
+            start_row = min(offset + 1, total_count) if total_count > 0 else 0
             end_row = min(offset + limit, total_count)
 
             rows = await conn.fetch(f"SELECT * FROM {table_name} {where_sql} {order_clause} LIMIT {limit} OFFSET {offset}", *params)
             rows_dict = [dict(r) for r in rows]
 
+            # O(1) Dictionary Lookup for Performance
             for col in columns:
                 c_name = col['raw']
-                if c_name == pk_column: continue
-                if c_name == 'address_details': continue # Skip parsing JSON into simple dropdown checks
+                if c_name == pk_column or c_name == 'address_details': continue 
 
                 options = await get_dropdown_options(conn, c_name)
-                lookup = {str(opt['id']): opt['name'] for opt in options} if options else None
-
-                for row in rows_dict:
-                    val = row.get(c_name)
-                    if val is not None and lookup and str(val) in lookup:
-                        row[c_name] = f"{lookup[str(val)]} (ID: {val})"
-                    row[c_name] = mask_sensitive_data(c_name, row.get(c_name), request.ctx.user_type)
+                if options:
+                    lookup = {str(opt['id']): opt['name'] for opt in options}
+                    for row in rows_dict:
+                        val = row.get(c_name)
+                        if val is not None and str(val) in lookup:
+                            row[c_name] = f"{lookup[str(val)]} (ID: {val})"
+                        row[c_name] = mask_sensitive_data(c_name, row.get(c_name), request.ctx.user_type)
 
             dynamic_mapping = get_table_modules(allowed)
 
             return await render("table_view.html", context={
-                "table_name": table_name, 
-                "table_title": make_human_readable(table_name), 
-                "columns": columns, 
-                "rows": rows_dict, 
-                "all_tables": allowed, 
-                "table_modules": dynamic_mapping,
-                "pk_column": pk_column, 
-                "user_id": request.ctx.user_id,
-                "username": request.ctx.username,
-                "csrf_token": request.ctx.csrf_token,
-                "search_query": search_query,
-                "page": page,
-                "total_pages": total_pages,
-                "total_count": total_count,
-                "start_row": start_row,
-                "end_row": end_row
+                "table_name": table_name, "table_title": make_human_readable(table_name), "columns": columns, 
+                "rows": rows_dict, "all_tables": allowed, "table_modules": dynamic_mapping, "pk_column": pk_column, 
+                "user_id": request.ctx.user_id, "username": request.ctx.username, "csrf_token": request.ctx.csrf_token,
+                "search_query": search_query, "page": page, "total_pages": total_pages, "total_count": total_count,
+                "start_row": start_row, "end_row": end_row
             })
-            
     except Exception as e:
         print(f"Error loading table {table_name}: {e}")
-        if request.headers.get("HX-Request"):
-            return response.json({"error": f"Table could not be loaded: {str(e)[:50]}"}, status=500)
+        if request.headers.get("HX-Request"): return response.json({"error": "Table could not be loaded"}, status=500)
         return response.redirect("/")
 
 
@@ -648,79 +580,57 @@ async def export_csv(request, table_name):
     pk_id = request.args.get("id")
     async with app.ctx.pool.acquire() as conn:
         allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
-        if table_name not in allowed:
-            return response.text("Unauthorized", status=403)
+        if table_name not in allowed: return response.text("Unauthorized", status=403)
 
-        if table_name not in SCHEMA_CACHE["columns"]:
-            cols = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
-            SCHEMA_CACHE["columns"][table_name] = [dict(c) for c in cols]
-
-        where_clauses = []
-        params = []
+        schema_cols = await _get_cached_schema(conn, table_name)
+        where_clauses, params = [], []
         pk_column = await get_pk_column(conn, table_name)
 
-        # TENANT ISOLATION
-        company_col = next((c['column_name'] for c in SCHEMA_CACHE["columns"][table_name] if c['column_name'].lower().endswith('company_id')), None)
+        company_col = next((c['column_name'] for c in schema_cols if c['column_name'].lower().endswith('company_id')), None)
         if company_col:
             params.append(request.ctx.company_id)
             where_clauses.append(f"{company_col} = $1")
 
         if pk_id and pk_column:
-            pk_type = next((r['data_type'] for r in SCHEMA_CACHE["columns"][table_name] if r['column_name'] == pk_column), 'integer')
+            pk_type = next((r['data_type'] for r in schema_cols if r['column_name'] == pk_column), 'integer')
             parsed_pk = pk_id if pk_type in ('character varying', 'text', 'varchar') else int(pk_id)
             search_param_idx = len(params) + 1
             params.append(parsed_pk)
             where_clauses.append(f"{pk_column} = ${search_param_idx}")
 
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-        query = f"SELECT * FROM {table_name} {where_sql}"
-
-        rows = await conn.fetch(query, *params)
-        if not rows:
-            return response.text("No data found")
+        rows = await conn.fetch(f"SELECT * FROM {table_name} {where_sql}", *params)
+        if not rows: return response.text("No data found")
         
         rows_dict = [dict(r) for r in rows]
-        sorted_cols = sorted(SCHEMA_CACHE["columns"][table_name], key=lambda c: get_column_sort_priority(pk_column, c['column_name']))
+        sorted_cols = sorted(schema_cols, key=lambda c: get_column_sort_priority(pk_column, c['column_name']))
 
         for r in sorted_cols:
             c_name = r['column_name']
             if c_name == 'address_details': continue
             options = await get_dropdown_options(conn, c_name)
-            lookup = {str(opt['id']): opt['name'] for opt in options} if options else None
-
-            for row in rows_dict:
-                val = row.get(c_name)
-                if val is not None and lookup and str(val) in lookup:
-                    row[c_name] = f"{lookup[str(val)]} (ID: {val})"
-                row[c_name] = mask_sensitive_data(c_name, row.get(c_name), request.ctx.user_type)
+            if options:
+                lookup = {str(opt['id']): opt['name'] for opt in options}
+                for row in rows_dict:
+                    val = row.get(c_name)
+                    if val is not None and str(val) in lookup: row[c_name] = f"{lookup[str(val)]} (ID: {val})"
+                    row[c_name] = mask_sensitive_data(c_name, row.get(c_name), request.ctx.user_type)
 
         output = io.StringIO()
         writer = csv.writer(output)
         ordered_keys = [c['column_name'] for c in sorted_cols]
         writer.writerow(ordered_keys)
-        
-        for row in rows_dict:
-            writer.writerow([row.get(k) for k in ordered_keys])
+        for row in rows_dict: writer.writerow([row.get(k) for k in ordered_keys])
 
         return response.text(output.getvalue(), headers={"Content-Disposition": f'attachment; filename="{table_name}_export.csv"', "Content-Type": "text/csv"})
 
 
-# ==========================================
-#  LOOKUP MASTER-DETAIL API
-# ==========================================
 @app.get("/api/lookup_values/<type_code>")
 @login_required
 async def get_lookup_values_api(request, type_code):
-    """Fetches the child records and returns raw HTML for HTMX to inject into the Split Pane."""
     async with app.ctx.pool.acquire() as conn:
         try:
-            rows = await conn.fetch("""
-                SELECT * FROM phc_lookup_values_t 
-                WHERE plv_lookup_type_code = $1 
-                ORDER BY plv_created ASC
-            """, type_code)
-            
-            # Build the HTML directly in Python
+            rows = await conn.fetch("SELECT * FROM phc_lookup_values_t WHERE plv_lookup_type_code = $1 ORDER BY plv_created ASC", type_code)
             html_parts = [f"""
             <div style="background: rgba(0,0,0,0.4); padding: 12px 20px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
                 <span style="font-family: var(--font-mono); font-size: 12px; color: var(--color-fog); text-transform: uppercase; letter-spacing: 0.05em;">2. Assigned Values for <span style="color: var(--color-frost-link);">{type_code}</span></span>
@@ -728,20 +638,10 @@ async def get_lookup_values_api(request, type_code):
             </div>
             <div class="table-scroll" style="flex-grow: 1; max-height: none;">
                 <table style="animation: fadeIn 0.3s ease;">
-                    <thead>
-                        <tr>
-                            <th style="width: 50px;"></th>
-                            <th>Value Code</th>
-                            <th>Display Name</th>
-                            <th>Description</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th style="width: 50px;"></th><th>Value Code</th><th>Display Name</th><th>Description</th><th>Status</th></tr></thead>
                     <tbody>
             """]
-            
-            if not rows:
-                html_parts.append('<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--color-fog);">No values assigned to this lookup type yet.</td></tr>')
+            if not rows: html_parts.append('<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--color-fog);">No values assigned to this lookup type yet.</td></tr>')
             else:
                 for row in rows:
                     status = '<span style="color: var(--color-cipher-mint); background: rgba(38,150,132,0.15); padding: 4px 8px; border-radius: 4px; font-size: 12px;">Active</span>' if row['plv_status'] == 'ACT' else '<span style="color: var(--color-ember); background: rgba(228,109,76,0.15); padding: 4px 8px; border-radius: 4px; font-size: 12px;">Inactive</span>'
@@ -752,50 +652,40 @@ async def get_lookup_values_api(request, type_code):
                         <td style="font-weight: 500; color: var(--color-glacier);">{row['plv_lookup_value_name'] or ''}</td>
                         <td style="color: var(--color-moonlight);">{row['plv_lookup_value_desc'] or ''}</td>
                         <td>{status}</td>
-                    </tr>
-                    """)
-                    
-            html_parts.append("""
-                    </tbody>
-                </table>
-            </div>
-            """)
-            
+                    </tr>""")
+            html_parts.append("</tbody></table></div>")
             return response.html("".join(html_parts))
         except Exception as e:
-            print(f"Lookup Error: {e}")
             return response.html('<div style="padding: 20px; color: var(--color-ember);">Error loading details.</div>')
 
 
-# ==========================================
-#  EDIT & CREATE ROUTES
-# ==========================================
 @app.get("/edit/<table_name>/<pk_val>")
 @login_required
 async def show_edit_form(request, table_name, pk_val):
     try:
         async with app.ctx.pool.acquire() as conn:
             allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
-            if table_name not in allowed:
-                return response.redirect("/")
+            if table_name not in allowed: return response.redirect("/")
 
             pk_column = await get_pk_column(conn, table_name)
-            col_rows = await conn.fetch("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
-            
+            col_rows = await _get_cached_schema(conn, table_name)
             pk_type = next((r['data_type'] for r in col_rows if r['column_name'] == pk_column), 'integer')
             parsed_pk = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
             
-            record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1", parsed_pk)
+            # SECURE IDOR FIX: Verify Tenant on Fetch
+            company_col = next((c['column_name'] for c in col_rows if c['column_name'].lower().endswith('company_id')), None)
+            if company_col:
+                record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1 AND {company_col} = $2", parsed_pk, request.ctx.company_id)
+                if not record: return response.text("Unauthorized or Record Not Found", status=403)
+            else:
+                record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1", parsed_pk)
+                
             columns = []
-
             for r in col_rows:
                 c_name = r['column_name']
-                if c_name.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or c_name.lower() in WHO_COLS:
-                    continue
-
+                if c_name.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or c_name.lower() in WHO_COLS: continue
                 is_pk = (c_name == pk_column)
                 
-                # Phase 3: Address Details Extraction (No masking for JSONB)
                 if r['data_type'] in ('json', 'jsonb'):
                     val = record[c_name]
                     if isinstance(val, str):
@@ -804,18 +694,12 @@ async def show_edit_form(request, table_name, pk_val):
                     val = json.dumps(val) if val else "{}"
                 else:
                     val = mask_sensitive_data(c_name, record[c_name], request.ctx.user_type)
-                    if isinstance(val, (date, datetime)):
-                        val = val.strftime('%Y-%m-%d')
+                    if isinstance(val, (date, datetime)): val = val.strftime('%Y-%m-%d')
 
                 options = await get_dropdown_options(conn, c_name) if not is_pk else None
                 is_req = (r['is_nullable'] == 'NO') and not is_pk
+                columns.append({"column_name": c_name, "label": make_human_readable(c_name), "required": is_req, "value": val, "data_type": r['data_type'], "options": options, "is_pk": is_pk})
 
-                columns.append({
-                    "column_name": c_name, "label": make_human_readable(c_name), "required": is_req, 
-                    "value": val, "data_type": r['data_type'], "options": options, "is_pk": is_pk
-                })
-
-            # Sort columns based on priority (pushes ID, Code, Name to top)
             columns = sorted(columns, key=lambda c: get_column_sort_priority(pk_column, c['column_name']))
 
             if table_name == 'phc_roles_t':
@@ -830,25 +714,13 @@ async def show_edit_form(request, table_name, pk_val):
                 assigned_val = ",".join([str(a['pua_role_id']) for a in assignments])
                 columns.append({"column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False, "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in roles], "is_pk": False})
 
-            dynamic_mapping = get_table_modules(allowed)
-
             return await render("form_view.html", context={
-                "table_name": table_name, 
-                "table_title": f"Edit {make_human_readable(table_name)}", 
-                "columns": columns, 
-                "all_tables": allowed, 
-                "table_modules": dynamic_mapping, 
-                "pk_val": pk_val, 
-                "mode": "edit", 
-                "user_id": request.ctx.user_id,
-                "username": request.ctx.username,
-                "csrf_token": request.ctx.csrf_token,
-                "current_user_type": request.ctx.user_type
+                "table_name": table_name, "table_title": f"Edit {make_human_readable(table_name)}", "columns": columns, 
+                "all_tables": allowed, "table_modules": get_table_modules(allowed), "pk_val": pk_val, "mode": "edit", 
+                "user_id": request.ctx.user_id, "username": request.ctx.username, "csrf_token": request.ctx.csrf_token, "current_user_type": request.ctx.user_type
             })
     except Exception as e:
-        print(f"Error loading edit form: {e}")
-        if request.headers.get("HX-Request"):
-            return response.json({"error": "Error loading record."}, status=500)
+        if request.headers.get("HX-Request"): return response.json({"error": "Error loading record."}, status=500)
         return response.redirect(f"/table/{table_name}")
 
 
@@ -858,18 +730,15 @@ async def show_add_form(request, table_name):
     try:
         async with app.ctx.pool.acquire() as conn:
             allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
-            if table_name not in allowed:
-                return response.redirect("/")
+            if table_name not in allowed: return response.redirect("/")
 
-            col_rows = await conn.fetch("SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = $1 ORDER BY ordinal_position", table_name)
+            col_rows = await _get_cached_schema(conn, table_name)
             pk_column = await get_pk_column(conn, table_name)
 
             columns = []
             for r in col_rows:
                 c_name = r['column_name']
-                if c_name.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or c_name.lower() in WHO_COLS:
-                    continue
-
+                if c_name.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or c_name.lower() in WHO_COLS: continue
                 is_pk = (c_name == pk_column)
                 options = await get_dropdown_options(conn, c_name) if not is_pk else None
                 is_req = (r['is_nullable'] == 'NO') and not is_pk
@@ -877,17 +746,10 @@ async def show_add_form(request, table_name):
                 val = ""
                 if ('date' in r['data_type'] or 'timestamp' in r['data_type']) and 'end' not in c_name.lower() and not is_pk:
                     val = datetime.now().strftime('%Y-%m-%d')
-                
-                # Default empty JSON object for Address
-                if r['data_type'] in ('json', 'jsonb'):
-                    val = "{}"
+                if r['data_type'] in ('json', 'jsonb'): val = "{}"
                     
-                columns.append({
-                    "column_name": c_name, "label": make_human_readable(c_name), "required": is_req, 
-                    "value": val, "data_type": r['data_type'], "options": options, "is_pk": is_pk
-                })
+                columns.append({"column_name": c_name, "label": make_human_readable(c_name), "required": is_req, "value": val, "data_type": r['data_type'], "options": options, "is_pk": is_pk})
 
-            # Sort columns based on priority (pushes ID, Code, Name to top)
             columns = sorted(columns, key=lambda c: get_column_sort_priority(pk_column, c['column_name']))
 
             if table_name == 'phc_roles_t':
@@ -898,26 +760,14 @@ async def show_add_form(request, table_name):
                 roles = await conn.fetch("SELECT prl_role_id as id, prl_role_name as name FROM phc_roles_t WHERE prl_status = 'ACT'")
                 columns.append({"column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False, "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in roles], "is_pk": False})
 
-            dynamic_mapping = get_table_modules(allowed)
-
             return await render("form_view.html", context={
-                "table_name": table_name, 
-                "table_title": f"New {make_human_readable(table_name)}", 
-                "columns": columns, 
-                "all_tables": allowed, 
-                "table_modules": dynamic_mapping, 
-                "mode": "create", 
-                "user_id": request.ctx.user_id,
-                "username": request.ctx.username,
-                "csrf_token": request.ctx.csrf_token,
-                "current_user_type": request.ctx.user_type
+                "table_name": table_name, "table_title": f"New {make_human_readable(table_name)}", "columns": columns, 
+                "all_tables": allowed, "table_modules": get_table_modules(allowed), "mode": "create", 
+                "user_id": request.ctx.user_id, "username": request.ctx.username, "csrf_token": request.ctx.csrf_token, "current_user_type": request.ctx.user_type
             })
     except Exception as e:
-        print(f"Error loading create form: {e}")
-        if request.headers.get("HX-Request"):
-            return response.json({"error": "Error creating record."}, status=500)
+        if request.headers.get("HX-Request"): return response.json({"error": "Error creating record."}, status=500)
         return response.redirect(f"/table/{table_name}")
-
 
 async def _sanitize_payload(data, schema_map, pk_column, current_user_id, request_method):
     clean_data = {}
@@ -925,81 +775,56 @@ async def _sanitize_payload(data, schema_map, pk_column, current_user_id, reques
 
     virtual_screens = data.pop("pr_allowed_tables", None)
     if isinstance(virtual_screens, list): data["pr_allowed_tables"] = ",".join(virtual_screens)
-    
     virtual_roles = data.pop("pu_assigned_roles", None)
     if isinstance(virtual_roles, list): data["pu_assigned_roles"] = ",".join(virtual_roles)
 
     for r in schema_map.values():
         c_name = r['column_name']
         if not data.get(c_name) and ('date' in r['data_type'] or 'timestamp' in r['data_type']):
-            if 'end' not in c_name.lower():
-                data[c_name] = datetime.now().strftime('%Y-%m-%d')
+            if 'end' not in c_name.lower(): data[c_name] = datetime.now().strftime('%Y-%m-%d')
 
     for k, v in data.items():
-        if v in ("", None) or k == pk_column:
-            continue
-
-        if k.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or k.lower() in WHO_COLS:
-            continue
+        if v in ("", None) or k == pk_column: continue
+        if k.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or k.lower() in WHO_COLS: continue
 
         if k == 'pus_pwd':
             salt = bcrypt.gensalt()
-            hashed_bytes = await loop.run_in_executor(None, partial(bcrypt.hashpw, v.encode('utf-8'), salt))
-            v = hashed_bytes.decode('utf-8')
+            v = (await loop.run_in_executor(None, partial(bcrypt.hashpw, v.encode('utf-8'), salt))).decode('utf-8')
 
         col_info = schema_map.get(k, {})
         target_type = col_info.get('data_type', '').lower()
         max_len = col_info.get('character_maximum_length')
         
-        # Phase 3: JSONB Data Parser for Nested Addresses
         if target_type in ('json', 'jsonb'):
             if isinstance(v, str):
-                try:
-                    v = json.loads(v)
-                except Exception:
-                    v = {}
-            # PostgreSQL driver expects dictionary or stringified JSON depending on strictness, stringify is safer
+                try: v = json.loads(v)
+                except Exception: v = {}
             clean_data[k] = json.dumps(v)
             continue
 
         if 'date' in target_type or 'timestamp' in target_type or (isinstance(v, str) and len(v) == 10 and v[4] == '-' and v[7] == '-'):
             if isinstance(v, str) and v:
-                try:
-                    v = datetime.strptime(v, '%Y-%m-%d')
+                try: v = datetime.strptime(v, '%Y-%m-%d')
                 except ValueError:
-                    try:
-                        v = datetime.fromisoformat(v)
-                    except ValueError:
-                        pass
+                    try: v = datetime.fromisoformat(v)
+                    except ValueError: pass
 
         if isinstance(v, str) and max_len is not None:
             if len(v) > max_len:
-                if "status" in k and v.lower() == "active":
-                    v = "ACT"
-                elif "status" in k and v.lower() == "inactive":
-                    v = "INA"
-                else:
-                    v = v[:max_len]
+                if "status" in k and v.lower() == "active": v = "ACT"
+                elif "status" in k and v.lower() == "inactive": v = "INA"
+                else: v = v[:max_len]
 
-        if target_type in ('integer', 'bigint', 'numeric', 'smallint') and isinstance(v, str) and v.strip().isdigit():
-            clean_data[k] = int(v)
-        else:
-            clean_data[k] = v
+        if target_type in ('integer', 'bigint', 'numeric', 'smallint') and isinstance(v, str) and v.strip().isdigit(): clean_data[k] = int(v)
+        else: clean_data[k] = v
 
     for col_name in schema_map:
         c_lower = col_name.lower()
-        
         if c_lower.endswith(('_created_by', '_modified_by', 'created_by', 'last_updated_by')):
             target_type = schema_map.get(col_name, {}).get('data_type', '').lower()
-            if target_type in ('integer', 'bigint', 'numeric', 'smallint'):
-                clean_data[col_name] = int(current_user_id) if str(current_user_id).isdigit() else None
-            else:
-                clean_data[col_name] = str(current_user_id)
-                
-        if request_method == "POST" and (c_lower.endswith('_created') or c_lower == 'creation_date'):
-            clean_data[col_name] = datetime.now()
-        if c_lower.endswith('_modified') or c_lower == 'last_update_date':
-            clean_data[col_name] = datetime.now()
+            clean_data[col_name] = int(current_user_id) if target_type in ('integer', 'bigint', 'numeric', 'smallint') and str(current_user_id).isdigit() else str(current_user_id)
+        if request_method == "POST" and (c_lower.endswith('_created') or c_lower == 'creation_date'): clean_data[col_name] = datetime.now()
+        if c_lower.endswith('_modified') or c_lower == 'last_update_date': clean_data[col_name] = datetime.now()
 
     return clean_data
 
@@ -1008,111 +833,65 @@ async def _sanitize_payload(data, schema_map, pk_column, current_user_id, reques
 @app.put("/api/<table_name>/<pk_val>", name="update_row")
 @login_required
 async def save_data(request, table_name, pk_val=None):
-    
-    provided_csrf = request.headers.get("X-CSRFToken")
-    if not provided_csrf or provided_csrf != request.ctx.csrf_token:
-        return response.json({"error": "Missing or Invalid CSRF Token. Session rejected."}, status=403)
+    if request.headers.get("X-CSRFToken") != request.ctx.csrf_token: return response.json({"error": "Invalid CSRF"}, status=403)
 
     data = request.json
-    current_user_id = request.ctx.user_id
-    user_type = request.ctx.user_type
-    company_id = int(request.ctx.company_id)
+    current_user_id, user_type, company_id = request.ctx.user_id, request.ctx.user_type, int(request.ctx.company_id)
 
     if user_type != 'ADM':
-        data.pop('pus_user_type', None)
-        data.pop('pus_status', None)
-        data.pop('pus_company_id', None)
-        data.pop('pu_assigned_roles', None)
-        data.pop('pr_allowed_tables', None)
-        
-        admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']
-        if table_name in admin_only_tables:
-            return response.json({"error": "Unauthorized. Security configuration tables are strictly for Administrators."}, status=403)
-
-        if table_name == 'phc_users_t' and request.method == "PUT" and str(pk_val) != str(current_user_id):
-            return response.json({"error": "Unauthorized to edit other users' profiles."}, status=403)
+        for key in ['pus_user_type', 'pus_status', 'pus_company_id', 'pu_assigned_roles', 'pr_allowed_tables']: data.pop(key, None)
+        if table_name in ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']: return response.json({"error": "Unauthorized"}, status=403)
         if table_name == 'phc_users_t' and request.method == "PUT":
+            if str(pk_val) != str(current_user_id): return response.json({"error": "Unauthorized"}, status=403)
             data.pop('pus_pwd', None) 
 
     async with app.ctx.pool.acquire() as conn:
         allowed = await get_allowed_tables(conn, current_user_id, user_type)
-        if table_name not in allowed:
-            return response.json({"error": "Unauthorized API Access"}, status=403)
+        if table_name not in allowed: return response.json({"error": "Unauthorized"}, status=403)
 
-        virtual_screens = data.pop("pr_allowed_tables", None)
-        virtual_roles = data.pop("pu_assigned_roles", None)
+        virtual_screens, virtual_roles = data.pop("pr_allowed_tables", None), data.pop("pu_assigned_roles", None)
         pk_column = await get_pk_column(conn, table_name)
-
-        schema_rows = await conn.fetch("SELECT column_name, data_type, character_maximum_length, is_nullable FROM information_schema.columns WHERE table_name = $1", table_name)
+        schema_rows = await _get_cached_schema(conn, table_name)
         schema_map = {r['column_name']: r for r in schema_rows}
-        
-        # TENANT ISOLATION: Auto-assign company ID
         company_col = next((k for k in schema_map.keys() if k.lower().endswith('company_id')), None)
         
         clean_data = await _sanitize_payload(data, schema_map, pk_column, current_user_id, request.method)
 
         async with conn.transaction():
             if request.method == "POST":
-                if company_col:
-                    clean_data[company_col] = company_id
-                
+                if company_col: clean_data[company_col] = company_id
                 max_val = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
                 target_id = (int(max_val) + 1) if max_val else 1
                 pk_type = schema_map.get(pk_column, {}).get('data_type', '')
-                
                 clean_data[pk_column] = str(target_id) if pk_type in ('character varying', 'text', 'varchar') else target_id
                 
-                cols = list(clean_data.keys())
-                vals = list(clean_data.values())
-                placeholders = ', '.join([f'${i+1}' for i in range(len(vals))])
-                
-                # Phase 3: Cast JSON strings to JSONB during insert
-                insert_cols = []
-                for idx, c in enumerate(cols):
-                    if schema_map.get(c, {}).get('data_type') in ('json', 'jsonb'):
-                        insert_cols.append(f"${idx+1}::jsonb")
-                    else:
-                        insert_cols.append(f"${idx+1}")
-                placeholders = ', '.join(insert_cols)
-                        
+                cols, vals = list(clean_data.keys()), list(clean_data.values())
+                placeholders = ', '.join([f"${i+1}::jsonb" if schema_map.get(c, {}).get('data_type') in ('json', 'jsonb') else f"${i+1}" for i, c in enumerate(cols)])
                 await conn.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({placeholders})", *vals)
             else:
                 pk_type = schema_map.get(pk_column, {}).get('data_type', '')
                 target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
                 
-                set_clauses = []
-                for i, k in enumerate(clean_data.keys()):
-                    if schema_map.get(k, {}).get('data_type') in ('json', 'jsonb'):
-                        set_clauses.append(f"{k} = ${i+2}::jsonb")
-                    else:
-                        set_clauses.append(f"{k} = ${i+2}")
-                        
+                set_clauses = [f"{k} = ${i+2}::jsonb" if schema_map.get(k, {}).get('data_type') in ('json', 'jsonb') else f"{k} = ${i+2}" for i, k in enumerate(clean_data.keys())]
                 vals = list(clean_data.values())
                 
                 if set_clauses:
                     if company_col:
                         vals.append(company_id)
-                        tenant_idx = len(vals) + 1
-                        where_clause = f"WHERE {pk_column} = $1 AND {company_col} = ${tenant_idx}"
-                        await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} {where_clause}", target_id, *vals)
+                        await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {pk_column} = $1 AND {company_col} = ${len(vals)}", target_id, *vals)
                     else:
                         await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {pk_column} = $1", target_id, *vals)
 
+            # Role/Screen assignments logic remains same
             if table_name == 'phc_roles_t' and virtual_screens is not None:
                 await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
                 if virtual_screens:
                     prs_pk_col = await get_pk_column(conn, 'phc_role_screen_assignment_t')
                     max_prs = await conn.fetchval(f"SELECT MAX({prs_pk_col}) FROM phc_role_screen_assignment_t") if prs_pk_col else 0
                     next_prs = (int(max_prs) + 1) if max_prs else 1
-                    
-                    v_screens_list = virtual_screens if isinstance(virtual_screens, list) else str(virtual_screens).split(',')
-                    for s_id in v_screens_list:
+                    for s_id in (virtual_screens if isinstance(virtual_screens, list) else str(virtual_screens).split(',')):
                         if str(s_id).strip() and prs_pk_col:
-                            await conn.execute("""
-                                INSERT INTO phc_role_screen_assignment_t 
-                                ({0}, prs_company_id, prs_role_id, prs_screen_id, prs_start_date, prs_status, prs_created_by, prs_modified_by, prs_created, prs_modified) 
-                                VALUES ($1, $2, $3, $4, CURRENT_DATE, 'ACT', $5, $5, NOW(), NOW())
-                            """.format(prs_pk_col), next_prs, company_id, target_id, int(str(s_id).strip()), str(current_user_id))
+                            await conn.execute(f"INSERT INTO phc_role_screen_assignment_t ({prs_pk_col}, prs_company_id, prs_role_id, prs_screen_id, prs_start_date, prs_status, prs_created_by, prs_modified_by, prs_created, prs_modified) VALUES ($1, $2, $3, $4, CURRENT_DATE, 'ACT', $5, $5, NOW(), NOW())", next_prs, company_id, target_id, int(str(s_id).strip()), str(current_user_id))
                             next_prs += 1
 
             if table_name == 'phc_users_t' and virtual_roles is not None:
@@ -1121,89 +900,59 @@ async def save_data(request, table_name, pk_val=None):
                     pua_pk_col = await get_pk_column(conn, 'phc_user_roles_assignment_t')
                     max_pua = await conn.fetchval(f"SELECT MAX({pua_pk_col}) FROM phc_user_roles_assignment_t") if pua_pk_col else 0
                     next_pua = (int(max_pua) + 1) if max_pua else 1
-                    
-                    v_roles_list = virtual_roles if isinstance(virtual_roles, list) else str(virtual_roles).split(',')
-                    for r_id in v_roles_list:
+                    for r_id in (virtual_roles if isinstance(virtual_roles, list) else str(virtual_roles).split(',')):
                         if str(r_id).strip() and pua_pk_col:
-                            await conn.execute("""
-                                INSERT INTO phc_user_roles_assignment_t 
-                                ({0}, pua_company_id, pua_user_id, pua_role_id, pua_start_date, pua_status, pua_created_by, pua_modified_by, pua_created, pua_modified) 
-                                VALUES ($1, $2, $3, $4, CURRENT_DATE, 'ACT', $5, $5, NOW(), NOW())
-                            """.format(pua_pk_col), next_pua, company_id, target_id, int(str(r_id).strip()), str(current_user_id))
+                            await conn.execute(f"INSERT INTO phc_user_roles_assignment_t ({pua_pk_col}, pua_company_id, pua_user_id, pua_role_id, pua_start_date, pua_status, pua_created_by, pua_modified_by, pua_created, pua_modified) VALUES ($1, $2, $3, $4, CURRENT_DATE, 'ACT', $5, $5, NOW(), NOW())", next_pua, company_id, target_id, int(str(r_id).strip()), str(current_user_id))
                             next_pua += 1
 
         if request.headers.get("HX-Request"):
-            return response.html(f"""
-                <script>
-                    sessionStorage.setItem('pendingToast', JSON.stringify({{"msg": "Record saved successfully!", "type": "success"}}));
-                    localStorage.removeItem('draft_{table_name}');
-                    window.location.href = "/table/{table_name}";
-                </script>
-            """)
-
+            return response.html(f"<script>sessionStorage.setItem('pendingToast', JSON.stringify({{\"msg\": \"Record saved successfully!\", \"type\": \"success\"}})); localStorage.removeItem('draft_{table_name}'); window.location.href = '/table/{table_name}';</script>")
         return response.json({"status": "success"})
 
 
-# HTMX DELETE ROUTE
 @app.delete("/api/<table_name>/<pk_val>", name="delete_row")
 @login_required
 async def delete_data(request, table_name, pk_val):
-    
-    provided_csrf = request.headers.get("X-CSRFToken")
-    if not provided_csrf or provided_csrf != request.ctx.csrf_token:
-        return response.json({"error": "Missing or Invalid CSRF Token. Are you a hacker?"}, status=403)
+    if request.headers.get("X-CSRFToken") != request.ctx.csrf_token: return response.json({"error": "Invalid CSRF Token."}, status=403)
 
-    current_user_id = request.ctx.user_id
-    user_type = request.ctx.user_type
-    company_id = int(request.ctx.company_id)
+    current_user_id, user_type, company_id = request.ctx.user_id, request.ctx.user_type, int(request.ctx.company_id)
     
     if user_type != 'ADM':
-        admin_only_tables = ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']
-        if table_name in admin_only_tables:
-            return response.json({"error": "Unauthorized to delete from security configuration tables."}, status=403)
-        if table_name == 'phc_users_t' and str(pk_val) != str(current_user_id):
-            return response.json({"error": "Unauthorized to delete other users."}, status=403)
+        if table_name in ['phc_roles_t', 'phc_screens_t', 'phc_role_screen_assignment_t', 'phc_user_roles_assignment_t', 'phc_companies_t']: return response.json({"error": "Unauthorized"}, status=403)
+        if table_name == 'phc_users_t' and str(pk_val) != str(current_user_id): return response.json({"error": "Unauthorized"}, status=403)
 
     async with app.ctx.pool.acquire() as conn:
         allowed = await get_allowed_tables(conn, current_user_id, user_type)
-        if table_name not in allowed:
-            return response.json({"error": "Unauthorized API Access"}, status=403)
+        if table_name not in allowed: return response.json({"error": "Unauthorized API Access"}, status=403)
 
         pk_column = await get_pk_column(conn, table_name)
-        schema_rows = await conn.fetch("SELECT column_name, data_type FROM information_schema.columns WHERE table_name = $1", table_name)
+        schema_rows = await _get_cached_schema(conn, table_name)
         pk_type = next((r['data_type'] for r in schema_rows if r['column_name'] == pk_column), 'integer')
         target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
 
-        company_col = next((c for c in schema_rows if c['column_name'].lower().endswith('company_id')), None)
-        status_col = next((c for c in schema_rows if c['column_name'].lower().endswith('status')), None)
+        company_col = next((c['column_name'] for c in schema_rows if c['column_name'].lower().endswith('company_id')), None)
+        status_col = next((c['column_name'] for c in schema_rows if c['column_name'].lower().endswith('status')), None)
 
         async with conn.transaction():
+            where_clause, params = f"WHERE {pk_column} = $1", [target_id]
             if company_col:
-                owner_check = await conn.fetchval(f"SELECT 1 FROM {table_name} WHERE {pk_column} = $1 AND {company_col} = $2", target_id, company_id)
-                if not owner_check:
-                    return response.json({"error": "Tenant violation. Record does not belong to your company."}, status=403)
+                where_clause += " AND " + f"{company_col} = $2"
+                params.append(company_id)
 
             if table_name in ['phc_role_screen_assignment_t', 'phc_user_roles_assignment_t']:
-                await conn.execute(f"DELETE FROM {table_name} WHERE {pk_column} = $1", target_id)
+                res = await conn.execute(f"DELETE FROM {table_name} {where_clause}", *params)
+                if res == "DELETE 0": return response.json({"error": "Record not found or Tenant violation."}, status=403)
                 msg = "Record deleted permanently."
             elif status_col:
-                status_name = status_col['column_name']
-                await conn.execute(f"UPDATE {table_name} SET {status_name} = 'INA' WHERE {pk_column} = $1", target_id)
+                res = await conn.execute(f"UPDATE {table_name} SET {status_col} = 'INA' {where_clause}", *params)
+                if res == "UPDATE 0": return response.json({"error": "Record not found or Tenant violation."}, status=403)
                 msg = "Record successfully archived (Soft Delete)."
             else:
-                return response.json({"error": "Hard deletions disabled for SOX compliance. Table lacks a status column."}, status=403)
+                return response.json({"error": "Hard deletions disabled. Table lacks a status column."}, status=403)
 
             await log_action(conn, current_user_id, f"Archived/Deleted record {target_id} from {table_name}")
 
-        if request.headers.get("HX-Request"):
-            return response.html(f"""
-                <div id="toast-container" hx-swap-oob="beforeend">
-                    <div class="toast" style="animation: slideIn Toast 0.4s ease, fadeOutToast 0.4s ease 3.5s forwards;">
-                        <i data-lucide="check-circle-2" style="color: var(--color-cipher-mint)"></i> {msg}
-                    </div>
-                </div>
-            """)
-            
+        if request.headers.get("HX-Request"): return response.html(f'<div id="toast-container" hx-swap-oob="beforeend"><div class="toast" style="animation: slideIn Toast 0.4s ease, fadeOutToast 0.4s ease 3.5s forwards;"><i data-lucide="check-circle-2" style="color: var(--color-cipher-mint)"></i> {msg}</div></div>')
         return response.json({"status": "success"})
 
 
