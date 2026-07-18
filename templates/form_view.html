@@ -332,7 +332,6 @@
         const formData = new FormData(form);
         for (let [key, value] of formData.entries()) {
             const el = document.querySelector(`[name="${key}"]`);
-            // Ignore hidden status/flag inputs, only check standard text/select inputs
             if (el && el.type !== 'hidden' && value.trim() !== '') {
                 return false;
             }
@@ -346,6 +345,11 @@
         
         const formData = new FormData(document.getElementById(formId));
         const draft = Object.fromEntries(formData.entries());
+        
+        // 🔥 PHASE 1 FIX: Prevent local storage harvesting of sensitive PII/Credentials
+        const sensitiveKeys = ['pus_pwd', 'password', 'credit_card', 'ssn'];
+        sensitiveKeys.forEach(k => delete draft[k]);
+        
         localStorage.setItem(draftKey, JSON.stringify(draft));
     }
 
