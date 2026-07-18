@@ -99,6 +99,12 @@
     html.light-mode .btn-cancel:hover { background: rgba(0,0,0,0.05); color: black; }
     .btn-clear { border-color: var(--color-ember); color: var(--color-ember); margin-right: auto; }
     .btn-clear:hover { background: rgba(228, 109, 76, 0.1); }
+    
+    /* Phase 3: Address Modal Overlay CSS */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.active { display: flex; }
+    .modal-content { background: var(--glass-surface); border: 1px solid var(--glass-border); border-radius: 12px; padding: 24px; width: 100%; max-width: 500px; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5); }
+    html.light-mode .modal-content { background: rgba(255,255,255,0.9); }
 </style>
 
 <div class="content-wrapper">
@@ -117,11 +123,10 @@
     </div>
 
     <div class="form-container">
-        <!-- FIX: Explicitly pass context variables to the macro to satisfy Jinja2 syntax -->
         {% macro render_field(col, current_user_type, table_modules, mode) %}
         
-        <!-- UI FIX: Completely hide company_id from users (unless it is the Primary Key of the company table) -->
-        {% if col.column_name.lower().endswith('company_id') and not col.is_pk %}
+        <!-- Hide company_id (except on Companies table itself) -->
+        {% if col.column_name.lower().endswith('company_id') and table_name != 'phc_companies_t' %}
             <input type="hidden" name="{{ col.column_name }}" value="{{ col.value }}">
         {% else %}
             <div class="form-group">
@@ -158,6 +163,16 @@
                 {% elif col.is_pk %}
                     <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else 'Pending...' }}" class="readonly-input" readonly tabindex="-1">
                 
+                {% elif col.data_type in ('json', 'jsonb') %}
+                    <!-- Phase 3: Address Modal Trigger -->
+                    <input type="hidden" name="{{ col.column_name }}" id="hidden_{{ col.column_name }}" value='{{ col.value if col.value else "{}" }}'>
+                    <button type="button" class="btn-cancel" style="width: 100%; display: flex; justify-content: space-between; align-items: center;" onclick="openAddressModal('{{ col.column_name }}')">
+                        <span><i data-lucide="map-pin" style="width: 16px; margin-right: 8px; vertical-align: text-bottom;"></i> Edit Address Details</span>
+                        <i data-lucide="plus" style="width: 16px;"></i>
+                    </button>
+                    <!-- Tiny preview text that updates when modal saves -->
+                    <div id="json_summary_{{ col.column_name }}" style="font-size: 12px; color: var(--color-fog); margin-top: 8px;"></div>
+                
                 {% elif col.data_type == 'virtual_checkbox' %}
                     <div style="display: flex; gap: 8px; margin-bottom: 8px;">
                         <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', true){% endif %}">Select Global All</button>
@@ -168,7 +183,6 @@
                         {% set selected_items = (col.value or "").split(',') %}
                         
                         {% if col.column_name == 'pr_allowed_tables' %}
-                            <!-- FIX: Safely map table groupings directly -->
                             {% set known_modules = ['AppSetup', 'CustomerSetup', 'Employee', 'Ledger', 'MasterData', 'OrderMgmt', 'Payables', 'Procurement', 'Product', 'Project', 'Receivables', 'All Screens'] %}
                             {% set mod_labels = {'AppSetup': 'App Setup', 'CustomerSetup': 'Customers & Vendors', 'Employee': 'Employees', 'Ledger': 'General Ledger', 'MasterData': 'Master Data', 'OrderMgmt': 'Order Management', 'Payables': 'Payables', 'Procurement': 'Procurement', 'Product': 'Inventory', 'Project': 'Project Accounting', 'Receivables': 'Receivables', 'All Screens': 'Other Screens'} %}
                             
@@ -280,7 +294,90 @@
     </div>
 </div>
 
+<!-- Phase 3: Hidden Modal Overlay for Address JSON Data -->
+<div class="modal-overlay" id="addressModal">
+    <div class="modal-content">
+        <h3 style="margin-bottom: 20px; color: var(--color-glacier);">Edit Address Details</h3>
+        <input type="hidden" id="current_json_col">
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+            <div class="form-group"><label>Building Name/No.</label><input type="text" id="addr_building"></div>
+            <div class="form-group"><label>Floor</label><input type="text" id="addr_floor"></div>
+            <div class="form-group"><label>Room No.</label><input type="text" id="addr_room"></div>
+            <div class="form-group"><label>Complex</label><input type="text" id="addr_complex"></div>
+            <div class="form-group" style="grid-column: 1 / -1;"><label>Street Name</label><input type="text" id="addr_street"></div>
+            <div class="form-group" style="grid-column: 1 / -1;"><label>Landmark</label><input type="text" id="addr_landmark"></div>
+            <div class="form-group"><label>Town/City</label><input type="text" id="addr_city"></div>
+            <div class="form-group"><label>Pin/Zip Code</label><input type="text" id="addr_pin"></div>
+            <div class="form-group" style="grid-column: 1 / -1;"><label>Country</label><input type="text" id="addr_country"></div>
+        </div>
+        
+        <div style="display: flex; justify-content: flex-end; gap: 12px;">
+            <button type="button" class="btn-cancel" onclick="closeAddressModal()">Cancel</button>
+            <button type="button" class="btn-submit" onclick="saveAddressModal()">Save Address</button>
+        </div>
+    </div>
+</div>
+
 <script>
+    // --- Phase 4: Defensive Event Handlers ---
+    const formId = "recordForm";
+    const draftKey = `draft_{{ table_name }}`;
+    const mode = '{{ mode }}';
+
+    function isFormEmpty() {
+        const form = document.getElementById(formId);
+        if(!form) return true;
+        
+        const formData = new FormData(form);
+        for (let [key, value] of formData.entries()) {
+            const el = document.querySelector(`[name="${key}"]`);
+            // Ignore hidden status/flag inputs, only check standard text/select inputs
+            if (el && el.type !== 'hidden' && value.trim() !== '') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function saveDraft() {
+        if (mode !== 'create') return;
+        if (isFormEmpty()) return; // Crucial fix: Don't serialize an empty object to cache
+        
+        const formData = new FormData(document.getElementById(formId));
+        const draft = Object.fromEntries(formData.entries());
+        localStorage.setItem(draftKey, JSON.stringify(draft));
+    }
+
+    function cancelForm() {
+        if (!isFormEmpty()) {
+            saveDraft(); // Only save draft if they actually typed something
+        }
+        window.location.href = "/table/{{ table_name }}";
+    }
+
+    function clearForm() {
+        const form = document.getElementById(formId);
+        if (form) form.reset();
+        localStorage.removeItem(draftKey);
+        
+        // Reset custom UI toggles safely
+        document.querySelectorAll('.hidden-input').forEach(el => {
+            if(el.name.toLowerCase().endsWith('status')) setStatus(el.name, 'ACT');
+            if(el.name.toLowerCase().endsWith('flag')) setFlag(el.name, 'Y');
+            if(el.name === 'pus_user_type') setUserType(el.name, 'STD');
+        });
+        
+        // Clear any address previews
+        document.querySelectorAll('[id^="json_summary_"]').forEach(el => {
+            el.innerText = '';
+        });
+        document.querySelectorAll('input[type="hidden"]').forEach(el => {
+            if (el.id.startsWith('hidden_')) el.value = "{}";
+        });
+    }
+
+    // --- Original UI Toggles ---
     function setStatus(colName, value) {
         let inputEl = document.getElementById('input_' + colName);
         if (inputEl) inputEl.value = value;
@@ -302,14 +399,8 @@
         if (inputEl) inputEl.value = value;
         const btnY = document.getElementById('btn_y_' + colName);
         const btnN = document.getElementById('btn_n_' + colName);
-        if(btnY) { 
-            btnY.className = 'ui-btn'; 
-            if(value === 'Y') btnY.classList.add('active-selected'); 
-        }
-        if(btnN) { 
-            btnN.className = 'ui-btn'; 
-            if(value === 'N') btnN.classList.add('inactive-selected'); 
-        }
+        if(btnY) { btnY.className = 'ui-btn'; if(value === 'Y') btnY.classList.add('active-selected'); }
+        if(btnN) { btnN.className = 'ui-btn'; if(value === 'N') btnN.classList.add('inactive-selected'); }
         if (typeof saveDraft === 'function') saveDraft();
     }
 
@@ -318,14 +409,8 @@
         if (inputEl) inputEl.value = value;
         const btnAdm = document.getElementById('btn_adm_' + colName);
         const btnStd = document.getElementById('btn_std_' + colName);
-        if(btnAdm) { 
-            btnAdm.className = 'ui-btn'; 
-            if(value === 'ADM') btnAdm.classList.add('adm-selected'); 
-        }
-        if(btnStd) { 
-            btnStd.className = 'ui-btn'; 
-            if(value !== 'ADM') btnStd.classList.add('std-selected'); 
-        }
+        if(btnAdm) { btnAdm.className = 'ui-btn'; if(value === 'ADM') btnAdm.classList.add('adm-selected'); }
+        if(btnStd) { btnStd.className = 'ui-btn'; if(value !== 'ADM') btnStd.classList.add('std-selected'); }
         if (typeof saveDraft === 'function') saveDraft();
     }
 
@@ -336,33 +421,82 @@
 
     function selectGroupCheckboxes(btnEl, colName, checkStatus) {
         const group = btnEl.closest('.cb-group');
-        group.querySelectorAll(`input[name="${colName}"]`).forEach(el => {
-            if(!el.disabled) el.checked = checkStatus;
-        });
+        group.querySelectorAll(`input[name="${colName}"]`).forEach(el => { if(!el.disabled) el.checked = checkStatus; });
         saveDraft();
     }
 
     function selectAllCheckboxes(colName, checkStatus) {
-        document.querySelectorAll(`input[name="${colName}"]`).forEach(el => {
-            if(!el.disabled) el.checked = checkStatus;
-        });
+        document.querySelectorAll(`input[name="${colName}"]`).forEach(el => { if(!el.disabled) el.checked = checkStatus; });
         saveDraft();
     }
 
+    // --- Phase 3: Address Modal Logic ---
+    function openAddressModal(colName) {
+        document.getElementById('addressModal').classList.add('active');
+        document.getElementById('current_json_col').value = colName;
+        
+        // Load existing data from the hidden input
+        const rawVal = document.getElementById('hidden_' + colName).value;
+        let data = {};
+        try { data = JSON.parse(rawVal); } catch(e) {}
+        
+        document.getElementById('addr_complex').value = data.complex || '';
+        document.getElementById('addr_building').value = data.building || '';
+        document.getElementById('addr_floor').value = data.floor || '';
+        document.getElementById('addr_room').value = data.room || '';
+        document.getElementById('addr_street').value = data.street || '';
+        document.getElementById('addr_landmark').value = data.landmark || '';
+        document.getElementById('addr_city').value = data.city || '';
+        document.getElementById('addr_pin').value = data.pin_code || '';
+        document.getElementById('addr_country').value = data.country || '';
+    }
+    
+    function closeAddressModal() {
+        document.getElementById('addressModal').classList.remove('active');
+    }
+    
+    function saveAddressModal() {
+        const colName = document.getElementById('current_json_col').value;
+        const payload = {
+            complex: document.getElementById('addr_complex').value,
+            building: document.getElementById('addr_building').value,
+            floor: document.getElementById('addr_floor').value,
+            room: document.getElementById('addr_room').value,
+            street: document.getElementById('addr_street').value,
+            landmark: document.getElementById('addr_landmark').value,
+            city: document.getElementById('addr_city').value,
+            pin_code: document.getElementById('addr_pin').value,
+            country: document.getElementById('addr_country').value,
+        };
+        
+        // Save stringified data to hidden input for form submission
+        document.getElementById('hidden_' + colName).value = JSON.stringify(payload);
+        
+        // Build tiny preview
+        let summary = [];
+        if(payload.building) summary.push(payload.building);
+        if(payload.street) summary.push(payload.street);
+        if(payload.city) summary.push(payload.city);
+        
+        const summaryEl = document.getElementById('json_summary_' + colName);
+        if (summary.length > 0) {
+            summaryEl.innerHTML = `<span style="color: var(--color-cipher-mint);"><i data-lucide="check" style="width: 12px; margin-right: 4px;"></i> Details captured: ${summary.join(', ')}</span>`;
+        } else {
+            summaryEl.innerHTML = '';
+        }
+        lucide.createIcons();
+        closeAddressModal();
+        saveDraft();
+    }
+
+    // --- Init ---
     function initFormUI() {
         document.querySelectorAll('.hidden-input').forEach(el => {
-            if (el.name.toLowerCase().endsWith('status')) {
-                setStatus(el.name, el.value || 'ACT');
-            } else if (el.name.toLowerCase().endsWith('flag')) {
-                setFlag(el.name, el.value || 'Y');
-            } else if (el.name === 'pus_user_type') {
-                setUserType(el.name, el.value || 'STD');
-            }
+            if (el.name.toLowerCase().endsWith('status')) setStatus(el.name, el.value || 'ACT');
+            else if (el.name.toLowerCase().endsWith('flag')) setFlag(el.name, el.value || 'Y');
+            else if (el.name === 'pus_user_type') setUserType(el.name, el.value || 'STD');
         });
 
-        const draftKey = `draft_{{ table_name }}`;
-        const mode = '{{ mode }}';
-        
         if (mode === 'create') {
             const draft = JSON.parse(localStorage.getItem(draftKey));
             if (draft) {
@@ -373,6 +507,13 @@
                         if (key.toLowerCase().endsWith('status')) setStatus(key, draft[key]);
                         if (key.toLowerCase().endsWith('flag')) setFlag(key, draft[key]);
                         if (key === 'pus_user_type') setUserType(key, draft[key]);
+                        // Try to render JSON summary for restored drafts
+                        if (key === 'address_details' && draft[key] !== '{}') {
+                           try {
+                               let d = JSON.parse(draft[key]);
+                               document.getElementById('json_summary_' + key).innerText = `Draft Address saved: ${d.city || 'Data present'}`;
+                           } catch(e) {}
+                        }
                     }
                 });
             }
@@ -380,36 +521,9 @@
     }
 
     initFormUI();
-
-    const formId = "recordForm";
-    const draftKey = `draft_{{ table_name }}`;
-    const mode = '{{ mode }}';
-
-    function saveDraft() {
-        if (mode !== 'create') return;
-        const formData = new FormData(document.getElementById(formId));
-        const draft = Object.fromEntries(formData.entries());
-        localStorage.setItem(draftKey, JSON.stringify(draft));
-    }
-
     document.querySelectorAll('input, select, textarea').forEach(el => {
         el.addEventListener('input', saveDraft);
         el.addEventListener('change', saveDraft);
     });
-
-    function cancelForm() {
-        saveDraft();
-        window.location.href = "/table/{{ table_name }}";
-    }
-
-    function clearForm() {
-        document.getElementById(formId).reset();
-        localStorage.removeItem(draftKey);
-        document.querySelectorAll('.hidden-input').forEach(el => {
-            if(el.name.toLowerCase().endsWith('status')) setStatus(el.name, 'ACT');
-            if(el.name.toLowerCase().endsWith('flag')) setFlag(el.name, 'Y');
-            if(el.name === 'pus_user_type') setUserType(el.name, 'STD');
-        });
-    }
 </script>
 {% endblock %}
