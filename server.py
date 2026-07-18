@@ -7,6 +7,7 @@ import asyncio
 from collections import defaultdict
 from datetime import datetime, date, timedelta, timezone
 from functools import wraps, partial
+import json
 
 import asyncpg
 import bcrypt
@@ -57,6 +58,8 @@ WHO_COLS = {'creation_date', 'created_by', 'last_update_date', 'last_updated_by'
 # ==========================================
 def get_table_modules(tables):
     mapping = {}
+    
+    # Phase 1: Explicit Exceptions overrides
     exceptions = {
         'phc_emp_t': 'Employee',
         'phc_apps_t': 'AppSetup',
@@ -283,11 +286,21 @@ def make_human_readable(text):
 
 
 def get_column_sort_priority(pk_column, c_name):
+    """ Phase 1: Smart Sorting Algorithm for forms """
     name = c_name.lower()
-    if c_name == pk_column: return 0
-    if name.endswith('status'): return 1
-    if name.endswith('flag'): return 2
     
+    # 1. Primary Key at the absolute top
+    if c_name == pk_column: return 0
+    
+    # 2. Key identifiers (Codes, Names) pushed up
+    if name.endswith('code') or name.endswith('name') or name == 'dosage_form': 
+        return 1
+        
+    # 3. Statuses and Flags
+    if name.endswith('status'): return 2
+    if name.endswith('flag'): return 3
+    
+    # 10. System WHO Columns at the very bottom
     if name in ('created_by', 'creation_date', 'last_update_date', 'last_updated_by', 'last_update_login') or \
        name.endswith('_created_by') or name.endswith('_modified_by') or \
        name.endswith('_created') or name.endswith('_modified'):
@@ -296,6 +309,7 @@ def get_column_sort_priority(pk_column, c_name):
     if 'start_date' in name: return 80
     if 'end_date' in name: return 81
     
+    # Everything else in the middle
     return 50
 
 
@@ -589,6 +603,7 @@ async def show_table(request, table_name):
             for col in columns:
                 c_name = col['raw']
                 if c_name == pk_column: continue
+                if c_name == 'address_details': continue # Skip parsing JSON into simple dropdown checks
 
                 options = await get_dropdown_options(conn, c_name)
                 lookup = {str(opt['id']): opt['name'] for opt in options} if options else None
@@ -669,6 +684,7 @@ async def export_csv(request, table_name):
 
         for r in sorted_cols:
             c_name = r['column_name']
+            if c_name == 'address_details': continue
             options = await get_dropdown_options(conn, c_name)
             lookup = {str(opt['id']): opt['name'] for opt in options} if options else None
 
@@ -778,9 +794,18 @@ async def show_edit_form(request, table_name, pk_val):
                     continue
 
                 is_pk = (c_name == pk_column)
-                val = mask_sensitive_data(c_name, record[c_name], request.ctx.user_type)
-                if isinstance(val, (date, datetime)):
-                    val = val.strftime('%Y-%m-%d')
+                
+                # Phase 3: Address Details Extraction (No masking for JSONB)
+                if r['data_type'] in ('json', 'jsonb'):
+                    val = record[c_name]
+                    if isinstance(val, str):
+                        try: val = json.loads(val)
+                        except Exception: val = {}
+                    val = json.dumps(val) if val else "{}"
+                else:
+                    val = mask_sensitive_data(c_name, record[c_name], request.ctx.user_type)
+                    if isinstance(val, (date, datetime)):
+                        val = val.strftime('%Y-%m-%d')
 
                 options = await get_dropdown_options(conn, c_name) if not is_pk else None
                 is_req = (r['is_nullable'] == 'NO') and not is_pk
@@ -789,6 +814,9 @@ async def show_edit_form(request, table_name, pk_val):
                     "column_name": c_name, "label": make_human_readable(c_name), "required": is_req, 
                     "value": val, "data_type": r['data_type'], "options": options, "is_pk": is_pk
                 })
+
+            # Sort columns based on priority (pushes ID, Code, Name to top)
+            columns = sorted(columns, key=lambda c: get_column_sort_priority(pk_column, c['column_name']))
 
             if table_name == 'phc_roles_t':
                 screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_code as code, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
@@ -849,11 +877,18 @@ async def show_add_form(request, table_name):
                 val = ""
                 if ('date' in r['data_type'] or 'timestamp' in r['data_type']) and 'end' not in c_name.lower() and not is_pk:
                     val = datetime.now().strftime('%Y-%m-%d')
+                
+                # Default empty JSON object for Address
+                if r['data_type'] in ('json', 'jsonb'):
+                    val = "{}"
                     
                 columns.append({
                     "column_name": c_name, "label": make_human_readable(c_name), "required": is_req, 
                     "value": val, "data_type": r['data_type'], "options": options, "is_pk": is_pk
                 })
+
+            # Sort columns based on priority (pushes ID, Code, Name to top)
+            columns = sorted(columns, key=lambda c: get_column_sort_priority(pk_column, c['column_name']))
 
             if table_name == 'phc_roles_t':
                 screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_code as code, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
@@ -907,7 +942,6 @@ async def _sanitize_payload(data, schema_map, pk_column, current_user_id, reques
         if k.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or k.lower() in WHO_COLS:
             continue
 
-        # Fix: Automatically hash passwords
         if k == 'pus_pwd':
             salt = bcrypt.gensalt()
             hashed_bytes = await loop.run_in_executor(None, partial(bcrypt.hashpw, v.encode('utf-8'), salt))
@@ -916,8 +950,18 @@ async def _sanitize_payload(data, schema_map, pk_column, current_user_id, reques
         col_info = schema_map.get(k, {})
         target_type = col_info.get('data_type', '').lower()
         max_len = col_info.get('character_maximum_length')
+        
+        # Phase 3: JSONB Data Parser for Nested Addresses
+        if target_type in ('json', 'jsonb'):
+            if isinstance(v, str):
+                try:
+                    v = json.loads(v)
+                except Exception:
+                    v = {}
+            # PostgreSQL driver expects dictionary or stringified JSON depending on strictness, stringify is safer
+            clean_data[k] = json.dumps(v)
+            continue
 
-        # Fix: Robust Date Parsing
         if 'date' in target_type or 'timestamp' in target_type or (isinstance(v, str) and len(v) == 10 and v[4] == '-' and v[7] == '-'):
             if isinstance(v, str) and v:
                 try:
@@ -1021,12 +1065,28 @@ async def save_data(request, table_name, pk_val=None):
                 cols = list(clean_data.keys())
                 vals = list(clean_data.values())
                 placeholders = ', '.join([f'${i+1}' for i in range(len(vals))])
+                
+                # Phase 3: Cast JSON strings to JSONB during insert
+                insert_cols = []
+                for idx, c in enumerate(cols):
+                    if schema_map.get(c, {}).get('data_type') in ('json', 'jsonb'):
+                        insert_cols.append(f"${idx+1}::jsonb")
+                    else:
+                        insert_cols.append(f"${idx+1}")
+                placeholders = ', '.join(insert_cols)
+                        
                 await conn.execute(f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({placeholders})", *vals)
             else:
                 pk_type = schema_map.get(pk_column, {}).get('data_type', '')
                 target_id = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
                 
-                set_clauses = [f"{k} = ${i+2}" for i, k in enumerate(clean_data.keys())]
+                set_clauses = []
+                for i, k in enumerate(clean_data.keys()):
+                    if schema_map.get(k, {}).get('data_type') in ('json', 'jsonb'):
+                        set_clauses.append(f"{k} = ${i+2}::jsonb")
+                    else:
+                        set_clauses.append(f"{k} = ${i+2}")
+                        
                 vals = list(clean_data.values())
                 
                 if set_clauses:
