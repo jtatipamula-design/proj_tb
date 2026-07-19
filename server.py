@@ -433,7 +433,8 @@ async def handle_login(request):
     if request.method == "GET":
         return await render("login.html")
         
-    data = request.json
+    # CRITICAL FIX: Add 'or {}' to prevent NoneType crashes if the payload is empty or invalid
+    data = request.json or {}
     username = data.get("username", "")
     password = data.get("password", "")
     
