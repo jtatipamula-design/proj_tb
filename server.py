@@ -92,9 +92,12 @@ def get_table_modules(tables):
         elif table.startswith('poe_'): mapping[table] = 'OrderMgmt'
         elif table.startswith('pa_'): mapping[table] = 'Project'
         elif table.startswith('mtl_'): mapping[table] = 'Product'
+        
+        # Route ALL the new Oracle tables strictly into Master Data
         elif table.startswith('phc_plant_') or table.startswith('phc_equ') or table.startswith('phc_cert'): mapping[table] = 'MasterData'
-        elif table.startswith('phc_material_') or table.startswith('phc_uom_'): mapping[table] = 'Product' # Maps to Inventory
-        elif table.startswith('phc_prod_'): mapping[table] = 'Product' # Maps to Inventory            
+        elif table.startswith('phc_material_') or table.startswith('phc_uom_'): mapping[table] = 'MasterData'
+        elif table.startswith('phc_prod_'): mapping[table] = 'MasterData'
+        
         else: mapping[table] = 'Other'
         
     return mapping
@@ -312,7 +315,9 @@ async def _get_cached_schema(conn, table_name):
 
 async def get_allowed_tables(conn, user_id, user_type):
     if SCHEMA_CACHE["tables"] is None:
-        rows = await conn.fetch("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE '%_t' OR table_name = 'phc_lookup_types'")
+        # THE BUG FIX: Dynamically load ALL active screens from the database 
+        # instead of hard-filtering for tables that end in '_t'
+        rows = await conn.fetch("SELECT psn_screen_code as table_name FROM phc_screens_t WHERE psn_status = 'ACT'")
         SCHEMA_CACHE["tables"] = [r['table_name'] for r in rows]
 
     all_tables = SCHEMA_CACHE["tables"]
