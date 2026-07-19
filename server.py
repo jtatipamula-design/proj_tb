@@ -54,11 +54,12 @@ WHO_COLS = {'creation_date', 'created_by', 'last_update_date', 'last_updated_by'
 
 
 # ==========================================
-#  DYNAMIC PREFIX ROUTING ENGINE
+#  DYNAMIC PREFIX ROUTING ENGINE (REVERTED)
 # ==========================================
 def get_table_modules(tables):
     mapping = {}
     
+    # We are putting all tables explicitly here as requested.
     exceptions = {
         'phc_emp_t': 'Employee',
         'phc_apps_t': 'AppSetup',
@@ -77,7 +78,20 @@ def get_table_modules(tables):
         'phc_orgs_t': 'MasterData',
         'phc_services_t': 'MasterData',
         'phc_lookup_types': 'MasterData',
-        'phc_lookup_values_t': 'MasterData'
+        'phc_lookup_values_t': 'MasterData',
+        # --- NEW TABLES ADDED EXPLICITLY ---
+        'phc_plant_master': 'MasterData',
+        'phc_plant_compliance': 'MasterData',
+        'phc_certifications': 'MasterData',
+        'phc_plant_equipment': 'MasterData',
+        'phc_equipment_locations': 'MasterData',
+        'phc_material_group_master': 'MasterData',
+        'phc_material_master': 'MasterData',
+        'phc_uom_master': 'MasterData',
+        'phc_uom_conversion': 'MasterData',
+        'phc_prod_master': 'MasterData',
+        'phc_prod_lifecycle_history': 'MasterData',
+        'phc_prod_alt_names': 'MasterData'
     }
     
     for table in tables:
@@ -92,12 +106,6 @@ def get_table_modules(tables):
         elif table.startswith('poe_'): mapping[table] = 'OrderMgmt'
         elif table.startswith('pa_'): mapping[table] = 'Project'
         elif table.startswith('mtl_'): mapping[table] = 'Product'
-        
-        # Route ALL the new Oracle tables strictly into Master Data
-        elif table.startswith('phc_plant_') or table.startswith('phc_equ') or table.startswith('phc_cert'): mapping[table] = 'MasterData'
-        elif table.startswith('phc_material_') or table.startswith('phc_uom_'): mapping[table] = 'MasterData'
-        elif table.startswith('phc_prod_'): mapping[table] = 'MasterData'
-        
         else: mapping[table] = 'Other'
         
     return mapping
@@ -315,8 +323,6 @@ async def _get_cached_schema(conn, table_name):
 
 async def get_allowed_tables(conn, user_id, user_type):
     if SCHEMA_CACHE["tables"] is None:
-        # THE BUG FIX: Dynamically load ALL active screens from the database 
-        # instead of hard-filtering for tables that end in '_t'
         rows = await conn.fetch("SELECT psn_screen_code as table_name FROM phc_screens_t WHERE psn_status = 'ACT'")
         SCHEMA_CACHE["tables"] = [r['table_name'] for r in rows]
 
@@ -433,7 +439,6 @@ async def handle_login(request):
     if request.method == "GET":
         return await render("login.html")
         
-    # CRITICAL FIX: Add 'or {}' to prevent NoneType crashes if the payload is empty or invalid
     data = request.json or {}
     username = data.get("username", "")
     password = data.get("password", "")
@@ -535,7 +540,6 @@ async def show_table(request, table_name):
             valid_search_types = ('character varying', 'text', 'varchar', 'integer', 'bigint', 'numeric')
             searchable_cols = [c['column_name'] for c in schema_cols if c.get('data_type') in valid_search_types]
 
-            # Require minimum 2 chars to search to prevent wildcard scanning slowdowns
             if len(search_query) >= 2 and searchable_cols:
                 search_param_idx = len(params) + 1
                 params.append(f"%{search_query}%")
@@ -554,7 +558,6 @@ async def show_table(request, table_name):
             rows = await conn.fetch(f"SELECT * FROM {table_name} {where_sql} {order_clause} LIMIT {limit} OFFSET {offset}", *params)
             rows_dict = [dict(r) for r in rows]
 
-            # O(1) Dictionary Lookup for Performance
             for col in columns:
                 c_name = col['raw']
                 if c_name == pk_column or c_name == 'address_details': continue 
@@ -681,7 +684,6 @@ async def show_edit_form(request, table_name, pk_val):
             pk_type = next((r['data_type'] for r in col_rows if r['column_name'] == pk_column), 'integer')
             parsed_pk = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
             
-            # SECURE IDOR FIX: Verify Tenant on Fetch
             company_col = next((c['column_name'] for c in col_rows if c['column_name'].lower().endswith('company_id')), None)
             if company_col:
                 record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1 AND {company_col} = $2", parsed_pk, request.ctx.company_id)
@@ -891,7 +893,6 @@ async def save_data(request, table_name, pk_val=None):
                     else:
                         await conn.execute(f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {pk_column} = $1", target_id, *vals)
 
-            # Role/Screen assignments logic remains same
             if table_name == 'phc_roles_t' and virtual_screens is not None:
                 await conn.execute("DELETE FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", target_id)
                 if virtual_screens:
