@@ -92,6 +92,9 @@ def get_table_modules(tables):
         elif table.startswith('poe_'): mapping[table] = 'OrderMgmt'
         elif table.startswith('pa_'): mapping[table] = 'Project'
         elif table.startswith('mtl_'): mapping[table] = 'Product'
+        elif table.startswith('phc_plant_') or table.startswith('phc_equ') or table.startswith('phc_cert'): mapping[table] = 'MasterData'
+        elif table.startswith('phc_material_') or table.startswith('phc_uom_'): mapping[table] = 'Product' # Maps to Inventory
+        elif table.startswith('phc_prod_'): mapping[table] = 'Product' # Maps to Inventory            
         else: mapping[table] = 'Other'
         
     return mapping
