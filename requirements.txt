@@ -6,5 +6,3 @@ Jinja==23.1.4
 pydantic==2.8.0
 python-dotenv==1.0.1
 PyJWT==2.8.0
-tracerite<1.1.0
-setuptools<70.0.0
