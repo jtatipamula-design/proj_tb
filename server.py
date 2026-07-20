@@ -54,12 +54,12 @@ WHO_COLS = {'creation_date', 'created_by', 'last_update_date', 'last_updated_by'
 
 
 # ==========================================
-#  DYNAMIC PREFIX ROUTING ENGINE (REVERTED)
+#  DYNAMIC PREFIX ROUTING ENGINE
 # ==========================================
 def get_table_modules(tables):
     mapping = {}
     
-    # We are putting all tables explicitly here as requested.
+    # We are putting all tables explicitly here as requested. No weird logic.
     exceptions = {
         'phc_emp_t': 'Employee',
         'phc_apps_t': 'AppSetup',
@@ -79,7 +79,7 @@ def get_table_modules(tables):
         'phc_services_t': 'MasterData',
         'phc_lookup_types': 'MasterData',
         'phc_lookup_values_t': 'MasterData',
-        # --- NEW TABLES ADDED EXPLICITLY ---
+        # --- THE 12 NEW TABLES (Explicitly mapped to Master Data) ---
         'phc_plant_master': 'MasterData',
         'phc_plant_compliance': 'MasterData',
         'phc_certifications': 'MasterData',
@@ -681,10 +681,12 @@ async def show_edit_form(request, table_name, pk_val):
 
             pk_column = await get_pk_column(conn, table_name)
             col_rows = await _get_cached_schema(conn, table_name)
+            
             pk_type = next((r['data_type'] for r in col_rows if r['column_name'] == pk_column), 'integer')
             parsed_pk = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
             
             company_col = next((c['column_name'] for c in col_rows if c['column_name'].lower().endswith('company_id')), None)
+            
             if company_col:
                 record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1 AND {company_col} = $2", parsed_pk, request.ctx.company_id)
                 if not record: return response.text("Unauthorized or Record Not Found", status=403)
