@@ -381,9 +381,31 @@ async def get_pk_column(conn, table_name):
 
 async def get_dropdown_options(conn, column_name):
     col_lower = column_name.lower()
+    
+    # =========================================================================
+    # TIER 1: ENTERPRISE LOV (List of Values) REGISTRY
+    # Automatically map columns like 'dosage_form' to the 'DOSAGE_FORM' lookup type.
+    # =========================================================================
+    try:
+        lov_rows = await conn.fetch("""
+            SELECT plv_lookup_value_code as id, plv_lookup_value_name as name 
+            FROM phc_lookup_values_t 
+            WHERE UPPER(plv_lookup_type_code) = $1 AND plv_status = 'ACT'
+            ORDER BY plv_lookup_value_name ASC
+        """, col_lower.upper())
+        
+        if lov_rows:
+            return [dict(row) for row in lov_rows]
+    except asyncpg.exceptions.UndefinedTableError:
+        pass # The LOV tables haven't been created/migrated yet
+
+    # If it's not in the LOV registry, it MUST be an ID or a Code to be a standard dropdown.
     if not col_lower.endswith('_id') and not col_lower.endswith('_code'):
         return None
 
+    # =========================================================================
+    # TIER 2: STRICT DATABASE FOREIGN KEYS
+    # =========================================================================
     fk_query = """
         SELECT ccu.table_name AS target_table, ccu.column_name AS target_column
         FROM information_schema.table_constraints AS tc
@@ -393,20 +415,49 @@ async def get_dropdown_options(conn, column_name):
     """
     fk_row = await conn.fetchrow(fk_query, column_name)
     
+    target_table, pk_col = None, None
     if fk_row:
         target_table, pk_col = fk_row['target_table'], fk_row['target_column']
     else:
-        target_table = None
-        if 'company_id' in col_lower: target_table = 'phc_companies_t'
-        elif 'dept_id' in col_lower: target_table = 'phc_dept_t'
-        elif 'role_id' in col_lower: target_table = 'phc_roles_t'
-        elif 'user_id' in col_lower: target_table = 'phc_users_t'
-        elif 'product_id' in col_lower: target_table = 'cv_product_registration_t'
-        elif 'equipment_id' in col_lower: target_table = 'cv_equipment_registration_t'
-        else: return None
-        pk_col = await get_pk_column(conn, target_table)
+        # =========================================================================
+        # TIER 3: INTELLIGENT HEURISTICS (The Fallback Map)
+        # =========================================================================
+        fallback_map = {
+            'company_id': 'phc_companies_t',
+            'dept_id': 'phc_dept_t',
+            'role_id': 'phc_roles_t',
+            'user_id': 'phc_users_t',
+            'plant_id': 'phc_plant_master',
+            'org_id': 'phc_orgs_t',
+            'location_id': 'pmd_locations_t',
+            'equipment_id': 'phc_plant_equipment',
+            'material_group_id': 'phc_material_group_master',
+            'material_id': 'phc_material_master',
+            'base_uom_id': 'phc_uom_master',
+            'alt_uom_id': 'phc_uom_master',
+            'uom_id': 'phc_uom_master',
+            'product_id': 'phc_prod_master',
+            'cost_center_id': 'phc_cost_center_t',
+            'services_id': 'phc_services_t'
+        }
+        
+        for key, t_name in fallback_map.items():
+            if key in col_lower:
+                target_table = t_name
+                break
+        
+        if target_table:
+            pk_col = await get_pk_column(conn, target_table)
 
-    if not target_table or not pk_col: return None
+    if not target_table or not pk_col: 
+        return None
+
+    # Verify table actually exists before querying
+    try:
+        exists = await conn.fetchval("SELECT to_regclass($1)", target_table)
+        if not exists: return None
+    except Exception:
+        return None
 
     cache_key = f"{target_table}_lookups"
     if cache_key in SCHEMA_CACHE["dropdown_lookups"]:
@@ -417,10 +468,20 @@ async def get_dropdown_options(conn, column_name):
     cols = await _get_cached_schema(conn, target_table)
     name_col = pk_col
 
+    # Try to find a human-readable "Name" column automatically
     for r in cols:
-        if r['column_name'] != pk_col and not r['column_name'].endswith('_id') and not r['column_name'].endswith('_by') and not r['column_name'].endswith('_code'):
-            if r['data_type'] in ('character varying', 'text', 'varchar'):
-                name_col = r['column_name']
+        c_name = r['column_name']
+        if c_name != pk_col and r['data_type'] in ('character varying', 'text', 'varchar'):
+            if 'name' in c_name.lower():
+                name_col = c_name
+                break
+    
+    # Fallback to the first varchar if 'name' doesn't exist
+    if name_col == pk_col:
+        for r in cols:
+            c_name = r['column_name']
+            if c_name != pk_col and r['data_type'] in ('character varying', 'text', 'varchar') and not c_name.endswith('_id') and not c_name.endswith('_by'):
+                name_col = c_name
                 break
 
     try:
