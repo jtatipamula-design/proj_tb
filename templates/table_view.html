@@ -24,7 +24,7 @@
         border: 1px solid var(--glass-border); border-radius: 12px; overflow: hidden; 
         box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5); width: 100%;
     }
-    .table-scroll { overflow-x: auto; max-height: 70vh; overflow-y: auto; width: 100%; }
+    .table-scroll { overflow-x: auto; max-height: 65vh; overflow-y: auto; width: 100%; }
     table { width: 100%; border-collapse: collapse; white-space: nowrap; text-align: left; }
     
     th {
@@ -51,7 +51,6 @@
     .pill-ina { background: rgba(228, 109, 76, 0.15); color: var(--color-ember); border-color: rgba(228, 109, 76, 0.3); }
     .pill-def { background: rgba(255,255,255,0.05); color: var(--color-fog); border-color: var(--glass-border); }
 
-    /* Edit Button Styling (Replaced the complex Dropdown) */
     .action-btn { 
         background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border); color: var(--color-fog); cursor: pointer; 
         padding: 6px; border-radius: 6px; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center;
@@ -59,6 +58,23 @@
     }
     .action-btn:hover { color: var(--color-electric-iris); background: rgba(186, 215, 247, 0.08); border-color: var(--color-electric-iris); }
     html.light-mode .action-btn { background: rgba(0,0,0,0.03); }
+
+    /* PHASE 2 OPTIMIZATION: Pagination CSS */
+    .pagination-wrapper {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 16px 8px; color: var(--color-fog); font-size: 13px; font-weight: 500;
+    }
+    .pagination-controls { display: flex; gap: 8px; align-items: center; }
+    .page-btn {
+        background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border);
+        color: var(--color-moonlight); padding: 8px 12px; border-radius: 8px;
+        cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+        font-family: var(--font-ui); font-size: 13px; font-weight: 500;
+    }
+    .page-btn:hover:not(:disabled) { background: rgba(186, 215, 247, 0.08); color: var(--color-glacier); border-color: var(--color-moonlight); }
+    .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    html.light-mode .page-btn { background: rgba(0,0,0,0.03); color: var(--color-pebble); }
+    html.light-mode .page-btn:hover:not(:disabled) { background: rgba(0,0,0,0.08); color: var(--color-midnight-ink); border-color: var(--color-fog); }
 
     .floating-dock {
         position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
@@ -106,52 +122,157 @@
             <p class="eyebrow-text" style="font-family: var(--font-mono); color: var(--color-fog); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">DATABASE TABLE</p>
             <h1>{{ table_title }}</h1>
         </div>
+        <!-- PHASE 2 OPTIMIZATION: Targets specific dynamic container to avoid disrupting headers -->
         <input type="text" class="search-box" id="searchInput" name="q" placeholder="Search records live..." 
                hx-get="/table/{{ table_name }}" 
                hx-trigger="keyup changed delay:300ms, search" 
-               hx-target="#dataTable" 
-               hx-select="#dataTable"
+               hx-target="#tableContent" 
+               hx-select="#tableContent"
                hx-swap="outerHTML"
+               value="{{ search_query | default('') }}"
                autocomplete="off">
     </div>
 
-    <div class="table-container">
-        <div class="table-scroll">
-            <table id="dataTable">
-                <thead>
-                    <tr>
-                        <th style="width: 60px; text-align: center;"></th>
-                        <!-- Backend now naturally sorts these exactly as requested -->
-                        {% for col in columns %}
-                        <th data-index="{{ loop.index }}" onclick="sortTable({{ loop.index }}, false)">
-                            {{ col.label }} <i class="sort-icon" data-lucide="arrow-up-down" style="width:12px; opacity:0.3; margin-left: 4px; vertical-align: middle;"></i>
-                        </th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in rows %}
-                    <tr>
-                        <td style="text-align: center;">
-                            <!-- SINGLE EDIT BUTTON REPLACES THE DROPDOWN/DELETE -->
-                            <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" class="action-btn" title="Edit Record">
-                                <i data-lucide="edit-2" style="width: 16px;"></i>
-                            </a>
-                        </td>
-                        {% for col in columns %}
-                            <td>
-                                {% set val = row[col.raw] %}
-                                {% if val == 'ACT' %} <span class="pill pill-act">Active</span>
-                                {% elif val == 'INA' %} <span class="pill pill-ina">Inactive</span>
-                                {% elif val == 'None' or val == None %} <span class="pill pill-def">Empty</span>
-                                {% else %} {{ val }} {% endif %}
-                            </td>
-                        {% endfor %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <!-- PHASE 2 OPTIMIZATION: Wrapper to cleanly swap tables & pagination together -->
+    <div id="tableContent">
+        
+        {% if table_name == 'phc_lookup_types' %}
+        <!-- ================================================== -->
+        <!-- SPLIT PANE MASTER-DETAIL UI FOR LOOKUPS            -->
+        <!-- ================================================== -->
+        <style>
+            .split-pane { display: flex; flex-direction: column; gap: 24px; height: 60vh; }
+            .pane-section {
+                background: var(--glass-surface); border: 1px solid var(--glass-border); 
+                border-radius: 12px; display: flex; flex-direction: column; flex: 1; overflow: hidden;
+            }
+            .master-row { cursor: pointer; }
+            .master-row:hover td { background: rgba(255, 255, 255, 0.05); }
+            .master-row.selected td { background: rgba(102, 58, 243, 0.15); border-color: rgba(102, 58, 243, 0.3); color: var(--color-glacier); }
+        </style>
+
+        <div class="split-pane">
+            <!-- Top Pane: Master Table -->
+            <div class="pane-section">
+                <div style="background: rgba(0,0,0,0.4); padding: 12px 20px; border-bottom: 1px solid var(--glass-border); font-family: var(--font-mono); font-size: 12px; color: var(--color-fog); text-transform: uppercase;">
+                    1. Lookup Types
+                </div>
+                <div class="table-scroll" style="max-height: none; flex-grow: 1;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;"></th>
+                                <th>Type Code</th>
+                                <th>Type Name</th>
+                                <th>Description</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in rows %}
+                            <tr class="master-row" 
+                                onclick="selectRow(this)"
+                                hx-get="/api/lookup_values/{{ row['plt_lookup_type_code'] }}" 
+                                hx-target="#lookup-values-container" 
+                                hx-swap="innerHTML">
+                                <td style="text-align: center;">
+                                    <a href="/edit/{{ table_name }}/{{ row['plt_lookup_type_code'] }}" class="action-btn" onclick="event.stopPropagation();">Edit</a>
+                                </td>
+                                <td style="font-family: var(--font-mono); color: var(--color-frost-link);">{{ row['plt_lookup_type_code'] }}</td>
+                                <td style="font-weight: 500; color: var(--color-glacier);">{{ row['plt_lookup_type'] }}</td>
+                                <td>{{ row['plt_lookup_type_desc'] }}</td>
+                                <td>{{ row['plt_status'] }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Bottom Pane: Child Details (Injected via HTMX) -->
+            <div class="pane-section" id="lookup-values-container">
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--color-fog); opacity: 0.5;">
+                    <i data-lucide="mouse-pointer-click" style="width: 48px; height: 48px; margin-bottom: 12px;"></i>
+                    <p>Select a Lookup Type above to view its assigned values.</p>
+                </div>
+            </div>
         </div>
+
+        <script>
+            function selectRow(rowElement) {
+                document.querySelectorAll('.master-row').forEach(row => row.classList.remove('selected'));
+                rowElement.classList.add('selected');
+            }
+        </script>
+        
+        {% else %}
+        <!-- ================================================== -->
+        <!-- STANDARD TABLE UI (For everything else)            -->
+        <!-- ================================================== -->
+        <div class="table-container">
+            <div class="table-scroll">
+                <table id="dataTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px; text-align: center;"></th>
+                            {% for col in columns %}
+                            <th data-index="{{ loop.index }}" onclick="sortTable({{ loop.index }}, false)">
+                                {{ col.label }} <i class="sort-icon" data-lucide="arrow-up-down" style="width:12px; opacity:0.3; margin-left: 4px; vertical-align: middle;"></i>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                        <tr>
+                            <td style="text-align: center;">
+                                <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" class="action-btn" title="Edit Record">
+                                    <i data-lucide="edit-2" style="width: 16px;"></i>
+                                </a>
+                            </td>
+                            {% for col in columns %}
+                                <td>
+                                    {% set val = row[col.raw] %}
+                                    {% if val == 'ACT' %} <span class="pill pill-act">Active</span>
+                                    {% elif val == 'INA' %} <span class="pill pill-ina">Inactive</span>
+                                    {% elif val == 'None' or val == None %} <span class="pill pill-def">Empty</span>
+                                    {% else %} {{ val }} {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PHASE 2 OPTIMIZATION: Advanced Pagination Controls -->
+        <div class="pagination-wrapper">
+            <div>Showing {{ start_row }} to {{ end_row }} of {{ total_count }} entries</div>
+            
+            <div class="pagination-controls">
+                <button class="page-btn" 
+                        {% if page > 1 %}
+                        hx-get="/table/{{ table_name }}?page={{ page - 1 }}" 
+                        hx-include="#searchInput"
+                        hx-target="#tableContent" hx-select="#tableContent" hx-swap="outerHTML"
+                        {% else %} disabled {% endif %}>
+                    <i data-lucide="chevron-left" style="width: 14px;"></i> Prev
+                </button>
+                
+                <span style="padding: 6px 12px;">Page {{ page }} of {{ total_pages }}</span>
+                
+                <button class="page-btn" 
+                        {% if page < total_pages %}
+                        hx-get="/table/{{ table_name }}?page={{ page + 1 }}" 
+                        hx-include="#searchInput"
+                        hx-target="#tableContent" hx-select="#tableContent" hx-swap="outerHTML"
+                        {% else %} disabled {% endif %}>
+                    Next <i data-lucide="chevron-right" style="width: 14px;"></i>
+                </button>
+            </div>
+        </div>
+        {% endif %} <!-- End of conditional check -->
     </div>
 </div>
 
@@ -159,7 +280,7 @@
     <a href="/export/{{ table_name }}" class="dock-item" tooltip="Export CSV">
         <i data-lucide="download" style="width:20px;"></i>
     </a>
-    <a href="/new/{{ table_name }}" class="dock-item" tooltip="Add Record">
+    <a href="/new/{{ table_name }}" id="addRecordBtn" class="dock-item" tooltip="Add Record">
         <i data-lucide="plus" style="width:20px;"></i>
     </a>
     <button class="dock-item" tooltip="Refresh Table" onclick="window.location.reload();">
@@ -168,7 +289,29 @@
 </div>
 
 <script>
-    const searchInput = document.getElementById("searchInput");
+    // --- NEW: DYNAMIC ADD RECORD BUTTON ---
+    // Automatically injects your search query into the form so you don't have to re-select it!
+    document.addEventListener("DOMContentLoaded", () => {
+        const addRecordBtn = document.getElementById('addRecordBtn');
+        const searchInput = document.getElementById('searchInput');
+        
+        if (addRecordBtn && searchInput && '{{ table_name }}' === 'phc_lookup_values_t') {
+            const originalHref = addRecordBtn.href;
+            
+            const updateUrl = () => {
+                const val = searchInput.value.trim();
+                if (val) {
+                    addRecordBtn.href = `${originalHref}?plv_lookup_type_code=${encodeURIComponent(val)}`;
+                } else {
+                    addRecordBtn.href = originalHref;
+                }
+            };
+            
+            updateUrl(); // Run on load
+            searchInput.addEventListener('input', updateUrl); // Run when user types
+        }
+    });
+
     let sortDir = {};
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -182,6 +325,7 @@
 
     function sortTable(n, skipToggle) {
         let table = document.getElementById("dataTable");
+        if (!table) return;
         let tbody = table.tBodies[0];
         let rows = Array.from(tbody.querySelectorAll("tr"));
         if (!skipToggle) sortDir[n] = !sortDir[n];
