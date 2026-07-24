@@ -2,532 +2,240 @@
 
 {% block content %}
 <style>
-    .content-wrapper {
-        width: 100%; max-width: 900px; margin: 0 auto;
-        display: flex; flex-direction: column;
-    }
-
-    .page-header { margin-bottom: 32px; }
-    .page-header h1 { font-size: 28px; font-weight: 500; color: var(--color-glacier); letter-spacing: normal; line-height: 1.17; margin: 0; }
-
     .form-container {
         background: var(--glass-surface); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-        border: 1px solid var(--glass-border); border-radius: 12px; padding: 40px;
-        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
-        animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-
-    .form-grid-2-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
-    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; margin-bottom: 24px; }
-    
-    @media (max-width: 600px) { .form-grid-2-col { grid-template-columns: 1fr; } }
-
-    .form-group { display: flex; flex-direction: column; gap: 8px; }
-    .form-group label { font-size: 14px; font-weight: 500; color: var(--color-moonlight); text-transform: none; }
-
-    .form-group input[type="text"], .form-group input[type="password"], .form-group input[type="date"], .form-group select {
-        padding: 12px 14px; border: 1px solid var(--glass-border); border-radius: 6px;
-        font-size: 14px; font-family: var(--font-ui); background-color: rgba(0,0,0,0.3); color: var(--color-glacier); 
-        transition: all 0.2s ease;
-    }
-    html.light-mode .form-group input, html.light-mode .form-group select {
-        background-color: rgba(255,255,255,0.6); color: var(--color-glacier);
-    }
-    
-    .form-group input:focus, .form-group select:focus {
-        outline: none; border-color: var(--color-frost-link);
-        box-shadow: 0 0 0 1px var(--color-frost-link);
+        border: 1px solid var(--glass-border); border-radius: 12px; padding: 32px;
+        max-width: 800px; margin: 0 auto; box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+        animation: fadeIn 0.3s ease-out;
     }
 
-    .readonly-input { opacity: 0.6; cursor: not-allowed; background-color: rgba(0,0,0,0.3) !important; pointer-events: none; }
-    html.light-mode .readonly-input { background-color: rgba(0,0,0,0.05) !important; }
+    .form-header { margin-bottom: 32px; border-bottom: 1px solid var(--glass-border); padding-bottom: 16px; }
+    .form-header h1 { font-size: 24px; font-weight: 500; color: var(--color-glacier); margin: 0 0 8px 0; }
+    .form-header p { color: var(--color-fog); font-size: 14px; margin: 0; }
 
-    .checkbox-scroll-box { max-height: 350px; overflow-y: auto; padding: 12px; border-radius: 6px; background-color: rgba(0,0,0,0.3); border: 1px solid var(--glass-border); }
-    html.light-mode .checkbox-scroll-box { background-color: rgba(255,255,255,0.6); }
-    
-    .checkbox-item { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 4px; cursor: pointer; transition: background 0.2s; font-weight: 400; font-size: 14px; color: var(--color-moonlight); }
-    .checkbox-item:hover { background: rgba(255, 255, 255, 0.05); }
-    html.light-mode .checkbox-item:hover { background: rgba(0, 0, 0, 0.05); }
-    .checkbox-item input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--color-electric-iris); border-radius: 4px; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+    .form-group { display: flex; flex-direction: column; gap: 8px; position: relative; }
+    .form-group.full-width { grid-column: 1 / -1; }
 
-    .cb-group { border: 1px solid var(--glass-border); border-radius: 6px; margin-bottom: 8px; overflow: hidden; background: rgba(0,0,0,0.1); }
-    html.light-mode .cb-group { background: rgba(255,255,255,0.5); }
-    
-    .cb-group-header { 
-        background: rgba(0,0,0,0.3); padding: 10px 14px; display: flex; justify-content: space-between; 
-        align-items: center; cursor: pointer; user-select: none; transition: background 0.2s;
+    .form-group label { font-size: 13px; font-weight: 500; color: var(--color-moonlight); display: flex; justify-content: space-between;}
+    .required-star { color: var(--color-ember); margin-left: 4px; }
+
+    .form-control {
+        background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
+        padding: 12px 14px; border-radius: 8px; color: var(--color-glacier);
+        font-family: var(--font-ui); font-size: 14px; transition: all 0.2s;
+        width: 100%;
     }
-    .cb-group-header:hover { background: rgba(186, 215, 247, 0.08); }
-    html.light-mode .cb-group-header { background: rgba(0,0,0,0.05); }
-    html.light-mode .cb-group-header:hover { background: rgba(0,0,0,0.08); }
+    html.light-mode .form-control { background: rgba(255,255,255,0.6); color: var(--color-midnight-ink); }
     
-    .cb-group-content { padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
-    .cb-group.collapsed .cb-group-content { display: none; }
-    .cb-group.collapsed .cb-chevron { transform: rotate(-90deg); }
-    .cb-chevron { transition: transform 0.2s; color: var(--color-fog); }
+    .form-control:focus { outline: none; border-color: var(--color-electric-iris); box-shadow: 0 0 0 1px var(--color-electric-iris); }
+    .form-control:read-only, .form-control:disabled { background: rgba(255, 255, 255, 0.02); color: var(--color-fog); cursor: not-allowed; }
+    html.light-mode .form-control:read-only { background: rgba(0,0,0,0.03); }
 
-    .btn-group-wrap { display: flex; gap: 8px; }
-    .ui-btn { flex: 1; padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px; color: var(--color-moonlight); transition: all 0.2s; background: transparent; border: 1px solid var(--glass-border); }
-    .ui-btn:hover { border-color: var(--color-pebble); }
-    
-    .active-selected { background: rgba(38, 150, 132, 0.15); color: var(--color-cipher-mint); border-color: var(--color-cipher-mint); }
-    .inactive-selected { background: rgba(228, 109, 76, 0.15); color: var(--color-ember); border-color: var(--color-ember); }
-    .adm-selected { background: rgba(102, 58, 243, 0.15); color: var(--color-electric-iris); border-color: var(--color-electric-iris); }
-    .std-selected { background: rgba(255, 255, 255, 0.05); color: var(--color-glacier); border-color: var(--color-moonlight); }
-    html.light-mode .std-selected { background: rgba(0, 0, 0, 0.05); color: var(--color-midnight-ink); border-color: var(--color-fog); }
-    
-    .disabled-btn { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
-    .hidden-input { display: none; }
-
-    .form-divider { height: 1px; width: 100%; background: var(--glass-border); margin: 32px 0; }
-
-    .form-actions { display: flex; gap: 12px; align-items: center; justify-content: flex-end; }
-    .btn-submit {
-        display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-        padding: 10px 24px; border-radius: 6px;
-        background: var(--color-electric-iris); color: white; font-weight: 500; font-family: var(--font-ui); font-size: 14px;
-        border: none; cursor: pointer; transition: background 0.2s, transform 0.2s; line-height: 1.5;
+    /* Custom Select Dropdown Styling */
+    select.form-control { 
+        appearance: none; 
+        cursor: pointer; 
+        padding-right: 40px; 
     }
-    .btn-submit:hover { background: #7a52f5; transform: translateY(-1px); }
-
-    .btn-cancel, .btn-clear {
-        padding: 10px 16px; border-radius: 6px; font-weight: 500; font-family: var(--font-ui); font-size: 14px;
-        cursor: pointer; transition: all 0.2s; background: transparent; border: 1px solid var(--glass-border); color: var(--color-moonlight);
+    .select-wrapper { position: relative; }
+    .select-wrapper::after {
+        content: ''; position: absolute; right: 16px; top: 50%;
+        width: 10px; height: 10px; 
+        border-right: 2px solid var(--color-fog); border-bottom: 2px solid var(--color-fog);
+        transform: translateY(-60%) rotate(45deg); pointer-events: none;
+        transition: border-color 0.2s;
     }
-    .btn-cancel:hover { background: rgba(255,255,255,0.05); color: white; }
-    html.light-mode .btn-cancel:hover { background: rgba(0,0,0,0.05); color: black; }
-    .btn-clear { border-color: var(--color-ember); color: var(--color-ember); margin-right: auto; }
-    .btn-clear:hover { background: rgba(228, 109, 76, 0.1); }
+    .select-wrapper:hover::after { border-color: var(--color-electric-iris); }
+
+    /* Select Option Styling for Dark Mode (Some browsers support this natively) */
+    select.form-control option {
+        background-color: var(--color-midnight-ink);
+        color: var(--color-glacier);
+        padding: 12px;
+    }
+    html.light-mode select.form-control option {
+        background-color: #fff;
+        color: var(--color-midnight-ink);
+    }
+
+    .status-toggle {
+        display: inline-flex; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
+        border-radius: 8px; overflow: hidden;
+    }
+    .status-btn {
+        padding: 10px 24px; font-size: 13px; font-weight: 500; color: var(--color-fog);
+        cursor: pointer; transition: all 0.2s; flex: 1; text-align: center; user-select: none;
+    }
+    .status-btn.active-yes { background: rgba(38, 150, 132, 0.15); color: var(--color-cipher-mint); }
+    .status-btn.active-no { background: rgba(228, 109, 76, 0.15); color: var(--color-ember); }
+
+    .form-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--glass-border); }
     
-    /* Phase 3: Address Modal Overlay CSS */
-    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); z-index: 1000; align-items: center; justify-content: center; }
-    .modal-overlay.active { display: flex; }
-    .modal-content { background: var(--glass-surface); border: 1px solid var(--glass-border); border-radius: 12px; padding: 24px; width: 100%; max-width: 500px; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5); }
-    html.light-mode .modal-content { background: rgba(255,255,255,0.9); }
+    .btn-cancel { background: transparent; color: var(--color-fog); border: 1px solid var(--glass-border); padding: 12px 24px; border-radius: 8px; cursor: pointer; transition: all 0.2s; text-decoration: none; font-size: 14px; font-weight: 500; }
+    .btn-cancel:hover { background: rgba(255,255,255,0.05); color: var(--color-moonlight); }
+    
+    .btn-submit { background: var(--color-electric-iris); color: white; border: none; padding: 12px 32px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(102, 58, 243, 0.3); }
+    .btn-submit:hover { background: #7a52f5; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(102, 58, 243, 0.4); }
+
+    /* Multi-select virtual checkboxes */
+    .checkbox-list {
+        background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
+        border-radius: 8px; max-height: 200px; overflow-y: auto; padding: 8px;
+    }
+    .checkbox-item {
+        display: flex; align-items: center; gap: 12px; padding: 8px 12px;
+        border-radius: 6px; cursor: pointer; transition: background 0.2s;
+    }
+    .checkbox-item:hover { background: rgba(255,255,255,0.05); }
+    .checkbox-item input { accent-color: var(--color-electric-iris); width: 16px; height: 16px; cursor: pointer; }
 </style>
 
-<div class="content-wrapper">
-    <div class="breadcrumbs" style="display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 25px; color: var(--color-fog);">
-        {% set clean_name = table_name.split('_', 1)[-1].replace('_t', '').replace('_', ' ').title() %}
-        <a href="/" style="color: var(--color-fog); text-decoration: none;">Nexus ERP</a> 
-        <i data-lucide="chevron-right" style="width: 14px;"></i> 
-        <a href="/table/{{ table_name }}" style="color: var(--color-fog); text-decoration: none;">{{ clean_name }}</a>
-        <i data-lucide="chevron-right" style="width: 14px;"></i> 
-        <span style="color: var(--color-moonlight);">{% if mode == 'edit' %}Edit Record ID {{ pk_val }}{% else %}New Record{% endif %}</span>
+<div class="form-container">
+    <div class="form-header">
+        <h1>{{ 'Edit' if is_update else 'New' }} Record</h1>
+        <p>{{ table_title }}</p>
     </div>
 
-    <div class="page-header">
-        <p class="eyebrow-text" style="font-family: var(--font-mono); color: var(--color-fog); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">RECORD EDITOR</p>
-        <h1>{{ table_title }}</h1>
-    </div>
-
-    <div class="form-container">
-        {% macro render_field(col, current_user_type, table_modules, mode) %}
+    <form id="recordForm" 
+          hx-{{ 'put' if is_update else 'post' }}="/api/{{ table_name }}{{ '/' ~ pk_val if is_update else '' }}" 
+          hx-ext="json-enc"
+          hx-swap="none">
         
-        <!-- Hide company_id (except on Companies table itself) -->
-        {% if col.column_name.lower().endswith('company_id') and table_name != 'phc_companies_t' %}
-            <input type="hidden" name="{{ col.column_name }}" value="{{ col.value }}">
-        {% else %}
-            <div class="form-group">
-                <label>
-                    {{ col.label }} 
-                    {% if col.required and not col.is_pk %}<span style="color: var(--color-ember);">*</span>{% endif %}
-                    {% if col.is_pk %}<span style="color: var(--color-fog); font-size: 12px; margin-left: 6px;">(Auto-Generated ID)</span>{% endif %}
-                </label>
+        <div class="form-grid">
+            {% for col in columns %}
+                {% set is_who_col = col.column_name.lower() in ['creation_date', 'created_by', 'last_update_date', 'last_updated_by'] or col.column_name.lower().endswith('_created') or col.column_name.lower().endswith('_modified') or col.column_name.lower().endswith('_created_by') or col.column_name.lower().endswith('_modified_by') %}
+                {% set is_company_col = col.column_name.lower().endswith('company_id') %}
                 
-                {% if col.column_name.lower().endswith('status') %}
-                    <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'ACT' }}">
-                    <div class="btn-group-wrap">
-                        <div class="ui-btn" id="btn_act_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'ACT')">Active</div>
-                        <div class="ui-btn" id="btn_ina_{{ col.column_name }}" onclick="setStatus('{{ col.column_name }}', 'INA')">Inactive</div>
-                    </div>
-                {% elif col.column_name.lower() == 'enabled_flag' %}
-                    <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'Y' }}">
-                    <div class="btn-group-wrap">
-                        <div class="ui-btn" id="btn_y_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'Y')">Active</div>
-                        <div class="ui-btn" id="btn_n_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'N')">Inactive</div>
-                    </div>
-                {% elif col.column_name.lower().endswith('flag') %}
-                    <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'Y' }}">
-                    <div class="btn-group-wrap">
-                        <div class="ui-btn" id="btn_y_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'Y')">Yes</div>
-                        <div class="ui-btn" id="btn_n_{{ col.column_name }}" onclick="setFlag('{{ col.column_name }}', 'N')">No</div>
-                    </div>
-                {% elif col.column_name == 'pus_user_type' %}
-                    <input type="text" name="{{ col.column_name }}" id="input_{{ col.column_name }}" class="hidden-input" value="{{ col.value if col.value else 'STD' }}">
-                    <div class="btn-group-wrap">
-                        <div class="ui-btn {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" id="btn_adm_{{ col.column_name }}" onclick="{% if current_user_type == 'ADM' %}setUserType('{{ col.column_name }}', 'ADM'){% endif %}">Admin (ADM)</div>
-                        <div class="ui-btn {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" id="btn_std_{{ col.column_name }}" onclick="{% if current_user_type == 'ADM' %}setUserType('{{ col.column_name }}', 'STD'){% endif %}">Standard (STD)</div>
-                    </div>
-                {% elif col.is_pk %}
-                    <input type="text" name="{{ col.column_name }}" value="{{ col.value if col.value != None else 'Pending...' }}" class="readonly-input" readonly tabindex="-1">
-                
-                {% elif col.data_type in ('json', 'jsonb') %}
-                    <!-- Phase 3: Address Modal Trigger -->
-                    <input type="hidden" name="{{ col.column_name }}" id="hidden_{{ col.column_name }}" value='{{ col.value if col.value else "{}" }}'>
-                    <button type="button" class="btn-cancel" style="width: 100%; display: flex; justify-content: space-between; align-items: center;" onclick="openAddressModal('{{ col.column_name }}')">
-                        <span><i data-lucide="map-pin" style="width: 16px; margin-right: 8px; vertical-align: text-bottom;"></i> Edit Address Details</span>
-                        <i data-lucide="plus" style="width: 16px;"></i>
-                    </button>
-                    <!-- Tiny preview text that updates when modal saves -->
-                    <div id="json_summary_{{ col.column_name }}" style="font-size: 12px; color: var(--color-fog); margin-top: 8px;"></div>
-                
-                {% elif col.data_type == 'virtual_checkbox' %}
-                    <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                        <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', true){% endif %}">Select Global All</button>
-                        <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 4px 8px; font-size: 11px;" onclick="{% if current_user_type == 'ADM' %}selectAllCheckboxes('{{ col.column_name }}', false){% endif %}">Deselect Global All</button>
-                    </div>
-                    
-                    <div class="checkbox-scroll-box">
-                        {% set selected_items = (col.value or "").split(',') %}
-                        
-                        {% if col.column_name == 'pr_allowed_tables' %}
-                            {% set known_modules = ['AppSetup', 'CustomerSetup', 'Employee', 'Ledger', 'MasterData', 'OrderMgmt', 'Payables', 'Procurement', 'Product', 'Project', 'Receivables', 'All Screens'] %}
-                            {% set mod_labels = {'AppSetup': 'App Setup', 'CustomerSetup': 'Customers & Vendors', 'Employee': 'Employees', 'Ledger': 'General Ledger', 'MasterData': 'Master Data', 'OrderMgmt': 'Order Management', 'Payables': 'Payables', 'Procurement': 'Procurement', 'Product': 'Inventory', 'Project': 'Project Accounting', 'Receivables': 'Receivables', 'All Screens': 'Other Screens'} %}
-                            
-                            {% for mod_key in known_modules %}
-                                {% set opts_in_mod = [] %}
-                                {% for opt in col.options %}
-                                    {% set opt_mod = table_modules.get(opt.code, 'All Screens') if opt.code else 'All Screens' %}
-                                    {% if opt_mod == mod_key %}
-                                        {% set _ = opts_in_mod.append(opt) %}
-                                    {% endif %}
-                                {% endfor %}
-                                
-                                {% if opts_in_mod|length > 0 %}
-                                    <div class="cb-group collapsed">
-                                        <div class="cb-group-header" onclick="toggleCbGroup(this)">
-                                            <div style="display:flex; align-items:center; gap:8px;">
-                                                <i data-lucide="chevron-down" class="cb-chevron" style="width:16px;"></i>
-                                                <span style="font-weight:600; font-size: 15px; color:var(--color-glacier);">{{ mod_labels.get(mod_key, mod_key) }}</span>
-                                            </div>
-                                            <div style="display:flex; gap: 6px;">
-                                                <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 2px 8px; font-size: 11px; border-color: rgba(255,255,255,0.1);" onclick="event.stopPropagation(); {% if current_user_type == 'ADM' %}selectGroupCheckboxes(this, '{{ col.column_name }}', true){% endif %}">Select All</button>
-                                                <button type="button" class="btn-cancel {% if current_user_type != 'ADM' %}disabled-btn{% endif %}" style="padding: 2px 8px; font-size: 11px; border-color: rgba(255,255,255,0.1);" onclick="event.stopPropagation(); {% if current_user_type == 'ADM' %}selectGroupCheckboxes(this, '{{ col.column_name }}', false){% endif %}">Clear</button>
-                                            </div>
-                                        </div>
-                                        <div class="cb-group-content">
-                                            {% for opt in opts_in_mod %}
-                                                <label class="checkbox-item {% if current_user_type != 'ADM' %}disabled-btn{% endif %}">
-                                                    <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %} {% if current_user_type != 'ADM' %}disabled{% endif %}>
-                                                    <span>{{ opt.name }}</span>
-                                                </label>
-                                            {% endfor %}
-                                        </div>
-                                    </div>
+                {% if not is_who_col and not is_company_col %}
+                    <div class="form-group {% if col.data_type == 'json' or col.data_type == 'jsonb' or (col.options and col.options|length > 10) %}full-width{% endif %}">
+                        <label for="{{ col.column_name }}">
+                            <span>{{ col.label }} {% if col.required and not col.is_pk %}<span class="required-star">*</span>{% endif %}</span>
+                            {% if col.is_pk and not is_update and col.data_type in ['character varying', 'text', 'varchar'] %}
+                                <span style="font-size: 11px; color: var(--color-electric-iris);">(Custom Code Allowed)</span>
+                            {% elif col.is_pk and not is_update %}
+                                <span style="font-size: 11px; color: var(--color-fog);">(Auto-Generated ID)</span>
+                            {% endif %}
+                        </label>
+
+                        {# 1. PRIMARY KEY HANDLING #}
+                        {% if col.is_pk %}
+                            {% if is_update %}
+                                <!-- Always readonly on updates -->
+                                <input type="text" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" value="{{ col.value }}" readonly>
+                            {% else %}
+                                {% if col.data_type in ['character varying', 'text', 'varchar'] %}
+                                    <!-- String PKs can be typed on creation (e.g. Lookup Types) -->
+                                    <input type="text" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" value="{{ col.value or '' }}" placeholder="Enter unique code..." required>
+                                {% else %}
+                                    <!-- Numeric PKs are auto-generated safely on backend -->
+                                    <input type="text" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" placeholder="Pending..." readonly>
                                 {% endif %}
-                            {% endfor %}
+                            {% endif %}
+
+                        {# 2. STATUS TOGGLE (ACT/INA) #}
+                        {% elif 'status' in col.column_name.lower() %}
+                            <div class="status-toggle">
+                                <input type="hidden" name="{{ col.column_name }}" id="{{ col.column_name }}" value="{{ col.value or 'ACT' }}">
+                                <div class="status-btn {% if col.value == 'ACT' or not col.value %}active-yes{% endif %}" onclick="setStatus('{{ col.column_name }}', 'ACT', this)">Active</div>
+                                <div class="status-btn {% if col.value == 'INA' %}active-no{% endif %}" onclick="setStatus('{{ col.column_name }}', 'INA', this)">Inactive</div>
+                            </div>
+
+                        {# 3. DROPDOWN OPTIONS (FOREIGN KEYS & LOVs) #}
+                        {% elif col.options %}
+                            <!-- Here is the new native select replacing the bulky javascript! -->
+                            <div class="select-wrapper">
+                                <select name="{{ col.column_name }}" id="{{ col.column_name }}" class="form-control" {% if col.required %}required{% endif %}>
+                                    <option value="" disabled {% if col.value == None or col.value == '' %}selected{% endif %}>-- Select {{ col.label }} --</option>
+                                    {% for opt in col.options %}
+                                        <option value="{{ opt.id }}" {% if opt.id|string == col.value|string %}selected{% endif %}>
+                                            {{ opt.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+
+                        {# 4. DATE PICKERS #}
+                        {% elif col.data_type == 'date' or col.data_type == 'timestamp' or 'date' in col.column_name.lower() %}
+                            <input type="date" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" value="{{ col.value }}" {% if col.required %}required{% endif %}>
+
+                        {# 5. PASSWORDS #}
+                        {% elif 'pwd' in col.column_name.lower() or 'password' in col.column_name.lower() %}
+                            <input type="password" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" placeholder="••••••••" {% if not is_update %}required{% endif %}>
+
+                        {# 6. JSON (VIRTUAL CHECKBOXES / TEXTAREA) #}
+                        {% elif col.data_type == 'json' or col.data_type == 'jsonb' %}
+                            {% if col.column_name == 'pr_allowed_tables' or col.column_name == 'pu_assigned_roles' %}
+                                <div class="checkbox-list">
+                                    {% for item in col.json_options %}
+                                        <label class="checkbox-item">
+                                            <input type="checkbox" name="{{ col.column_name }}" value="{{ item.id }}" {% if item.id|string in col.value %}checked{% endif %}>
+                                            <span>{{ item.name }}</span>
+                                        </label>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <textarea id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" rows="4">{{ col.value | default('{}') }}</textarea>
+                            {% endif %}
+
+                        {# 7. STANDARD TEXT/NUMERIC INPUT #}
                         {% else %}
-                            {% for opt in col.options %}
-                                <label class="checkbox-item {% if current_user_type != 'ADM' %}disabled-btn{% endif %}">
-                                    <input type="checkbox" name="{{ col.column_name }}" value="{{ opt.id }}" {% if opt.id|string in selected_items %}checked{% endif %} {% if current_user_type != 'ADM' %}disabled{% endif %}>
-                                    <span>{{ opt.name }}</span>
-                                </label>
-                            {% endfor %}
+                            {% set input_type = 'number' if col.data_type in ['integer', 'numeric', 'bigint', 'smallint'] else 'text' %}
+                            <input type="{{ input_type }}" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" value="{{ col.value if col.value != None else '' }}" {% if col.required %}required{% endif %} {% if col.max_length %}maxlength="{{ col.max_length }}"{% endif %}>
                         {% endif %}
                     </div>
-                
-                {% elif col.options %}
-                    <select name="{{ col.column_name }}" {% if col.required %}required{% endif %}>
-                        <option value="">-- Select --</option>
-                        {% for opt in col.options %}
-                            <option value="{{ opt.id }}" {% if col.value|string == opt.id|string %}selected{% endif %}>{{ opt.name }}</option>
-                        {% endfor %}
-                    </select>
-                {% elif col.data_type == 'date' or col.data_type == 'timestamp' %}
-                    <input type="date" name="{{ col.column_name }}" value="{{ col.value }}" {% if col.required %}required{% endif %}>
-                {% elif 'pwd' in col.column_name or 'password' in col.column_name %}
-                    <input type="password" name="{{ col.column_name }}" autocomplete="new-password" placeholder="{% if mode == 'edit' %}Leave blank to keep unchanged{% else %}••••••••{% endif %}" {% if col.required and mode != 'edit' %}required{% endif %}>
-                {% else %}
-                    <input type="text" name="{{ col.column_name }}" placeholder="Enter {{ col.label|lower }}" value="{{ col.value if col.value != None else '' }}" {% if col.required %}required{% endif %}>
                 {% endif %}
-            </div>
-        {% endif %}
-        {% endmacro %}
-
-        <form hx-ext="json-enc" 
-              hx-swap="beforeend"
-              hx-target="body"
-              {% if mode == 'edit' %}
-              hx-put="/api/{{ table_name }}/{{ pk_val }}"
-              {% else %}
-              hx-post="/api/{{ table_name }}"
-              {% endif %}
-              id="recordForm">
-            
-            <div class="form-grid-2-col">
-                <!-- Group IDs, Statuses, Flags and User Types together -->
-                {% for col in columns if col.is_pk or col.column_name.lower().endswith('status') or col.column_name.lower().endswith('flag') or col.column_name == 'pus_user_type' %}
-                    {{ render_field(col, current_user_type, table_modules, mode) }}
-                {% endfor %}
-            </div>
-
-            <div class="form-grid-2-col">
-                {% for col in columns if 'start_date' in col.column_name.lower() or 'end_date' in col.column_name.lower() %}
-                    {{ render_field(col, current_user_type, table_modules, mode) }}
-                {% endfor %}
-            </div>
-
-            <div class="form-grid">
-                {% for col in columns if not (col.is_pk or col.column_name.lower().endswith('status') or col.column_name.lower().endswith('flag') or col.column_name == 'pus_user_type' or 'start_date' in col.column_name.lower() or 'end_date' in col.column_name.lower()) %}
-                    {{ render_field(col, current_user_type, table_modules, mode) }}
-                {% endfor %}
-            </div>
-            
-            <div class="form-divider"></div>
-
-            <div class="form-actions">
-                {% if mode == 'create' %}
-                    <button type="button" class="btn-clear" onclick="clearForm()">
-                        <i data-lucide="trash" style="width: 16px; margin-right: 4px; vertical-align: middle;"></i> Clear
-                    </button>
-                {% endif %}
-
-                <button type="button" class="btn-cancel" onclick="cancelForm()">Cancel (Save Draft)</button>
-                
-                <button type="submit" class="btn-submit">
-                    <i data-lucide="save" style="width: 16px; margin-right: 4px; vertical-align: middle;"></i> Save Record
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Phase 3: Hidden Modal Overlay for Address JSON Data -->
-<div class="modal-overlay" id="addressModal">
-    <div class="modal-content">
-        <h3 style="margin-bottom: 20px; color: var(--color-glacier);">Edit Address Details</h3>
-        <input type="hidden" id="current_json_col">
-        
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
-            <div class="form-group"><label>Building Name/No.</label><input type="text" id="addr_building"></div>
-            <div class="form-group"><label>Floor</label><input type="text" id="addr_floor"></div>
-            <div class="form-group"><label>Room No.</label><input type="text" id="addr_room"></div>
-            <div class="form-group"><label>Complex</label><input type="text" id="addr_complex"></div>
-            <div class="form-group" style="grid-column: 1 / -1;"><label>Street Name</label><input type="text" id="addr_street"></div>
-            <div class="form-group" style="grid-column: 1 / -1;"><label>Landmark</label><input type="text" id="addr_landmark"></div>
-            <div class="form-group"><label>Town/City</label><input type="text" id="addr_city"></div>
-            <div class="form-group"><label>Pin/Zip Code</label><input type="text" id="addr_pin"></div>
-            <div class="form-group" style="grid-column: 1 / -1;"><label>Country</label><input type="text" id="addr_country"></div>
+            {% endfor %}
         </div>
-        
-        <div style="display: flex; justify-content: flex-end; gap: 12px;">
-            <button type="button" class="btn-cancel" onclick="closeAddressModal()">Cancel</button>
-            <button type="button" class="btn-submit" onclick="saveAddressModal()">Save Address</button>
+
+        <div class="form-actions">
+            <a href="/table/{{ table_name }}" class="btn-cancel">Cancel</a>
+            <button type="submit" class="btn-submit">
+                <i data-lucide="save" style="width: 18px;"></i> Save Record
+            </button>
         </div>
-    </div>
+    </form>
 </div>
 
 <script>
-    // --- Phase 4: Defensive Event Handlers ---
-    const formId = "recordForm";
-    const draftKey = `draft_{{ table_name }}`;
-    const mode = '{{ mode }}';
-
-    function isFormEmpty() {
-        const form = document.getElementById(formId);
-        if(!form) return true;
-        
-        const formData = new FormData(form);
-        for (let [key, value] of formData.entries()) {
-            const el = document.querySelector(`[name="${key}"]`);
-            if (el && el.type !== 'hidden' && value.trim() !== '') {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    function saveDraft() {
-        if (mode !== 'create') return;
-        if (isFormEmpty()) return; // Crucial fix: Don't serialize an empty object to cache
-        
-        const formData = new FormData(document.getElementById(formId));
-        const draft = Object.fromEntries(formData.entries());
-        
-        // 🔥 PHASE 1 FIX: Prevent local storage harvesting of sensitive PII/Credentials
-        const sensitiveKeys = ['pus_pwd', 'password', 'credit_card', 'ssn'];
-        sensitiveKeys.forEach(k => delete draft[k]);
-        
-        localStorage.setItem(draftKey, JSON.stringify(draft));
-    }
-
-    function cancelForm() {
-        if (!isFormEmpty()) {
-            saveDraft(); // Only save draft if they actually typed something
-        }
-        window.location.href = "/table/{{ table_name }}";
-    }
-
-    function clearForm() {
-        const form = document.getElementById(formId);
-        if (form) form.reset();
-        localStorage.removeItem(draftKey);
-        
-        // Reset custom UI toggles safely
-        document.querySelectorAll('.hidden-input').forEach(el => {
-            if(el.name.toLowerCase().endsWith('status')) setStatus(el.name, 'ACT');
-            if(el.name.toLowerCase().endsWith('flag')) setFlag(el.name, 'Y');
-            if(el.name === 'pus_user_type') setUserType(el.name, 'STD');
+    // Status Toggle visual logic
+    function setStatus(colName, val, el) {
+        document.getElementById(colName).value = val;
+        const parent = el.parentElement;
+        parent.querySelectorAll('.status-btn').forEach(btn => {
+            btn.classList.remove('active-yes', 'active-no');
         });
-        
-        // Clear any address previews
-        document.querySelectorAll('[id^="json_summary_"]').forEach(el => {
-            el.innerText = '';
-        });
-        document.querySelectorAll('input[type="hidden"]').forEach(el => {
-            if (el.id.startsWith('hidden_')) el.value = "{}";
-        });
+        if (val === 'ACT') el.classList.add('active-yes');
+        else el.classList.add('active-no');
     }
 
-    // --- Original UI Toggles ---
-    function setStatus(colName, value) {
-        let inputEl = document.getElementById('input_' + colName);
-        if (inputEl) inputEl.value = value;
-        const btnAct = document.getElementById('btn_act_' + colName);
-        const btnIna = document.getElementById('btn_ina_' + colName);
-        if(btnAct) { 
-            btnAct.className = 'ui-btn'; 
-            if(value === 'ACT' || value === 'AIU') btnAct.classList.add('active-selected'); 
-        }
-        if(btnIna) { 
-            btnIna.className = 'ui-btn'; 
-            if(value !== 'ACT' && value !== 'AIU') btnIna.classList.add('inactive-selected'); 
-        }
-        if (typeof saveDraft === 'function') saveDraft();
-    }
+    // Keep form state for draft recovery so users never lose their typing!
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('recordForm');
+        if(!form) return;
 
-    function setFlag(colName, value) {
-        let inputEl = document.getElementById('input_' + colName);
-        if (inputEl) inputEl.value = value;
-        const btnY = document.getElementById('btn_y_' + colName);
-        const btnN = document.getElementById('btn_n_' + colName);
-        if(btnY) { btnY.className = 'ui-btn'; if(value === 'Y') btnY.classList.add('active-selected'); }
-        if(btnN) { btnN.className = 'ui-btn'; if(value === 'N') btnN.classList.add('inactive-selected'); }
-        if (typeof saveDraft === 'function') saveDraft();
-    }
-
-    function setUserType(colName, value) {
-        let inputEl = document.getElementById('input_' + colName);
-        if (inputEl) inputEl.value = value;
-        const btnAdm = document.getElementById('btn_adm_' + colName);
-        const btnStd = document.getElementById('btn_std_' + colName);
-        if(btnAdm) { btnAdm.className = 'ui-btn'; if(value === 'ADM') btnAdm.classList.add('adm-selected'); }
-        if(btnStd) { btnStd.className = 'ui-btn'; if(value !== 'ADM') btnStd.classList.add('std-selected'); }
-        if (typeof saveDraft === 'function') saveDraft();
-    }
-
-    function toggleCbGroup(headerEl) {
-        const group = headerEl.closest('.cb-group');
-        group.classList.toggle('collapsed');
-    }
-
-    function selectGroupCheckboxes(btnEl, colName, checkStatus) {
-        const group = btnEl.closest('.cb-group');
-        group.querySelectorAll(`input[name="${colName}"]`).forEach(el => { if(!el.disabled) el.checked = checkStatus; });
-        saveDraft();
-    }
-
-    function selectAllCheckboxes(colName, checkStatus) {
-        document.querySelectorAll(`input[name="${colName}"]`).forEach(el => { if(!el.disabled) el.checked = checkStatus; });
-        saveDraft();
-    }
-
-    // --- Phase 3: Address Modal Logic ---
-    function openAddressModal(colName) {
-        document.getElementById('addressModal').classList.add('active');
-        document.getElementById('current_json_col').value = colName;
-        
-        // Load existing data from the hidden input
-        const rawVal = document.getElementById('hidden_' + colName).value;
-        let data = {};
-        try { data = JSON.parse(rawVal); } catch(e) {}
-        
-        document.getElementById('addr_complex').value = data.complex || '';
-        document.getElementById('addr_building').value = data.building || '';
-        document.getElementById('addr_floor').value = data.floor || '';
-        document.getElementById('addr_room').value = data.room || '';
-        document.getElementById('addr_street').value = data.street || '';
-        document.getElementById('addr_landmark').value = data.landmark || '';
-        document.getElementById('addr_city').value = data.city || '';
-        document.getElementById('addr_pin').value = data.pin_code || '';
-        document.getElementById('addr_country').value = data.country || '';
-    }
-    
-    function closeAddressModal() {
-        document.getElementById('addressModal').classList.remove('active');
-    }
-    
-    function saveAddressModal() {
-        const colName = document.getElementById('current_json_col').value;
-        const payload = {
-            complex: document.getElementById('addr_complex').value,
-            building: document.getElementById('addr_building').value,
-            floor: document.getElementById('addr_floor').value,
-            room: document.getElementById('addr_room').value,
-            street: document.getElementById('addr_street').value,
-            landmark: document.getElementById('addr_landmark').value,
-            city: document.getElementById('addr_city').value,
-            pin_code: document.getElementById('addr_pin').value,
-            country: document.getElementById('addr_country').value,
-        };
-        
-        // Save stringified data to hidden input for form submission
-        document.getElementById('hidden_' + colName).value = JSON.stringify(payload);
-        
-        // Build tiny preview
-        let summary = [];
-        if(payload.building) summary.push(payload.building);
-        if(payload.street) summary.push(payload.street);
-        if(payload.city) summary.push(payload.city);
-        
-        const summaryEl = document.getElementById('json_summary_' + colName);
-        if (summary.length > 0) {
-            summaryEl.innerHTML = `<span style="color: var(--color-cipher-mint);"><i data-lucide="check" style="width: 12px; margin-right: 4px;"></i> Details captured: ${summary.join(', ')}</span>`;
-        } else {
-            summaryEl.innerHTML = '';
-        }
-        lucide.createIcons();
-        closeAddressModal();
-        saveDraft();
-    }
-
-    // --- Init ---
-    function initFormUI() {
-        document.querySelectorAll('.hidden-input').forEach(el => {
-            if (el.name.toLowerCase().endsWith('status')) setStatus(el.name, el.value || 'ACT');
-            else if (el.name.toLowerCase().endsWith('flag')) setFlag(el.name, el.value || 'Y');
-            else if (el.name === 'pus_user_type') setUserType(el.name, el.value || 'STD');
-        });
-
-        if (mode === 'create') {
-            const draft = JSON.parse(localStorage.getItem(draftKey));
-            if (draft) {
-                Object.keys(draft).forEach(key => {
-                    const el = document.querySelector(`[name="${key}"]`);
-                    if (el && el.type !== 'file') {
-                        el.value = draft[key];
-                        if (key.toLowerCase().endsWith('status')) setStatus(key, draft[key]);
-                        if (key.toLowerCase().endsWith('flag')) setFlag(key, draft[key]);
-                        if (key === 'pus_user_type') setUserType(key, draft[key]);
-                        // Try to render JSON summary for restored drafts
-                        if (key === 'address_details' && draft[key] !== '{}') {
-                           try {
-                               let d = JSON.parse(draft[key]);
-                               document.getElementById('json_summary_' + key).innerText = `Draft Address saved: ${d.city || 'Data present'}`;
-                           } catch(e) {}
+        if(!'{{ is_update }}' || '{{ is_update }}' === 'False') {
+            const draft = localStorage.getItem('draft_{{ table_name }}');
+            if(draft) {
+                try {
+                    const data = JSON.parse(draft);
+                    Object.keys(data).forEach(key => {
+                        const el = document.getElementById(key);
+                        if(el && !el.readOnly && data[key]) {
+                            el.value = data[key];
                         }
-                    }
-                });
+                    });
+                } catch(e) {}
             }
         }
-    }
 
-    initFormUI();
-    document.querySelectorAll('input, select, textarea').forEach(el => {
-        el.addEventListener('input', saveDraft);
-        el.addEventListener('change', saveDraft);
+        form.addEventListener('input', () => {
+            if('{{ is_update }}' === 'True') return;
+            const fd = new FormData(form);
+            const obj = {};
+            fd.forEach((value, key) => obj[key] = value);
+            localStorage.setItem('draft_{{ table_name }}', JSON.stringify(obj));
+        });
     });
 </script>
 {% endblock %}
