@@ -214,6 +214,17 @@
         const form = document.getElementById('recordForm');
         if(!form) return;
 
+        // --- NEW: SMART URL PRE-FILLER ---
+        // If the URL has ?plv_lookup_type_code=DOSAGE_FORM, this will auto-select it in the dropdown!
+        const params = new URLSearchParams(window.location.search);
+        params.forEach((value, key) => {
+            const el = document.getElementById(key);
+            if(el && !el.readOnly && !el.value) { 
+                el.value = value;
+            }
+        });
+        // ---------------------------------
+
         if(!'{{ is_update }}' || '{{ is_update }}' === 'False') {
             const draft = localStorage.getItem('draft_{{ table_name }}');
             if(draft) {
