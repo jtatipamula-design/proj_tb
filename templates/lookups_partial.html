@@ -1,0 +1,49 @@
+<div class="pane-header">
+    <span>2. Assigned Values for <span style="color: var(--color-frost-link);">{{ type_code }}</span></span>
+    <!-- Pre-populates the type code so they don't have to type it again -->
+    <a href="/new/phc_lookup_values_t?plv_lookup_type_code={{ type_code }}" class="action-btn" style="background: var(--color-electric-iris); color: white; border-color: var(--color-electric-iris);">+ Add Value</a>
+</div>
+<div class="table-scroll">
+    <table style="animation: fadeIn 0.3s ease;">
+        <thead>
+            <tr>
+                <th style="width: 50px;"></th>
+                <th>Value Code</th>
+                <th>Display Name</th>
+                <th>Description</th>
+                <th>Start Date</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr>
+                <td>
+                    <a href="/edit/phc_lookup_values_t/{{ row.plv_lookup_value_code }}" class="action-btn">Edit</a>
+                </td>
+                <td style="font-family: var(--font-mono);">{{ row.plv_lookup_value_code }}</td>
+                <td style="font-weight: 500; color: var(--color-glacier);">{{ row.plv_lookup_value_name }}</td>
+                <td>{{ row.plv_lookup_value_desc }}</td>
+                <td>{{ row.plv_start_date }}</td>
+                <td>
+                    {% if row.plv_status == 'ACT' %}
+                        <span style="color: var(--color-cipher-mint);">Active</span>
+                    {% else %}
+                        <span style="color: var(--color-ember);">Inactive</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 30px; color: var(--color-fog);">
+                    No values have been assigned to this lookup type yet.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+    lucide.createIcons();
+</script>
