@@ -400,7 +400,7 @@ async def get_dropdown_options(conn, column_name):
         pass # The LOV tables haven't been created/migrated yet
 
     # If it's not in the LOV registry, it MUST be an ID or a Code to be a standard dropdown.
-    if not col_lower.endswith('_id') and not col_lower.endswith('_code'):
+    if not col_lower.endswith('_id') and not col_lower.endswith('_code') and not col_lower.endswith('_by'):
         return None
 
     # =========================================================================
@@ -427,6 +427,9 @@ async def get_dropdown_options(conn, column_name):
             'dept_id': 'phc_dept_t',
             'role_id': 'phc_roles_t',
             'user_id': 'phc_users_t',
+            'created_by': 'phc_users_t',
+            'modified_by': 'phc_users_t',
+            'last_updated_by': 'phc_users_t',
             'plant_id': 'phc_plant_master',
             'org_id': 'phc_orgs_t',
             'location_id': 'pmd_locations_t',
@@ -492,358 +495,7 @@ async def get_dropdown_options(conn, column_name):
     except asyncpg.exceptions.UndefinedTableError:
         return None
 
-# ==========================================
-#  AUTH ROUTES
-# ==========================================
-@app.route('/login', methods=['GET', 'POST'])
-async def handle_login(request):
-    if request.method == "GET":
-        return await render("login.html")
-        
-    data = request.json or {}
-    username = data.get("username", "")
-    password = data.get("password", "")
-    
-    async with app.ctx.pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT * FROM phc_users_t WHERE pus_user_name = $1", username)
-        
-        if user:
-            stored_pwd = user['pus_pwd']
-            is_valid = False
-            loop = asyncio.get_running_loop()
-            
-            try:
-                is_valid = await loop.run_in_executor(None, partial(bcrypt.checkpw, password.encode('utf-8'), stored_pwd.encode('utf-8')))
-            except ValueError:
-                if password == stored_pwd:
-                    is_valid = True
-                    new_hashed = await loop.run_in_executor(None, partial(bcrypt.hashpw, password.encode('utf-8'), bcrypt.gensalt()))
-                    await conn.execute("UPDATE phc_users_t SET pus_pwd = $1 WHERE pus_user_id = $2", new_hashed.decode('utf-8'), user['pus_user_id'])
-                    
-            if is_valid:
-                session_id = str(uuid.uuid4())
-                await conn.execute("UPDATE phc_users_t SET pus_session_id = $1 WHERE pus_user_id = $2", session_id, user['pus_user_id'])
-                csrf_token = str(uuid.uuid4().hex)
-
-                payload = {
-                    "user_id": user['pus_user_id'],
-                    "user_type": user.get('pus_user_type') or 'STD',
-                    "username": user['pus_user_name'],
-                    "session_id": session_id,
-                    "csrf_token": csrf_token,
-                    "exp": datetime.now(timezone.utc) + timedelta(hours=12)
-                }
-                token = jwt.encode(payload, app.config.SECRET, algorithm="HS256")
-                
-                resp = response.json({"status": "success"})
-                resp.add_cookie("auth_token", token, httponly=True, samesite="Strict", secure=not is_development)
-                await log_action(conn, user['pus_user_id'], "User logged in")
-                return resp
-        
-        return response.json({"error": "Invalid credentials"}, status=401)
-
-
-@app.route("/logout")
-async def logout(request):
-    if request.headers.get("HX-Request"):
-        resp = response.text("Logging out...")
-        resp.headers["HX-Redirect"] = "/login"
-    else:
-        resp = response.redirect("/login")
-    resp.delete_cookie("auth_token")
-    return resp
-
-# ==========================================
-#  MAIN ROUTES
-# ==========================================
-@app.route("/")
-@login_required
-async def dashboard(request):
-    async with app.ctx.pool.acquire() as conn:
-        allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
-        stats = {
-            "emp_count": await conn.fetchval("SELECT COUNT(*) FROM phc_emp_t") if 'phc_emp_t' in allowed else "🔒",
-            "comp_count": await conn.fetchval("SELECT COUNT(*) FROM phc_companies_t WHERE pcp_status = 'ACT'") if 'phc_companies_t' in allowed else "🔒",
-            "dept_count": await conn.fetchval("SELECT COUNT(*) FROM phc_dept_t") if 'phc_dept_t' in allowed else "🔒",
-            "app_count": await conn.fetchval("SELECT COUNT(*) FROM phc_apps_t") if 'phc_apps_t' in allowed else "🔒"
-        }
-        
-    dynamic_mapping = get_table_modules(allowed)
-    return await render("dashboard.html", context={
-        "stats": stats, "all_tables": allowed, "table_modules": dynamic_mapping, 
-        "username": request.ctx.username, "user_id": request.ctx.user_id, "csrf_token": request.ctx.csrf_token 
-    })
-
-
-@app.get("/table/<table_name>")
-@login_required
-async def show_table(request, table_name):
-    try:
-        async with app.ctx.pool.acquire() as conn:
-            allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
-            if table_name not in allowed: return response.redirect("/")
-
-            schema_cols = await _get_cached_schema(conn, table_name)
-            columns = [{"raw": r['column_name'], "label": make_human_readable(r['column_name'])} for r in schema_cols]
-            pk_column = await get_pk_column(conn, table_name)
-            columns = sorted(columns, key=lambda c: get_column_sort_priority(pk_column, c['raw']))
-
-            page, limit = int(request.args.get("page", 1)), 50
-            offset = (page - 1) * limit
-            search_query = request.args.get("q", "").strip()
-            where_clauses, params = [], []
-
-            company_col = next((c['column_name'] for c in schema_cols if c['column_name'].lower().endswith('company_id')), None)
-            if company_col:
-                params.append(request.ctx.company_id)
-                where_clauses.append(f"{company_col} = $1")
-
-            valid_search_types = ('character varying', 'text', 'varchar', 'integer', 'bigint', 'numeric')
-            searchable_cols = [c['column_name'] for c in schema_cols if c.get('data_type') in valid_search_types]
-
-            if len(search_query) >= 2 and searchable_cols:
-                search_param_idx = len(params) + 1
-                params.append(f"%{search_query}%")
-                cast_clauses = [f"CAST({col} AS TEXT) ILIKE ${search_param_idx}" for col in searchable_cols]
-                where_clauses.append(f"({' OR '.join(cast_clauses)})")
-                
-            where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-            order_clause = f"ORDER BY {pk_column} DESC" if pk_column else "ORDER BY 1 DESC"
-            
-            total_count = await conn.fetchval(f"SELECT COUNT(*) FROM {table_name} {where_sql}", *params)
-            total_pages = max(1, (total_count + limit - 1) // limit)
-            
-            start_row = min(offset + 1, total_count) if total_count > 0 else 0
-            end_row = min(offset + limit, total_count)
-
-            rows = await conn.fetch(f"SELECT * FROM {table_name} {where_sql} {order_clause} LIMIT {limit} OFFSET {offset}", *params)
-            rows_dict = [dict(r) for r in rows]
-
-            for col in columns:
-                c_name = col['raw']
-                if c_name == pk_column or c_name == 'address_details': continue 
-
-                options = await get_dropdown_options(conn, c_name)
-                if options:
-                    lookup = {str(opt['id']): opt['name'] for opt in options}
-                    for row in rows_dict:
-                        val = row.get(c_name)
-                        if val is not None and str(val) in lookup:
-                            row[c_name] = f"{lookup[str(val)]} (ID: {val})"
-                        row[c_name] = mask_sensitive_data(c_name, row.get(c_name), request.ctx.user_type)
-
-            dynamic_mapping = get_table_modules(allowed)
-
-            return await render("table_view.html", context={
-                "table_name": table_name, "table_title": make_human_readable(table_name), "columns": columns, 
-                "rows": rows_dict, "all_tables": allowed, "table_modules": dynamic_mapping, "pk_column": pk_column, 
-                "user_id": request.ctx.user_id, "username": request.ctx.username, "csrf_token": request.ctx.csrf_token,
-                "search_query": search_query, "page": page, "total_pages": total_pages, "total_count": total_count,
-                "start_row": start_row, "end_row": end_row
-            })
-    except Exception as e:
-        print(f"Error loading table {table_name}: {e}")
-        if request.headers.get("HX-Request"): return response.json({"error": "Table could not be loaded"}, status=500)
-        return response.redirect("/")
-
-
-@app.route("/export/<table_name>")
-@login_required
-async def export_csv(request, table_name):
-    pk_id = request.args.get("id")
-    async with app.ctx.pool.acquire() as conn:
-        allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
-        if table_name not in allowed: return response.text("Unauthorized", status=403)
-
-        schema_cols = await _get_cached_schema(conn, table_name)
-        where_clauses, params = [], []
-        pk_column = await get_pk_column(conn, table_name)
-
-        company_col = next((c['column_name'] for c in schema_cols if c['column_name'].lower().endswith('company_id')), None)
-        if company_col:
-            params.append(request.ctx.company_id)
-            where_clauses.append(f"{company_col} = $1")
-
-        if pk_id and pk_column:
-            pk_type = next((r['data_type'] for r in schema_cols if r['column_name'] == pk_column), 'integer')
-            parsed_pk = pk_id if pk_type in ('character varying', 'text', 'varchar') else int(pk_id)
-            search_param_idx = len(params) + 1
-            params.append(parsed_pk)
-            where_clauses.append(f"{pk_column} = ${search_param_idx}")
-
-        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-        rows = await conn.fetch(f"SELECT * FROM {table_name} {where_sql}", *params)
-        if not rows: return response.text("No data found")
-        
-        rows_dict = [dict(r) for r in rows]
-        sorted_cols = sorted(schema_cols, key=lambda c: get_column_sort_priority(pk_column, c['column_name']))
-
-        for r in sorted_cols:
-            c_name = r['column_name']
-            if c_name == 'address_details': continue
-            options = await get_dropdown_options(conn, c_name)
-            if options:
-                lookup = {str(opt['id']): opt['name'] for opt in options}
-                for row in rows_dict:
-                    val = row.get(c_name)
-                    if val is not None and str(val) in lookup: row[c_name] = f"{lookup[str(val)]} (ID: {val})"
-                    row[c_name] = mask_sensitive_data(c_name, row.get(c_name), request.ctx.user_type)
-
-        output = io.StringIO()
-        writer = csv.writer(output)
-        ordered_keys = [c['column_name'] for c in sorted_cols]
-        writer.writerow(ordered_keys)
-        for row in rows_dict: writer.writerow([row.get(k) for k in ordered_keys])
-
-        return response.text(output.getvalue(), headers={"Content-Disposition": f'attachment; filename="{table_name}_export.csv"', "Content-Type": "text/csv"})
-
-
-@app.get("/api/lookup_values/<type_code>")
-@login_required
-async def get_lookup_values_api(request, type_code):
-    async with app.ctx.pool.acquire() as conn:
-        try:
-            rows = await conn.fetch("SELECT * FROM phc_lookup_values_t WHERE plv_lookup_type_code = $1 ORDER BY plv_created ASC", type_code)
-            html_parts = [f"""
-            <div style="background: rgba(0,0,0,0.4); padding: 12px 20px; border-bottom: 1px solid var(--glass-border); display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-family: var(--font-mono); font-size: 12px; color: var(--color-fog); text-transform: uppercase; letter-spacing: 0.05em;">2. Assigned Values for <span style="color: var(--color-frost-link);">{type_code}</span></span>
-                <a href="/new/phc_lookup_values_t" class="action-btn" style="background: var(--color-electric-iris); color: white; border: none; padding: 4px 12px; border-radius: 4px; font-weight: 500; font-size: 13px; text-decoration: none;">+ Add Value</a>
-            </div>
-            <div class="table-scroll" style="flex-grow: 1; max-height: none;">
-                <table style="animation: fadeIn 0.3s ease;">
-                    <thead><tr><th style="width: 50px;"></th><th>Value Code</th><th>Display Name</th><th>Description</th><th>Status</th></tr></thead>
-                    <tbody>
-            """]
-            if not rows: html_parts.append('<tr><td colspan="5" style="text-align: center; padding: 40px; color: var(--color-fog);">No values assigned to this lookup type yet.</td></tr>')
-            else:
-                for row in rows:
-                    status = '<span style="color: var(--color-cipher-mint); background: rgba(38,150,132,0.15); padding: 4px 8px; border-radius: 4px; font-size: 12px;">Active</span>' if row['plv_status'] == 'ACT' else '<span style="color: var(--color-ember); background: rgba(228,109,76,0.15); padding: 4px 8px; border-radius: 4px; font-size: 12px;">Inactive</span>'
-                    html_parts.append(f"""
-                    <tr>
-                        <td style="text-align: center;"><a href="/edit/phc_lookup_values_t/{row['plv_lookup_value_code']}" class="action-btn" style="background: rgba(255,255,255,0.05); color: var(--color-fog); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--glass-border); text-decoration: none; font-size: 12px;">Edit</a></td>
-                        <td style="font-family: var(--font-mono); color: var(--color-pebble);">{row['plv_lookup_value_code']}</td>
-                        <td style="font-weight: 500; color: var(--color-glacier);">{row['plv_lookup_value_name'] or ''}</td>
-                        <td style="color: var(--color-moonlight);">{row['plv_lookup_value_desc'] or ''}</td>
-                        <td>{status}</td>
-                    </tr>""")
-            html_parts.append("</tbody></table></div>")
-            return response.html("".join(html_parts))
-        except Exception as e:
-            return response.html('<div style="padding: 20px; color: var(--color-ember);">Error loading details.</div>')
-
-
-@app.get("/edit/<table_name>/<pk_val>")
-@login_required
-async def show_edit_form(request, table_name, pk_val):
-    try:
-        async with app.ctx.pool.acquire() as conn:
-            allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
-            if table_name not in allowed: return response.redirect("/")
-
-            pk_column = await get_pk_column(conn, table_name)
-            col_rows = await _get_cached_schema(conn, table_name)
-            
-            pk_type = next((r['data_type'] for r in col_rows if r['column_name'] == pk_column), 'integer')
-            parsed_pk = str(pk_val) if pk_type in ('character varying', 'text', 'varchar') else int(pk_val)
-            
-            company_col = next((c['column_name'] for c in col_rows if c['column_name'].lower().endswith('company_id')), None)
-            
-            if company_col:
-                record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1 AND {company_col} = $2", parsed_pk, request.ctx.company_id)
-                if not record: return response.text("Unauthorized or Record Not Found", status=403)
-            else:
-                record = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1", parsed_pk)
-                
-            columns = []
-            for r in col_rows:
-                c_name = r['column_name']
-                if c_name.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or c_name.lower() in WHO_COLS: continue
-                is_pk = (c_name == pk_column)
-                
-                if r['data_type'] in ('json', 'jsonb'):
-                    val = record[c_name]
-                    if isinstance(val, str):
-                        try: val = json.loads(val)
-                        except Exception: val = {}
-                    val = json.dumps(val) if val else "{}"
-                else:
-                    val = mask_sensitive_data(c_name, record[c_name], request.ctx.user_type)
-                    if isinstance(val, (date, datetime)): val = val.strftime('%Y-%m-%d')
-
-                options = await get_dropdown_options(conn, c_name) if not is_pk else None
-                is_req = (r['is_nullable'] == 'NO') and not is_pk
-                columns.append({"column_name": c_name, "label": make_human_readable(c_name), "required": is_req, "value": val, "data_type": r['data_type'], "options": options, "is_pk": is_pk})
-
-            columns = sorted(columns, key=lambda c: get_column_sort_priority(pk_column, c['column_name']))
-
-            if table_name == 'phc_roles_t':
-                screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_code as code, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
-                assignments = await conn.fetch("SELECT prs_screen_id FROM phc_role_screen_assignment_t WHERE prs_role_id = $1", parsed_pk)
-                assigned_val = ",".join([str(a['prs_screen_id']) for a in assignments])
-                columns.append({"column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False, "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in screens], "is_pk": False})
-
-            if table_name == 'phc_users_t':
-                roles = await conn.fetch("SELECT prl_role_id as id, prl_role_name as name FROM phc_roles_t WHERE prl_status = 'ACT'")
-                assignments = await conn.fetch("SELECT pua_role_id FROM phc_user_roles_assignment_t WHERE pua_user_id = $1", parsed_pk)
-                assigned_val = ",".join([str(a['pua_role_id']) for a in assignments])
-                columns.append({"column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False, "value": assigned_val, "data_type": "virtual_checkbox", "options": [dict(r) for r in roles], "is_pk": False})
-
-            return await render("form_view.html", context={
-                "table_name": table_name, "table_title": f"Edit {make_human_readable(table_name)}", "columns": columns, 
-                "all_tables": allowed, "table_modules": get_table_modules(allowed), "pk_val": pk_val, "mode": "edit", 
-                "user_id": request.ctx.user_id, "username": request.ctx.username, "csrf_token": request.ctx.csrf_token, "current_user_type": request.ctx.user_type
-            })
-    except Exception as e:
-        if request.headers.get("HX-Request"): return response.json({"error": "Error loading record."}, status=500)
-        return response.redirect(f"/table/{table_name}")
-
-
-@app.get("/new/<table_name>")
-@login_required
-async def show_add_form(request, table_name):
-    try:
-        async with app.ctx.pool.acquire() as conn:
-            allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
-            if table_name not in allowed: return response.redirect("/")
-
-            col_rows = await _get_cached_schema(conn, table_name)
-            pk_column = await get_pk_column(conn, table_name)
-
-            columns = []
-            for r in col_rows:
-                c_name = r['column_name']
-                if c_name.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or c_name.lower() in WHO_COLS: continue
-                is_pk = (c_name == pk_column)
-                options = await get_dropdown_options(conn, c_name) if not is_pk else None
-                is_req = (r['is_nullable'] == 'NO') and not is_pk
-                
-                val = ""
-                if ('date' in r['data_type'] or 'timestamp' in r['data_type']) and 'end' not in c_name.lower() and not is_pk:
-                    val = datetime.now().strftime('%Y-%m-%d')
-                if r['data_type'] in ('json', 'jsonb'): val = "{}"
-                    
-                columns.append({"column_name": c_name, "label": make_human_readable(c_name), "required": is_req, "value": val, "data_type": r['data_type'], "options": options, "is_pk": is_pk})
-
-            columns = sorted(columns, key=lambda c: get_column_sort_priority(pk_column, c['column_name']))
-
-            if table_name == 'phc_roles_t':
-                screens = await conn.fetch("SELECT psn_screen_id as id, psn_screen_code as code, psn_screen_name as name FROM phc_screens_t WHERE psn_status = 'ACT'")
-                columns.append({"column_name": "pr_allowed_tables", "label": "Assigned Screens", "required": False, "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in screens], "is_pk": False})
-
-            if table_name == 'phc_users_t':
-                roles = await conn.fetch("SELECT prl_role_id as id, prl_role_name as name FROM phc_roles_t WHERE prl_status = 'ACT'")
-                columns.append({"column_name": "pu_assigned_roles", "label": "Assigned Roles", "required": False, "value": "", "data_type": "virtual_checkbox", "options": [dict(r) for r in roles], "is_pk": False})
-
-            return await render("form_view.html", context={
-                "table_name": table_name, "table_title": f"New {make_human_readable(table_name)}", "columns": columns, 
-                "all_tables": allowed, "table_modules": get_table_modules(allowed), "mode": "create", 
-                "user_id": request.ctx.user_id, "username": request.ctx.username, "csrf_token": request.ctx.csrf_token, "current_user_type": request.ctx.user_type
-            })
-    except Exception as e:
-        if request.headers.get("HX-Request"): return response.json({"error": "Error creating record."}, status=500)
-        return response.redirect(f"/table/{table_name}")
-
-async def _sanitize_payload(data, schema_map, pk_column, current_user_id, request_method):
+async def _sanitize_payload(data, schema_map, pk_column, current_user_id, current_username, request_method):
     clean_data = {}
     loop = asyncio.get_running_loop()
 
@@ -852,13 +504,17 @@ async def _sanitize_payload(data, schema_map, pk_column, current_user_id, reques
     virtual_roles = data.pop("pu_assigned_roles", None)
     if isinstance(virtual_roles, list): data["pu_assigned_roles"] = ",".join(virtual_roles)
 
+    pk_type = schema_map.get(pk_column, {}).get('data_type', '')
+    is_string_pk = pk_type in ('character varying', 'text', 'varchar')
+
     for r in schema_map.values():
         c_name = r['column_name']
         if not data.get(c_name) and ('date' in r['data_type'] or 'timestamp' in r['data_type']):
             if 'end' not in c_name.lower(): data[c_name] = datetime.now().strftime('%Y-%m-%d')
 
     for k, v in data.items():
-        if v in ("", None) or k == pk_column: continue
+        if v in ("", None, "Pending..."): continue
+        if k == pk_column and not is_string_pk: continue
         if k.lower().endswith(('_created', '_modified', '_created_by', '_modified_by')) or k.lower() in WHO_COLS: continue
 
         if k == 'pus_pwd':
@@ -896,7 +552,10 @@ async def _sanitize_payload(data, schema_map, pk_column, current_user_id, reques
         c_lower = col_name.lower()
         if c_lower.endswith(('_created_by', '_modified_by', 'created_by', 'last_updated_by')):
             target_type = schema_map.get(col_name, {}).get('data_type', '').lower()
-            clean_data[col_name] = int(current_user_id) if target_type in ('integer', 'bigint', 'numeric', 'smallint') and str(current_user_id).isdigit() else str(current_user_id)
+            if target_type in ('integer', 'bigint', 'numeric', 'smallint'):
+                clean_data[col_name] = int(current_user_id) if str(current_user_id).isdigit() else None
+            else:
+                clean_data[col_name] = current_username
         if request_method == "POST" and (c_lower.endswith('_created') or c_lower == 'creation_date'): clean_data[col_name] = datetime.now()
         if c_lower.endswith('_modified') or c_lower == 'last_update_date': clean_data[col_name] = datetime.now()
 
@@ -929,15 +588,22 @@ async def save_data(request, table_name, pk_val=None):
         schema_map = {r['column_name']: r for r in schema_rows}
         company_col = next((k for k in schema_map.keys() if k.lower().endswith('company_id')), None)
         
-        clean_data = await _sanitize_payload(data, schema_map, pk_column, current_user_id, request.method)
+        clean_data = await _sanitize_payload(data, schema_map, pk_column, current_user_id, request.ctx.username, request.method)
 
         async with conn.transaction():
             if request.method == "POST":
                 if company_col: clean_data[company_col] = company_id
-                max_val = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
-                target_id = (int(max_val) + 1) if max_val else 1
+                
                 pk_type = schema_map.get(pk_column, {}).get('data_type', '')
-                clean_data[pk_column] = str(target_id) if pk_type in ('character varying', 'text', 'varchar') else target_id
+                
+                if pk_type in ('character varying', 'text', 'varchar'):
+                    if pk_column not in clean_data:
+                        return response.json({"error": f"Primary Key ({pk_column}) is required."}, status=400)
+                    target_id = clean_data[pk_column]
+                else:
+                    max_val = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
+                    target_id = (int(max_val) + 1) if max_val else 1
+                    clean_data[pk_column] = target_id
                 
                 cols, vals = list(clean_data.keys()), list(clean_data.values())
                 placeholders = ', '.join([f"${i+1}::jsonb" if schema_map.get(c, {}).get('data_type') in ('json', 'jsonb') else f"${i+1}" for i, c in enumerate(cols)])
@@ -1027,6 +693,15 @@ async def delete_data(request, table_name, pk_val):
 
         if request.headers.get("HX-Request"): return response.html(f'<div id="toast-container" hx-swap-oob="beforeend"><div class="toast" style="animation: slideIn Toast 0.4s ease, fadeOutToast 0.4s ease 3.5s forwards;"><i data-lucide="check-circle-2" style="color: var(--color-cipher-mint)"></i> {msg}</div></div>')
         return response.json({"status": "success"})
+
+
+@app.get("/api/components/lookup_types_master")
+@login_required
+async def get_lookup_types_master(request):
+    """Fetches the Master pane for the Split-Pane UI independently."""
+    async with app.ctx.pool.acquire() as conn:
+        types = await conn.fetch("SELECT * FROM phc_lookup_types ORDER BY plt_lookup_type_code ASC")
+        return await render("lookup_master_partial.html", context={"types": [dict(t) for t in types]})
 
 
 if __name__ == "__main__":
