@@ -537,8 +537,8 @@ async def show_table(request, table_name):
             "username": request.ctx.username, "user_id": request.ctx.user_id, "csrf_token": request.ctx.csrf_token
         })
 
-@app.get("/new/<table_name>")
-@app.get("/edit/<table_name>/<pk_val>")
+@app.get("/new/<table_name>", name="new_form")
+@app.get("/edit/<table_name>/<pk_val>", name="edit_form")
 @login_required
 async def show_form(request, table_name, pk_val=None):
     async with app.ctx.pool.acquire() as conn:
