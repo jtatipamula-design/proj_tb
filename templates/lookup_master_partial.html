@@ -1,0 +1,40 @@
+<div style="background: rgba(0,0,0,0.4); padding: 12px 20px; border-bottom: 1px solid var(--glass-border); font-family: var(--font-mono); font-size: 12px; color: var(--color-fog); text-transform: uppercase;">
+    1. Lookup Types
+</div>
+<div class="table-scroll" style="max-height: none; flex-grow: 1;">
+    <table style="animation: fadeIn 0.3s ease;">
+        <thead>
+            <tr>
+                <th style="width: 60px;"></th>
+                <th>Type Code</th>
+                <th>Type Name</th>
+                <th>Description</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in types %}
+            <tr class="master-row" 
+                onclick="selectRow(this)"
+                hx-get="/api/lookup_values/{{ row['plt_lookup_type_code'] }}" 
+                hx-target="#lookup-values-container" 
+                hx-swap="innerHTML">
+                <td style="text-align: center;">
+                    <a href="/edit/phc_lookup_types/{{ row['plt_lookup_type_code'] }}" class="action-btn" onclick="event.stopPropagation();">Edit</a>
+                </td>
+                <td style="font-family: var(--font-mono); color: var(--color-frost-link);">{{ row['plt_lookup_type_code'] }}</td>
+                <td style="font-weight: 500; color: var(--color-glacier);">{{ row['plt_lookup_type'] }}</td>
+                <td>{{ row['plt_lookup_type_desc'] }}</td>
+                <td>
+                    {% if row['plt_status'] == 'ACT' %}
+                        <span class="pill pill-act">Active</span>
+                    {% else %}
+                        <span class="pill pill-ina">Inactive</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<script>lucide.createIcons();</script>
