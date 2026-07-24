@@ -478,11 +478,15 @@ async def logout(request):
 @login_required
 async def dashboard(request):
     async with app.ctx.pool.acquire() as conn:
-        emp_count = await conn.fetchval("SELECT COUNT(*) FROM phc_emp_t WHERE pem_status='ACT'") if 'phc_emp_t' in SCHEMA_CACHE.get("tables", []) else 0
-        comp_count = await conn.fetchval("SELECT COUNT(*) FROM phc_companies_t WHERE pcp_status='ACT'")
-        dept_count = await conn.fetchval("SELECT COUNT(*) FROM phc_dept_t WHERE pdp_status='ACT'") if 'phc_dept_t' in SCHEMA_CACHE.get("tables", []) else 0
-        app_count = await conn.fetchval("SELECT COUNT(*) FROM phc_apps_t WHERE pap_status='ACT'") if 'phc_apps_t' in SCHEMA_CACHE.get("tables", []) else 0
+        # FIX: Fetch allowed tables FIRST so the SCHEMA_CACHE is guaranteed to be populated!
         allowed = await get_allowed_tables(conn, request.ctx.user_id, request.ctx.user_type)
+        all_db_tables = SCHEMA_CACHE.get("tables") or []
+        
+        emp_count = await conn.fetchval("SELECT COUNT(*) FROM phc_emp_t WHERE pem_status='ACT'") if 'phc_emp_t' in all_db_tables else 0
+        comp_count = await conn.fetchval("SELECT COUNT(*) FROM phc_companies_t WHERE pcp_status='ACT'") if 'phc_companies_t' in all_db_tables else 0
+        dept_count = await conn.fetchval("SELECT COUNT(*) FROM phc_dept_t WHERE pdp_status='ACT'") if 'phc_dept_t' in all_db_tables else 0
+        app_count = await conn.fetchval("SELECT COUNT(*) FROM phc_apps_t WHERE pap_status='ACT'") if 'phc_apps_t' in all_db_tables else 0
+        
         return await render("dashboard.html", context={
             "username": request.ctx.username, "user_id": request.ctx.user_id,
             "stats": {"emp_count": emp_count, "comp_count": comp_count, "dept_count": dept_count, "app_count": app_count},
