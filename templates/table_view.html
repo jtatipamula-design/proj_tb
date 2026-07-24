@@ -136,7 +136,7 @@
     <!-- PHASE 2 OPTIMIZATION: Wrapper to cleanly swap tables & pagination together -->
     <div id="tableContent">
         
-        {% if table_name == 'phc_lookup_types' %}
+        {% if table_name == 'phc_lookup_values_t' %}
         <!-- ================================================== -->
         <!-- SPLIT PANE MASTER-DETAIL UI FOR LOOKUPS            -->
         <!-- ================================================== -->
@@ -152,40 +152,14 @@
         </style>
 
         <div class="split-pane">
-            <!-- Top Pane: Master Table -->
-            <div class="pane-section">
-                <div style="background: rgba(0,0,0,0.4); padding: 12px 20px; border-bottom: 1px solid var(--glass-border); font-family: var(--font-mono); font-size: 12px; color: var(--color-fog); text-transform: uppercase;">
-                    1. Lookup Types
-                </div>
-                <div class="table-scroll" style="max-height: none; flex-grow: 1;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th style="width: 60px;"></th>
-                                <th>Type Code</th>
-                                <th>Type Name</th>
-                                <th>Description</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in rows %}
-                            <tr class="master-row" 
-                                onclick="selectRow(this)"
-                                hx-get="/api/lookup_values/{{ row['plt_lookup_type_code'] }}" 
-                                hx-target="#lookup-values-container" 
-                                hx-swap="innerHTML">
-                                <td style="text-align: center;">
-                                    <a href="/edit/{{ table_name }}/{{ row['plt_lookup_type_code'] }}" class="action-btn" onclick="event.stopPropagation();">Edit</a>
-                                </td>
-                                <td style="font-family: var(--font-mono); color: var(--color-frost-link);">{{ row['plt_lookup_type_code'] }}</td>
-                                <td style="font-weight: 500; color: var(--color-glacier);">{{ row['plt_lookup_type'] }}</td>
-                                <td>{{ row['plt_lookup_type_desc'] }}</td>
-                                <td>{{ row['plt_status'] }}</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+            <!-- Top Pane: Master Table (Loaded via HTMX to get Types data independently) -->
+            <div class="pane-section" 
+                 hx-get="/api/components/lookup_types_master" 
+                 hx-trigger="load" 
+                 hx-swap="innerHTML">
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--color-fog);">
+                    <i data-lucide="loader-2" class="lucide-spin" style="width: 32px; height: 32px; margin-bottom: 12px;"></i>
+                    <p>Loading Lookup Categories...</p>
                 </div>
             </div>
 
