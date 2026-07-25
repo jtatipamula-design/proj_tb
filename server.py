@@ -1,7 +1,6 @@
 from sanic import Sanic, response
 from sanic.exceptions import NotFound
 from jinja2 import Environment, FileSystemLoader
-from dotenv import load_dotenv
 import asyncpg
 import os
 import json
@@ -10,8 +9,11 @@ from datetime import datetime
 import jwt
 import functools
 import uuid
+from dotenv import load_dotenv
 
-# 1. LOAD ENVIRONMENT VARIABLES (This restores your DB Connection!)
+# 1. LOAD ENVIRONMENT VARIABLES GLOBALLY (This is the fix!)
+# Placed in the global scope so Sanic worker processes actually load it
+# before attempting to connect to the database.
 load_dotenv()
 
 app = Sanic("ERP_System")
@@ -179,7 +181,6 @@ async def get_pk_column(conn, table_name):
     return pk
 
 async def get_dropdown_options(conn, table_name, column_name):
-    # Map foreign keys to their actual names for the native dropdowns
     fallback_map = {
         'company_id': ('phc_companies_t', 'pcp_company_id', 'pcp_company_name'),
         'pma_product_id': ('cv_product_registration_t', 'product_id', 'product_name'),
@@ -197,7 +198,6 @@ async def get_dropdown_options(conn, table_name, column_name):
         'last_updated_by': ('phc_users_t', 'pus_user_id', 'pus_user_name')
     }
     
-    # 1. Native Dropdown via Fallback Map
     for key in fallback_map:
         if key in column_name.lower():
             target_table, target_pk, target_name = fallback_map[key]
@@ -208,16 +208,14 @@ async def get_dropdown_options(conn, table_name, column_name):
                     WHERE status = 'ACT' OR status IS NULL OR status = 'Active' OR pat_status = 'ACT' OR plt_status = 'ACT'
                 """)
                 return [{"id": r["id"], "name": f"{r['name']} ({r['id']})"} for r in rows]
-            except Exception as e:
+            except Exception:
                 pass
                 
-    # 2. ERP Lookup Engine (phc_lookup_values_t)
     try:
         if column_name.lower() in ('dosage_form', 'process_stage', 'solubility_water', 'cleanability_score', 'pel_zone_classification'):
             lookup_code = column_name.upper()
             rows = await conn.fetch("SELECT plv_lookup_value_code, plv_lookup_value_name FROM phc_lookup_values_t WHERE plv_lookup_type_code = $1 AND plv_status = 'ACT'", lookup_code)
-            if rows:
-                return [{"id": r["plv_lookup_value_code"], "name": r["plv_lookup_value_name"]} for r in rows]
+            if rows: return [{"id": r["plv_lookup_value_code"], "name": r["plv_lookup_value_name"]} for r in rows]
                 
         elif column_name.lower().endswith('_role_type'):
             rows = await conn.fetch("SELECT plv_lookup_value_code, plv_lookup_value_name FROM phc_lookup_values_t WHERE plv_lookup_type_code = 'APPR_ROLE_TYPE' AND plv_status = 'ACT'")
