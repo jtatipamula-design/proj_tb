@@ -7,7 +7,6 @@ load_dotenv()
 
 # ==========================================
 # 🚨 SERVER PRE-FLIGHT DIAGNOSTIC 🚨
-# This runs before Sanic even boots to catch URL issues instantly.
 # ==========================================
 db_url = os.environ.get("DATABASE_URL")
 
@@ -18,14 +17,13 @@ if not db_url:
     print("❌ Render is completely blind to your database variable.")
     print("❌ Action: Check Render Dashboard -> Environment Variables.")
     print("="*50 + "\n")
-    sys.exit(1) # Force crash gracefully so you see this log
+    sys.exit(1)
 elif "localhost" in db_url or "127.0.0.1" in db_url:
     print("❌ ERROR: DATABASE_URL is pointing to LOCALHOST!")
     print("❌ Action: Replace it with your actual Neon URL.")
     print("="*50 + "\n")
     sys.exit(1)
 else:
-    # Safely print the start of the URL so we can verify Render sees the right one
     masked = db_url[:30] + "******"
     print(f"✅ DATABASE_URL Found: {masked}")
     print("✅ Environment Variables are loaded correctly.")
@@ -46,9 +44,10 @@ import functools
 import uuid
 
 app = Sanic("ERP_System")
+SECRET_KEY = os.environ.get("SECRET_KEY", "super-secret-fallback-key")
 
 # ==========================================
-# TEMPLATING & MIDDLEWARE
+# TEMPLATING & MIDDLEWARE (SESSIONS)
 # ==========================================
 env = Environment(loader=FileSystemLoader('templates'))
 
@@ -57,8 +56,28 @@ async def render_template(template_name, **kwargs):
     html_content = template.render(**kwargs)
     return response.html(html_content)
 
+@app.middleware("request")
+async def load_session(request):
+    # Initialize the session dictionary so it never throws an AttributeError
+    request.ctx.session = {}
+    token = request.cookies.get("session_token")
+    if token:
+        try:
+            request.ctx.session = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        except Exception:
+            pass
+
 @app.middleware("response")
-async def add_security_headers(request, res):
+async def save_session_and_headers(request, res):
+    # Save the session to a secure cookie
+    if hasattr(request.ctx, "session"):
+        if request.ctx.session:
+            token = jwt.encode(request.ctx.session, SECRET_KEY, algorithm="HS256")
+            res.add_cookie("session_token", token, httponly=True, samesite="Lax")
+        else:
+            res.delete_cookie("session_token")
+
+    # Security Headers
     res.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate, private"
     res.headers["Pragma"] = "no-cache"
     res.headers["Expires"] = "0"
@@ -638,3 +657,4 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     is_development = os.environ.get("ENVIRONMENT") != "production"
     app.run(host="0.0.0.0", port=port, debug=is_development, single_process=True)
+        
