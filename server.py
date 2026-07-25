@@ -33,7 +33,6 @@ else:
 # NORMAL IMPORTS & SERVER BOOTUP
 # ==========================================
 from sanic import Sanic, response
-from sanic.exceptions import NotFound
 from jinja2 import Environment, FileSystemLoader
 import asyncpg
 import json
@@ -58,7 +57,6 @@ async def render_template(template_name, **kwargs):
 
 @app.middleware("request")
 async def load_session(request):
-    # Initialize the session dictionary so it never throws an AttributeError
     request.ctx.session = {}
     token = request.cookies.get("session_token")
     if token:
@@ -69,7 +67,6 @@ async def load_session(request):
 
 @app.middleware("response")
 async def save_session_and_headers(request, res):
-    # Save the session to a secure cookie
     if hasattr(request.ctx, "session"):
         if request.ctx.session:
             token = jwt.encode(request.ctx.session, SECRET_KEY, algorithm="HS256")
@@ -77,13 +74,9 @@ async def save_session_and_headers(request, res):
         else:
             res.delete_cookie("session_token")
 
-    # Security Headers
     res.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, proxy-revalidate, private"
     res.headers["Pragma"] = "no-cache"
     res.headers["Expires"] = "0"
-    res.headers["X-Content-Type-Options"] = "nosniff"
-    res.headers["X-Frame-Options"] = "DENY"
-    res.headers["X-XSS-Protection"] = "1; mode=block"
 
 # ==========================================
 # DATABASE LIFECYCLE
@@ -162,19 +155,19 @@ def get_table_modules():
         'phc_locations_t': 'MasterData',
         'phc_orgs_t': 'MasterData',
         'phc_services_t': 'MasterData',
-        'phc_plant_master': 'MasterData',
-        'phc_plant_compliance': 'MasterData',
-        'phc_certifications': 'MasterData',
-        'phc_plant_equipment': 'MasterData',
-        'phc_equipment_locations': 'MasterData',
-        'phc_material_group_master': 'MasterData',
-        'phc_material_master': 'MasterData',
-        'phc_uom_master': 'MasterData',
-        'phc_uom_conversion': 'MasterData',
-        'phc_prod_master': 'MasterData',
-        'phc_prod_lifecycle_history': 'MasterData',
-        'phc_prod_alt_names': 'MasterData',
-        'phc_lookup_types': 'MasterData',
+        'phc_plant_master_t': 'MasterData',
+        'phc_plant_compliance_t': 'MasterData',
+        'phc_certifications_t': 'MasterData',
+        'phc_plant_equipment_t': 'MasterData',
+        'phc_equipment_locations_t': 'MasterData',
+        'phc_material_group_master_t': 'MasterData',
+        'phc_material_master_t': 'MasterData',
+        'phc_uom_master_t': 'MasterData',
+        'phc_uom_conversion_t': 'MasterData',
+        'phc_prod_master_t': 'MasterData',
+        'phc_prod_lifecycle_history_t': 'MasterData',
+        'phc_prod_alt_names_t': 'MasterData',
+        'phc_lookup_types_t': 'MasterData',
         'phc_lookup_values_t': 'MasterData',
         
         'cv_product_registration_t': 'Cleaning',
@@ -240,7 +233,7 @@ async def get_dropdown_options(conn, table_name, column_name):
         'cost_center_id': ('phc_cost_center_t', 'pcc_cost_center_id', 'pcc_cost_center_name'),
         'services_id': ('phc_services_t', 'pse_services_id', 'pse_services_name'),
         'menu_id': ('phc_menu_folders_t', 'menu_id', 'menu_name'),
-        'lookup_type': ('phc_lookup_types', 'plt_lookup_type_code', 'plt_lookup_type'),
+        'lookup_type': ('phc_lookup_types_t', 'plt_lookup_type_code', 'plt_lookup_type'),
         'approval_type': ('phc_approval_types_t', 'pat_approval_type', 'pat_approval_type_desc'),
         'created_by': ('phc_users_t', 'pus_user_id', 'pus_user_name'),
         'modified_by': ('phc_users_t', 'pus_user_id', 'pus_user_name'),
@@ -345,6 +338,7 @@ async def show_table(request, table_name):
         for r in schema_rows:
             col_name = r['column_name']
             
+            # Hide audit columns from grid
             if col_name.lower() in ['created_by', 'last_updated_by', 'creation_date', 'last_update_date', 'status', 'company_id']:
                 continue
             if col_name.lower().endswith(('_created', '_modified', '_created_by', '_modified_by', '_company_id')):
@@ -393,7 +387,7 @@ async def show_table(request, table_name):
 
         lookup_categories = []
         if table_name == 'phc_lookup_values_t':
-            lookup_categories = [dict(r) for r in await conn.fetch("SELECT plt_lookup_type_code as code, plt_lookup_type as name FROM phc_lookup_types ORDER BY plt_lookup_type")]
+            lookup_categories = [dict(r) for r in await conn.fetch("SELECT plt_lookup_type_code as code, plt_lookup_type as name FROM phc_lookup_types_t ORDER BY plt_lookup_type")]
 
         return await render_template(
             "table_view.html",
@@ -445,6 +439,7 @@ async def show_form(request, table_name, pk_val=None):
         for r in schema_rows:
             col_name = r['column_name']
             
+            # Hide audit/company columns from form
             if col_name.lower() in ('created_by', 'last_updated_by', 'creation_date', 'last_update_date', 'company_id'):
                 continue
             if col_name.lower().endswith(('_created', '_modified', '_created_by', '_modified_by', '_company_id')):
@@ -491,7 +486,6 @@ async def show_form(request, table_name, pk_val=None):
 # ==========================================
 # API ENDPOINTS (SAVE & DELETE)
 # ==========================================
-
 @app.post('/api/menu/assign', name="assign_menu")
 @check_auth
 async def assign_menu(request):
@@ -596,6 +590,7 @@ async def save_data(request, table_name, pk_val=None):
             pk_col_info = schema_map.get(pk_column, {})
             is_string_pk = pk_col_info.get('data_type') in ('character varying', 'text', 'varchar')
             
+            # --- Auto-ID Logic replaces Custom Code ---
             if is_string_pk:
                 target_id = data.get(pk_column)
                 if not target_id:
@@ -657,4 +652,3 @@ if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     is_development = os.environ.get("ENVIRONMENT") != "production"
     app.run(host="0.0.0.0", port=port, debug=is_development, single_process=True)
-        
