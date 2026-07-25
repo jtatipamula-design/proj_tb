@@ -466,15 +466,15 @@ async def assign_menu(request):
         
     async with app.ctx.db.acquire() as conn:
         if folder_id:
-            await conn.execute("UPDATE phc_screens_t SET menu_id = $1 WHERE psn_screen_code = $2", int(folder_id), screen_code)
-        else:
-            await conn.execute("UPDATE phc_screens_t SET menu_id = NULL WHERE psn_screen_code = $1", screen_code)
-            
+        await conn.execute("UPDATE phc_screens_t SET menu_id = $1 WHERE psn_screen_code = $2", int(folder_id), screen_code)
+    else:
+        await conn.execute("UPDATE phc_screens_t SET menu_id = NULL WHERE psn_screen_code = $1", screen_code)
+        
     return response.json({"status": "success"})
 
 
-@app.post('/api/<table_name>')
-@app.put('/api/<table_name>/<pk_val>')
+@app.post('/api/<table_name>', name="post_save_data")
+@app.put('/api/<table_name>/<pk_val>', name="put_save_data")
 @check_auth
 async def save_data(request, table_name, pk_val=None):
     data = request.json
