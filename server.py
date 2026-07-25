@@ -1,20 +1,49 @@
+import os
+import sys
+from dotenv import load_dotenv
+
+# 1. LOAD ENVIRONMENT VARIABLES GLOBALLY
+load_dotenv()
+
+# ==========================================
+# 🚨 SERVER PRE-FLIGHT DIAGNOSTIC 🚨
+# This runs before Sanic even boots to catch URL issues instantly.
+# ==========================================
+db_url = os.environ.get("DATABASE_URL")
+
+print("\n" + "="*50)
+print("🚀 SERVER PRE-FLIGHT CHECK 🚀")
+if not db_url:
+    print("❌ ERROR: DATABASE_URL is MISSING or EMPTY!")
+    print("❌ Render is completely blind to your database variable.")
+    print("❌ Action: Check Render Dashboard -> Environment Variables.")
+    print("="*50 + "\n")
+    sys.exit(1) # Force crash gracefully so you see this log
+elif "localhost" in db_url or "127.0.0.1" in db_url:
+    print("❌ ERROR: DATABASE_URL is pointing to LOCALHOST!")
+    print("❌ Action: Replace it with your actual Neon URL.")
+    print("="*50 + "\n")
+    sys.exit(1)
+else:
+    # Safely print the start of the URL so we can verify Render sees the right one
+    masked = db_url[:30] + "******"
+    print(f"✅ DATABASE_URL Found: {masked}")
+    print("✅ Environment Variables are loaded correctly.")
+    print("="*50 + "\n")
+
+# ==========================================
+# NORMAL IMPORTS & SERVER BOOTUP
+# ==========================================
 from sanic import Sanic, response
 from sanic.exceptions import NotFound
 from jinja2 import Environment, FileSystemLoader
 import asyncpg
-import os
 import json
 import bcrypt
 from datetime import datetime
 import jwt
 import functools
 import uuid
-from dotenv import load_dotenv
-
-# 1. LOAD ENVIRONMENT VARIABLES GLOBALLY (This is the fix!)
-# Placed in the global scope so Sanic worker processes actually load it
-# before attempting to connect to the database.
-load_dotenv()
 
 app = Sanic("ERP_System")
 
@@ -83,6 +112,7 @@ async def handle_login(request):
                 if bcrypt.checkpw(password.encode('utf-8'), stored_pwd.encode('utf-8')):
                     is_valid = True
             except ValueError:
+                # Catch unhashed passwords during development
                 if password == stored_pwd:
                     is_valid = True
                     
@@ -443,7 +473,7 @@ async def show_form(request, table_name, pk_val=None):
 # API ENDPOINTS (SAVE & DELETE)
 # ==========================================
 
-@app.post('/api/menu/assign')
+@app.post('/api/menu/assign', name="assign_menu")
 @check_auth
 async def assign_menu(request):
     data = request.json
@@ -575,8 +605,7 @@ async def save_data(request, table_name, pk_val=None):
             </script>
         """)
 
-
-@app.delete('/api/<table_name>/<pk_val>')
+@app.delete('/api/<table_name>/<pk_val>', name="delete_data")
 @check_auth
 async def delete_data(request, table_name, pk_val):
     async with app.ctx.db.acquire() as conn:
