@@ -300,13 +300,11 @@ async def dashboard(request):
         allowed_tables = await get_allowed_tables(request, conn)
         SCHEMA_CACHE["tables"] = allowed_tables
         
-        # Safe statistics querying using _t suffixes
         emp_count = await conn.fetchval("SELECT COUNT(*) FROM phc_emp_t WHERE pem_status='ACT'") if 'phc_emp_t' in allowed_tables else 0
         comp_count = await conn.fetchval("SELECT COUNT(*) FROM phc_companies_t WHERE pcp_status='ACT'") if 'phc_companies_t' in allowed_tables else 0
         dept_count = await conn.fetchval("SELECT COUNT(*) FROM phc_dept_t WHERE pdp_status='ACT'") if 'phc_dept_t' in allowed_tables else 0
         app_count = await conn.fetchval("SELECT COUNT(*) FROM phc_apps_t WHERE pap_status='ACT'") if 'phc_apps_t' in allowed_tables else 0
 
-        # Completely removed phc_menu_folders_t crash point. We use safe dictionaries.
         return await render(
             "dashboard.html",
             context={
