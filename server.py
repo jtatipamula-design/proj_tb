@@ -11,7 +11,9 @@ import jwt
 import functools
 import uuid
 
+# 1. LOAD ENVIRONMENT VARIABLES (This restores your DB Connection!)
 load_dotenv()
+
 app = Sanic("ERP_System")
 
 # ==========================================
@@ -200,7 +202,6 @@ async def get_dropdown_options(conn, table_name, column_name):
         if key in column_name.lower():
             target_table, target_pk, target_name = fallback_map[key]
             try:
-                # Try to fetch using status=ACT, fall back if no status column exists
                 rows = await conn.fetch(f"""
                     SELECT {target_pk} as id, {target_name} as name 
                     FROM {target_table} 
@@ -212,14 +213,12 @@ async def get_dropdown_options(conn, table_name, column_name):
                 
     # 2. ERP Lookup Engine (phc_lookup_values_t)
     try:
-        # Match standard LOVs
         if column_name.lower() in ('dosage_form', 'process_stage', 'solubility_water', 'cleanability_score', 'pel_zone_classification'):
             lookup_code = column_name.upper()
             rows = await conn.fetch("SELECT plv_lookup_value_code, plv_lookup_value_name FROM phc_lookup_values_t WHERE plv_lookup_type_code = $1 AND plv_status = 'ACT'", lookup_code)
             if rows:
                 return [{"id": r["plv_lookup_value_code"], "name": r["plv_lookup_value_name"]} for r in rows]
                 
-        # Match the new Approval Lookups dynamically
         elif column_name.lower().endswith('_role_type'):
             rows = await conn.fetch("SELECT plv_lookup_value_code, plv_lookup_value_name FROM phc_lookup_values_t WHERE plv_lookup_type_code = 'APPR_ROLE_TYPE' AND plv_status = 'ACT'")
             if rows: return [{"id": r["plv_lookup_value_code"], "name": r["plv_lookup_value_name"]} for r in rows]
@@ -240,7 +239,6 @@ async def get_dropdown_options(conn, table_name, column_name):
 @check_auth
 async def dashboard(request):
     async with app.ctx.db.acquire() as conn:
-        # Fetch tables FIRST to load the Cache securely
         allowed_tables = await get_allowed_tables(request, conn)
         SCHEMA_CACHE["tables"] = allowed_tables
         
@@ -249,7 +247,6 @@ async def dashboard(request):
         dept_count = await conn.fetchval("SELECT COUNT(*) FROM phc_dept_t WHERE pdp_status='ACT'") if 'phc_dept_t' in allowed_tables else 0
         app_count = await conn.fetchval("SELECT COUNT(*) FROM phc_apps_t WHERE pap_status='ACT'") if 'phc_apps_t' in allowed_tables else 0
 
-        # Fetch active menu folders
         folders = await conn.fetch("SELECT * FROM phc_menu_folders_t WHERE status = 'ACT' ORDER BY display_order")
         
         menus = []
@@ -284,7 +281,6 @@ async def show_table(request, table_name):
         if table_name not in allowed_tables:
             return response.html("Access Denied", status=403)
 
-        is_htmx = request.headers.get("HX-Request") == "true"
         q = request.args.get("q", "")
         type_filter = request.args.get("type_filter", "")
         page = int(request.args.get("page", 1))
@@ -302,7 +298,6 @@ async def show_table(request, table_name):
         for r in schema_rows:
             col_name = r['column_name']
             
-            # Hide WHO audit columns and Company ID from the table view
             if col_name.lower() in ['created_by', 'last_updated_by', 'creation_date', 'last_update_date', 'status', 'company_id']:
                 continue
             if col_name.lower().endswith(('_created', '_modified', '_created_by', '_modified_by', '_company_id')):
@@ -323,7 +318,6 @@ async def show_table(request, table_name):
         where_clauses = []
         params = []
         
-        # Security: Tenant Isolation
         has_company_id = any(c['column_name'].lower() in ('company_id', 'pcp_company_id', 'pat_company_id') for c in schema_rows)
         if has_company_id and request.ctx.session.get('role') != 'ADM':
             company_col_name = next(c['column_name'] for c in schema_rows if 'company_id' in c['column_name'].lower())
@@ -339,7 +333,6 @@ async def show_table(request, table_name):
             if search_conds:
                 where_clauses.append("(" + " OR ".join(search_conds) + ")")
 
-        # FILTER: Lookup Values Type Filter (Dropdown next to search)
         if table_name == 'phc_lookup_values_t' and type_filter:
             where_clauses.append(f"plv_lookup_type_code = ${len(params) + 1}")
             params.append(type_filter)
@@ -351,7 +344,6 @@ async def show_table(request, table_name):
         
         rows = await conn.fetch(f"SELECT * FROM {table_name} {where_str} ORDER BY {pk_column} DESC LIMIT {per_page} OFFSET {offset}", *params)
 
-        # FETCH: Categories for Lookup Values Dropdown Filter
         lookup_categories = []
         if table_name == 'phc_lookup_values_t':
             lookup_categories = [dict(r) for r in await conn.fetch("SELECT plt_lookup_type_code as code, plt_lookup_type as name FROM phc_lookup_types ORDER BY plt_lookup_type")]
@@ -406,7 +398,6 @@ async def show_form(request, table_name, pk_val=None):
         for r in schema_rows:
             col_name = r['column_name']
             
-            # Hide WHO audit columns and Company ID so they don't clutter the form UI
             if col_name.lower() in ('created_by', 'last_updated_by', 'creation_date', 'last_update_date', 'company_id'):
                 continue
             if col_name.lower().endswith(('_created', '_modified', '_created_by', '_modified_by', '_company_id')):
@@ -525,7 +516,6 @@ async def save_data(request, table_name, pk_val=None):
                  if v.strip().isdigit(): clean_data[k] = int(v)
             else: clean_data[k] = v
 
-        # Inject Creation/Update Audit Trails
         for col_name, col_info in schema_map.items():
             target_type = col_info['data_type'].lower()
             
@@ -556,14 +546,12 @@ async def save_data(request, table_name, pk_val=None):
             msg = "Record updated successfully"
             
         else:
-            # New Record - Check if PK is String vs Int
             pk_col_info = schema_map.get(pk_column, {})
             is_string_pk = pk_col_info.get('data_type') in ('character varying', 'text', 'varchar')
             
             if is_string_pk:
                 target_id = data.get(pk_column)
                 if not target_id:
-                    # Auto-Generate unique String ID (e.g. LOO-A39B2)
                     prefix = "".join(c for c in table_name.split('_')[1] if c.isalpha())[:3].upper()
                     if not prefix: prefix = "ID"
                     random_hex = uuid.uuid4().hex[:5].upper()
