@@ -87,7 +87,7 @@ def get_table_modules(tables):
         'phc_uom_conversion': 'MasterData',
         'phc_prod_master': 'MasterData',
         'phc_prod_lifecycle_history': 'MasterData',
-        'phc_prod_alt_names': 'MasterData'
+        'phc_prod_alt_names': 'MasterData',
         'phc_approval_types_t': 'AppSetup',
         'phc_approval_setup_t': 'AppSetup',
         'phc_notifications_setup_t': 'AppSetup',
