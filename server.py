@@ -287,7 +287,7 @@ async def dashboard(request):
         dept_count = await conn.fetchval("SELECT COUNT(*) FROM phc_dept_t WHERE pdp_status='ACT'") if 'phc_dept_t' in allowed_tables else 0
         app_count = await conn.fetchval("SELECT COUNT(*) FROM phc_apps_t WHERE pap_status='ACT'") if 'phc_apps_t' in allowed_tables else 0
 
-        folders = await conn.fetch("SELECT * FROM phc_menu_folders_t WHERE status = 'ACT' ORDER BY display_order")
+       # folders = await conn.fetch("SELECT * FROM phc_menu_folders_t WHERE status = 'ACT' ORDER BY display_order")
         
         menus = []
         for f in folders:
