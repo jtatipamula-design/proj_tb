@@ -18,6 +18,8 @@
     }
     .search-box:focus { outline: none; border-color: var(--color-frost-link); box-shadow: 0 0 0 1px var(--color-frost-link); }
     html.light-mode .search-box { background: rgba(255,255,255,0.5); color: var(--color-glacier); }
+    
+    select.search-box { appearance: none; cursor: pointer; padding-right: 32px; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2381899b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>'); background-repeat: no-repeat; background-position: right 12px center; }
 
     .table-container {
         background: var(--glass-surface); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
@@ -59,7 +61,6 @@
     .action-btn:hover { color: var(--color-electric-iris); background: rgba(186, 215, 247, 0.08); border-color: var(--color-electric-iris); }
     html.light-mode .action-btn { background: rgba(0,0,0,0.03); }
 
-    /* PHASE 2 OPTIMIZATION: Pagination CSS */
     .pagination-wrapper {
         display: flex; justify-content: space-between; align-items: center;
         padding: 16px 8px; color: var(--color-fog); font-size: 13px; font-weight: 500;
@@ -122,67 +123,38 @@
             <p class="eyebrow-text" style="font-family: var(--font-mono); color: var(--color-fog); font-size: 14px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">DATABASE TABLE</p>
             <h1>{{ table_title }}</h1>
         </div>
-        <!-- PHASE 2 OPTIMIZATION: Targets specific dynamic container to avoid disrupting headers -->
-        <input type="text" class="search-box" id="searchInput" name="q" placeholder="Search records live..." 
-               hx-get="/table/{{ table_name }}" 
-               hx-trigger="keyup changed delay:300ms, search" 
-               hx-target="#tableContent" 
-               hx-select="#tableContent"
-               hx-swap="outerHTML"
-               value="{{ search_query | default('') }}"
-               autocomplete="off">
+        
+        <div style="display: flex; gap: 12px; align-items: center;">
+            {% if table_name == 'phc_lookup_values_t' %}
+            <!-- The New Lookup Category Dropdown Filter -->
+            <select class="search-box" id="typeFilter" name="type_filter" style="width: 260px;"
+                    hx-get="/table/{{ table_name }}" 
+                    hx-trigger="change" 
+                    hx-target="#tableContent" 
+                    hx-select="#tableContent"
+                    hx-swap="outerHTML"
+                    hx-include="#searchInput">
+                <option value="">-- All Lookup Categories --</option>
+                {% for cat in lookup_categories %}
+                <option value="{{ cat.code }}" {% if type_filter == cat.code %}selected{% endif %}>{{ cat.name }} ({{ cat.code }})</option>
+                {% endfor %}
+            </select>
+            {% endif %}
+
+            <!-- Standard Search Bar -->
+            <input type="text" class="search-box" id="searchInput" name="q" placeholder="Search records live..." 
+                   hx-get="/table/{{ table_name }}" 
+                   hx-trigger="keyup changed delay:300ms, search" 
+                   hx-target="#tableContent" 
+                   hx-select="#tableContent"
+                   hx-swap="outerHTML"
+                   {% if table_name == 'phc_lookup_values_t' %}hx-include="#typeFilter"{% endif %}
+                   value="{{ search_query | default('') }}"
+                   autocomplete="off">
+        </div>
     </div>
 
-    <!-- PHASE 2 OPTIMIZATION: Wrapper to cleanly swap tables & pagination together -->
     <div id="tableContent">
-        
-        {% if table_name == 'phc_lookup_values_t' %}
-        <!-- ================================================== -->
-        <!-- SPLIT PANE MASTER-DETAIL UI FOR LOOKUPS            -->
-        <!-- ================================================== -->
-        <style>
-            .split-pane { display: flex; flex-direction: column; gap: 24px; height: 60vh; }
-            .pane-section {
-                background: var(--glass-surface); border: 1px solid var(--glass-border); 
-                border-radius: 12px; display: flex; flex-direction: column; flex: 1; overflow: hidden;
-            }
-            .master-row { cursor: pointer; }
-            .master-row:hover td { background: rgba(255, 255, 255, 0.05); }
-            .master-row.selected td { background: rgba(102, 58, 243, 0.15); border-color: rgba(102, 58, 243, 0.3); color: var(--color-glacier); }
-        </style>
-
-        <div class="split-pane">
-            <!-- Top Pane: Master Table (Loaded via HTMX to get Types data independently) -->
-            <div class="pane-section" 
-                 hx-get="/api/components/lookup_types_master" 
-                 hx-trigger="load" 
-                 hx-swap="innerHTML">
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--color-fog);">
-                    <i data-lucide="loader-2" class="lucide-spin" style="width: 32px; height: 32px; margin-bottom: 12px;"></i>
-                    <p>Loading Lookup Categories...</p>
-                </div>
-            </div>
-
-            <!-- Bottom Pane: Child Details (Injected via HTMX) -->
-            <div class="pane-section" id="lookup-values-container">
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--color-fog); opacity: 0.5;">
-                    <i data-lucide="mouse-pointer-click" style="width: 48px; height: 48px; margin-bottom: 12px;"></i>
-                    <p>Select a Lookup Type above to view its assigned values.</p>
-                </div>
-            </div>
-        </div>
-
-        <script>
-            function selectRow(rowElement) {
-                document.querySelectorAll('.master-row').forEach(row => row.classList.remove('selected'));
-                rowElement.classList.add('selected');
-            }
-        </script>
-        
-        {% else %}
-        <!-- ================================================== -->
-        <!-- STANDARD TABLE UI (For everything else)            -->
-        <!-- ================================================== -->
         <div class="table-container">
             <div class="table-scroll">
                 <table id="dataTable">
@@ -220,7 +192,6 @@
             </div>
         </div>
 
-        <!-- PHASE 2 OPTIMIZATION: Advanced Pagination Controls -->
         <div class="pagination-wrapper">
             <div>Showing {{ start_row }} to {{ end_row }} of {{ total_count }} entries</div>
             
@@ -228,7 +199,7 @@
                 <button class="page-btn" 
                         {% if page > 1 %}
                         hx-get="/table/{{ table_name }}?page={{ page - 1 }}" 
-                        hx-include="#searchInput"
+                        hx-include="#searchInput{% if table_name == 'phc_lookup_values_t' %}, #typeFilter{% endif %}"
                         hx-target="#tableContent" hx-select="#tableContent" hx-swap="outerHTML"
                         {% else %} disabled {% endif %}>
                     <i data-lucide="chevron-left" style="width: 14px;"></i> Prev
@@ -239,14 +210,13 @@
                 <button class="page-btn" 
                         {% if page < total_pages %}
                         hx-get="/table/{{ table_name }}?page={{ page + 1 }}" 
-                        hx-include="#searchInput"
+                        hx-include="#searchInput{% if table_name == 'phc_lookup_values_t' %}, #typeFilter{% endif %}"
                         hx-target="#tableContent" hx-select="#tableContent" hx-swap="outerHTML"
                         {% else %} disabled {% endif %}>
                     Next <i data-lucide="chevron-right" style="width: 14px;"></i>
                 </button>
             </div>
         </div>
-        {% endif %} <!-- End of conditional check -->
     </div>
 </div>
 
@@ -263,18 +233,18 @@
 </div>
 
 <script>
-    // --- NEW: DYNAMIC ADD RECORD BUTTON ---
-    // Automatically injects your search query into the form so you don't have to re-select it!
     document.addEventListener("DOMContentLoaded", () => {
         const addRecordBtn = document.getElementById('addRecordBtn');
-        const searchInput = document.getElementById('searchInput');
+        const typeFilter = document.getElementById('typeFilter');
         
-        if (addRecordBtn && searchInput && '{{ table_name }}' === 'phc_lookup_values_t') {
-            const originalHref = addRecordBtn.href;
+        // Smart URL Pre-filler for the Add button!
+        if (addRecordBtn && typeFilter && '{{ table_name }}' === 'phc_lookup_values_t') {
+            const originalHref = addRecordBtn.href.split('?')[0]; // Clean base URL
             
             const updateUrl = () => {
-                const val = searchInput.value.trim();
+                const val = typeFilter.value;
                 if (val) {
+                    // Instantly modifies the + Add Record button URL so it pre-fills the form!
                     addRecordBtn.href = `${originalHref}?plv_lookup_type_code=${encodeURIComponent(val)}`;
                 } else {
                     addRecordBtn.href = originalHref;
@@ -282,7 +252,7 @@
             };
             
             updateUrl(); // Run on load
-            searchInput.addEventListener('input', updateUrl); // Run when user types
+            typeFilter.addEventListener('change', updateUrl); // Run when user changes dropdown
         }
     });
 
