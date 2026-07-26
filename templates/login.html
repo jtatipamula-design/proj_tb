@@ -4,17 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nexus ERP - Login</title>
-    <!-- AuthKit Typography -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     
+    <script>
+        // Check theme instantly to prevent flashing
+        if (localStorage.getItem('theme') === 'light') {
+            document.documentElement.classList.add('light-mode');
+        }
+    </script>
+
     <style>
         :root {
             --color-midnight-ink: #05060f;
             --color-graphite-plate: #2f343e;
-            --color-steel-border: #3f4959;
+            --color-steel-border: rgba(255, 255, 255, 0.1);
             --color-fog: #81899b;
             --color-pebble: #9da7ba;
             --color-moonlight: #c7d3ea;
@@ -22,11 +28,23 @@
             --color-frost-link: #b6d9fc;
             --color-electric-iris: #663af3;
             --color-ember: #e46d4c;
+            --color-cipher-mint: #269684;
+            --glass-surface: rgba(10, 15, 30, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.1);
 
-            --font-ui: 'Inter', sans-serif;
-            --font-mono: 'JetBrains Mono', monospace;
+            --font-ui: 'Inter', ui-sans-serif, system-ui, sans-serif;
+        }
 
-            --shadow-subtle-4: inset 0px 1px 1px 0px rgba(199, 211, 234, 0.12), inset 0px 24px 48px 0px rgba(199, 211, 234, 0.05), 0px 24px 32px 0px rgba(6, 6, 14, 0.7);
+        html.light-mode {
+            --color-midnight-ink: #f8fafc;
+            --color-graphite-plate: #ffffff;
+            --color-steel-border: #e2e8f0;
+            --color-fog: #64748b;
+            --color-pebble: #475569;
+            --color-moonlight: #334155;
+            --color-glacier: #0f172a;
+            --glass-surface: rgba(255, 255, 255, 0.8);
+            --glass-border: rgba(0, 0, 0, 0.1);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -38,151 +56,465 @@
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
             min-height: 100vh; overflow: hidden; position: relative;
-            letter-spacing: -0.01em;
-            /* AuthKit Blueprint Grid */
-            background-image: 
-                linear-gradient(rgba(186, 215, 247, 0.04) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(186, 215, 247, 0.04) 1px, transparent 1px);
-            background-size: 40px 40px;
+            transition: background-color 0.3s, color 0.3s;
         }
 
-        svg.lucide { stroke-width: 1.5px; }
-
-        /* AuthKit Blueprint Glow (Top Center Radial) */
-        .blueprint-glow {
-            position: absolute; top: -20%; left: 50%; transform: translateX(-50%);
-            width: 800px; height: 600px; border-radius: 50%;
-            background: radial-gradient(circle, rgba(186, 207, 247, 0.08) 0%, transparent 70%);
-            pointer-events: none; z-index: 1;
+        /* Kinetic Grid Canvas Background */
+        #kinetic-canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0; pointer-events: none; /* Let the window catch the mouse */
         }
 
-        /* Hero Text Lockup */
-        .hero-lockup {
-            text-align: center; margin-bottom: 40px; z-index: 10; position: relative;
+        /* Theme Toggle Button */
+        .theme-toggle {
+            position: absolute; top: 24px; right: 24px; z-index: 20;
+            background: var(--glass-surface); border: 1px solid var(--glass-border);
+            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+            border-radius: 50%; width: 44px; height: 44px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; color: var(--color-fog); transition: all 0.2s ease;
         }
-        .hero-eyebrow {
-            font-family: var(--font-mono); font-size: 15px; color: var(--color-fog);
-            letter-spacing: 0.1em; margin-bottom: 16px;
-        }
-        .hero-title {
-            font-size: 48px; font-weight: 500; color: #ffffff;
-            line-height: 1.14; margin-bottom: 16px; letter-spacing: normal;
-        }
-        .hero-subtitle {
-            font-size: 18px; color: var(--color-pebble); font-weight: 400;
-        }
+        .theme-toggle:hover { color: var(--color-glacier); transform: scale(1.05); }
+        html.light-mode .theme-toggle:hover { color: var(--color-midnight-ink); }
 
-        /* AuthKit Graphite Plate Card */
+        /* ========================================= */
+        /* ACETERNITY ANIMATED CARD BORDER           */
+        /* ========================================= */
         .login-card {
-            background: var(--color-graphite-plate);
-            border: 1px solid var(--color-steel-border);
-            border-radius: 10px;
-            padding: 32px 24px; width: 100%; max-width: 380px;
-            box-shadow: var(--shadow-subtle-4);
-            animation: floatIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-            position: relative; z-index: 10;
+            position: relative;
+            width: 100%; max-width: 420px;
+            border-radius: 16px;
+            padding: 2px; /* This creates the thickness of the animated border */
+            overflow: hidden;
+            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5);
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            z-index: 10;
         }
 
-        @keyframes floatIn {
-            0% { opacity: 0; transform: translateY(20px); }
-            100% { opacity: 1; transform: translateY(0); }
+        /* The rotating conic gradient beam */
+        .login-card::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%;
+            width: 200%; height: 200%;
+            background: conic-gradient(
+                transparent, transparent, transparent, 
+                var(--color-electric-iris)
+            );
+            animation: rotateBeam 4s linear infinite;
+            z-index: -1;
         }
 
-        .input-group { display: flex; flex-direction: column; gap: 8px; text-align: left; margin-bottom: 20px; }
-        .input-group label { font-size: 14px; font-weight: 500; color: var(--color-moonlight); }
-
-        /* AuthKit 2px Radius Inputs */
-        input {
-            width: 100%; padding: 10px 12px; border: 1px solid var(--color-steel-border);
-            border-radius: 2px; font-size: 14px; font-family: var(--font-ui);
-            background-color: var(--color-midnight-ink); color: white;
-            box-shadow: inset 0px 0px 0px 1px rgba(186, 215, 247, 0.06); transition: all 0.2s;
-        }
-        input:focus {
-            outline: none; border-color: var(--color-frost-link);
-            box-shadow: 0 0 0 1px var(--color-frost-link), inset 0px 0px 0px 1px rgba(186, 215, 247, 0.12);
+        @keyframes rotateBeam {
+            100% { transform: rotate(360deg); }
         }
 
-        /* AuthKit Electric Iris CTA */
-        .btn-login {
-            width: 100%; padding: 10px 16px; margin-top: 10px;
+        .login-card-inner {
+            background: rgba(10, 15, 30, 0.85);
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            border-radius: 14px; /* Slightly less than the outer card to fit perfectly */
+            padding: 40px;
+            position: relative;
+            z-index: 1;
+            height: 100%;
+            transition: background 0.3s;
+        }
+        html.light-mode .login-card-inner {
+            background: rgba(255, 255, 255, 0.9);
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .login-header { text-align: center; margin-bottom: 32px; }
+        .login-header h1 { font-size: 32px; font-weight: 600; color: var(--color-glacier); margin-bottom: 8px; letter-spacing: -0.02em; }
+        html.light-mode .login-header h1 { color: var(--color-midnight-ink); }
+        .login-header p { color: var(--color-pebble); font-size: 15px; }
+
+        /* Form Inputs & Floating Labels (React active state logic) */
+        .form-field { position: relative; margin-bottom: 24px; }
+        .form-field label {
+            position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+            font-size: 15px; color: var(--color-fog); pointer-events: none;
+            transition: all 0.2s ease; background: transparent; padding: 0 4px;
+        }
+        
+        .form-field.active label {
+            top: 0; transform: translateY(-50%) scale(0.85);
+            color: var(--color-frost-link); background: var(--color-midnight-ink);
+            border-radius: 4px;
+        }
+        html.light-mode .form-field.active label {
+            background: var(--color-graphite-plate); color: var(--color-electric-iris);
+        }
+
+        .form-field input {
+            width: 100%; padding: 14px 14px; border: 1px solid var(--glass-border);
+            border-radius: 8px; font-size: 15px; font-family: var(--font-ui);
+            background-color: rgba(0,0,0,0.2); color: var(--color-glacier);
+            transition: all 0.2s; outline: none;
+        }
+        html.light-mode .form-field input {
+            background-color: rgba(255,255,255,0.6); color: var(--color-midnight-ink);
+        }
+        .form-field.active input {
+            border-color: var(--color-frost-link);
+            background-color: rgba(0,0,0,0.4);
+            box-shadow: 0 0 0 1px var(--color-frost-link);
+        }
+        html.light-mode .form-field.active input {
+            border-color: var(--color-electric-iris); background-color: #fff;
+            box-shadow: 0 0 0 1px var(--color-electric-iris);
+        }
+
+        .toggle-password {
+            position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+            background: transparent; border: none; color: var(--color-fog);
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: color 0.2s; padding: 4px;
+        }
+        .toggle-password:hover { color: var(--color-glacier); }
+        html.light-mode .toggle-password:hover { color: var(--color-midnight-ink); }
+
+        .form-options {
+            display: flex; justify-content: flex-start; align-items: center;
+            margin-bottom: 28px; font-size: 13px; color: var(--color-pebble);
+        }
+        .remember-me { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+        .remember-me input { accent-color: var(--color-electric-iris); width: 14px; height: 14px; cursor: pointer; }
+        
+        /* ========================================= */
+        /* SMOOTH ANIMATED LOGIN BUTTON              */
+        /* ========================================= */
+        .login-button {
+            position: relative; width: 100%; height: 50px; 
             background: var(--color-electric-iris); color: white;
-            border: none; border-radius: 2px;
-            font-size: 16px; font-weight: 500; font-family: var(--font-ui);
-            cursor: pointer; box-shadow: none; transition: background 0.2s;
-            display: flex; justify-content: center; align-items: center; gap: 8px; line-height: 1.5;
+            border: none; border-radius: 8px; font-size: 16px; font-weight: 500; font-family: var(--font-ui);
+            cursor: pointer; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow: hidden;
         }
-        .btn-login:hover { background: #7a52f5; }
+        .login-button:hover:not(.is-loading):not(.is-success) { 
+            background: #7a52f5; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(102, 58, 243, 0.4); 
+        }
+
+        /* Inner Button Layers */
+        .btn-text {
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); opacity: 1; transform: translateY(0);
+        }
+        .btn-spinner {
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); opacity: 0; transform: translateY(20px);
+        }
+        .btn-success {
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); opacity: 0; transform: translateY(20px) scale(0.8);
+        }
+
+        /* Loading State */
+        .login-button.is-loading { cursor: not-allowed; pointer-events: none; opacity: 0.9; }
+        .login-button.is-loading .btn-text { opacity: 0; transform: translateY(-20px); }
+        .login-button.is-loading .btn-spinner { opacity: 1; transform: translateY(0); }
+
+        /* Success State */
+        .login-button.is-success { background: var(--color-cipher-mint) !important; cursor: default; pointer-events: none; box-shadow: 0 4px 16px rgba(38, 150, 132, 0.5); }
+        .login-button.is-success .btn-text, .login-button.is-success .btn-spinner { opacity: 0; transform: translateY(-20px); }
+        .login-button.is-success .btn-success { opacity: 1; transform: translateY(0) scale(1); }
 
         #error-msg {
             color: var(--color-ember); font-size: 14px; font-weight: 500;
-            margin-top: 15px; min-height: 20px; opacity: 0; transition: opacity 0.3s; text-align: center;
+            margin-top: 16px; min-height: 20px; opacity: 0; transition: opacity 0.3s; text-align: center;
         }
     </style>
 </head>
 <body>
 
-    <div class="blueprint-glow"></div>
+    <!-- The Vanilla JS Port of the Kinetic Grid -->
+    <canvas id="kinetic-canvas"></canvas>
 
-    <div class="hero-lockup">
-        <div class="hero-eyebrow">NEXUS ERP</div>
-        <h1 class="hero-title">Sign In</h1>
-        <p class="hero-subtitle">Access your enterprise control center.</p>
+    <!-- Theme Toggle -->
+    <div class="theme-toggle" onclick="toggleTheme()" id="themeToggleBtn">
+        <i data-lucide="moon" id="themeIcon"></i>
     </div>
 
-    <div class="login-card">
-        <form id="loginForm" onsubmit="handleLogin(event)">
-            <div class="input-group">
-                <label>Username</label>
-                <input type="text" id="username" required placeholder="admin" autocomplete="username">
+    <div class="login-card" id="loginCard">
+        <div class="login-card-inner">
+            <div class="login-header">
+                <h1>Welcome</h1>
+                <p>Please sign in to continue</p>
             </div>
 
-            <div class="input-group">
-                <label>Password</label>
-                <input type="password" id="password" required placeholder="••••••••" autocomplete="current-password">
-            </div>
+            <form class="login-form" id="loginForm" onsubmit="handleLogin(event)">
+                
+                <div class="form-field">
+                    <input type="text" id="username" required autocomplete="username">
+                    <label for="username">Username</label>
+                </div>
 
-            <button type="submit" class="btn-login" id="loginBtn">
-                Continue
-            </button>
-            <div id="error-msg">Invalid Credentials</div>
-        </form>
+                <div class="form-field">
+                    <input type="password" id="password" required autocomplete="current-password">
+                    <label for="password">Password</label>
+                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility()" aria-label="Toggle password visibility">
+                        <i data-lucide="eye" id="eyeIcon" style="width: 18px;"></i>
+                    </button>
+                </div>
+
+                <div class="form-options">
+                    <label class="remember-me">
+                        <input type="checkbox" id="rememberMe">
+                        Remember me
+                    </label>
+                </div>
+
+                <button type="submit" class="login-button" id="loginBtn">
+                    <div class="btn-text">Sign In</div>
+                    <div class="btn-spinner"><i data-lucide="loader-2" class="lucide-spin" style="width: 20px;"></i></div>
+                    <div class="btn-success"><i data-lucide="check" style="width: 20px;"></i> Authenticated</div>
+                </button>
+                
+                <div id="error-msg">Invalid Credentials</div>
+            </form>
+        </div>
     </div>
 
     <script>
         lucide.createIcons();
 
+        // -----------------------------------------
+        // REACT STATE REPLICA FOR FLOATING LABELS
+        // -----------------------------------------
+        const inputs = document.querySelectorAll('.form-field input');
+        inputs.forEach(input => {
+            const wrapper = input.parentElement;
+            const updateState = () => {
+                if (input.value.trim() !== '' || document.activeElement === input) wrapper.classList.add('active');
+                else wrapper.classList.remove('active');
+            };
+            input.addEventListener('focus', updateState);
+            input.addEventListener('blur', updateState);
+            input.addEventListener('input', updateState);
+            setTimeout(updateState, 50);
+        });
+
+        // -----------------------------------------
+        // UI INTERACTIONS
+        // -----------------------------------------
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isLight = html.classList.toggle('light-mode');
+            localStorage.setItem('theme', isLight ? 'light' : 'dark');
+            const themeIcon = document.getElementById('themeIcon');
+            themeIcon.setAttribute('data-lucide', isLight ? 'sun' : 'moon');
+            lucide.createIcons();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const isLight = document.documentElement.classList.contains('light-mode');
+            document.getElementById('themeIcon').setAttribute('data-lucide', isLight ? 'sun' : 'moon');
+            lucide.createIcons();
+        });
+
+        function togglePasswordVisibility() {
+            const pwdInput = document.getElementById('password');
+            const eyeIcon = document.getElementById('eyeIcon');
+            if (pwdInput.type === 'password') {
+                pwdInput.type = 'text';
+                eyeIcon.setAttribute('data-lucide', 'eye-off');
+            } else {
+                pwdInput.type = 'password';
+                eyeIcon.setAttribute('data-lucide', 'eye');
+            }
+            lucide.createIcons();
+        }
+
+        // -----------------------------------------
+        // KINETIC GRID (Vanilla JS Port)
+        // -----------------------------------------
+        const canvas = document.getElementById("kinetic-canvas");
+        const ctx = canvas.getContext("2d");
+        
+        let W = window.innerWidth;
+        let H = window.innerHeight;
+        let cols = [];
+        let dots = [];
+        const trailHistory = [];
+        const mouse = { x: -9999, y: -9999, active: false };
+        
+        // Physics Settings
+        const spacing = 35; 
+        const radius = 250; 
+        const strength = 4;
+        const PULL = (Math.max(1, Math.min(10, strength)) / 10) * 4;
+
+        function buildGrid() {
+            W = window.innerWidth;
+            H = window.innerHeight;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = Math.floor(W * dpr);
+            canvas.height = Math.floor(H * dpr);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+            cols = [];
+            dots = [];
+            const nCols = Math.floor(W / spacing) + 2;
+            const nRows = Math.floor(H / spacing) + 2;
+
+            for (let c = 0; c < nCols; c++) {
+                const col = [];
+                for (let rIdx = 0; rIdx < nRows; rIdx++) {
+                    const hx = c * spacing;
+                    const hy = rIdx * spacing;
+                    const d = { hx, hy, x: hx, y: hy, vx: 0, vy: 0 };
+                    col.push(d);
+                    dots.push(d);
+                }
+                cols.push(col);
+            }
+        }
+
+        window.addEventListener("resize", buildGrid);
+        buildGrid();
+
+        // Mouse Listeners
+        const setMouse = (clientX, clientY) => {
+            mouse.x = clientX;
+            mouse.y = clientY;
+            mouse.active = true;
+            trailHistory.push({ x: clientX, y: clientY, t: performance.now() });
+            if (trailHistory.length > 80) trailHistory.shift();
+        };
+
+        window.addEventListener("mousemove", (e) => setMouse(e.clientX, e.clientY));
+        window.addEventListener("touchmove", (e) => {
+            if(e.touches[0]) setMouse(e.touches[0].clientX, e.touches[0].clientY);
+        }, { passive: true });
+        
+        const clearMouse = () => { mouse.active = false; };
+        window.addEventListener("mouseleave", clearMouse);
+        window.addEventListener("touchend", clearMouse);
+
+        // Animation Loop
+        function animateGrid() {
+            ctx.clearRect(0, 0, W, H);
+            
+            // Dynamic Theme Colors
+            const isLight = document.documentElement.classList.contains('light-mode');
+            const dotColor = isLight ? "rgba(0, 0, 0, 0.4)" : "rgba(255, 255, 255, 0.4)";
+            const lineColor = isLight ? "rgba(102, 58, 243, 0.8)" : "rgba(182, 217, 252, 0.8)";
+            const trailColor = "rgba(102, 58, 243, 0.9)"; // Electric Iris
+
+            // Physics Update
+            for (const d of dots) {
+                let ax = (d.hx - d.x) * 0.08;
+                let ay = (d.hy - d.y) * 0.08;
+                if (mouse.active) {
+                    const dx = mouse.x - d.x;
+                    const dy = mouse.y - d.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < radius && dist > 0.001) {
+                        const f = (1 - dist / radius) * PULL;
+                        ax += (dx / dist) * f;
+                        ay += (dy / dist) * f;
+                    }
+                }
+                d.vx = (d.vx + ax) * 0.82;
+                d.vy = (d.vy + ay) * 0.82;
+                d.x += d.vx;
+                d.y += d.vy;
+            }
+
+            // Draw Lines
+            for (let c = 0; c < cols.length; c++) {
+                for (let rIdx = 0; rIdx < cols[c].length; rIdx++) {
+                    const d = cols[c][rIdx];
+                    const right = cols[c + 1]?.[rIdx];
+                    const down = cols[c]?.[rIdx + 1];
+                    const prox = mouse.active ? Math.max(0, 1 - Math.sqrt((mouse.x - d.x) ** 2 + (mouse.y - d.y) ** 2) / radius) : 0;
+                    
+                    if (right) {
+                        ctx.globalAlpha = 0.03 + prox * 0.5;
+                        ctx.strokeStyle = lineColor;
+                        ctx.lineWidth = 0.5 + prox * 1.5;
+                        ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(right.x, right.y); ctx.stroke();
+                    }
+                    if (down) {
+                        ctx.globalAlpha = 0.03 + prox * 0.5;
+                        ctx.strokeStyle = lineColor;
+                        ctx.lineWidth = 0.5 + prox * 1.5;
+                        ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(down.x, down.y); ctx.stroke();
+                    }
+                }
+            }
+
+            // Draw Dots
+            for (const d of dots) {
+                const prox = mouse.active ? Math.max(0, 1 - Math.sqrt((mouse.x - d.x) ** 2 + (mouse.y - d.y) ** 2) / radius) : 0;
+                ctx.globalAlpha = 0.15 + prox * 0.85;
+                ctx.fillStyle = dotColor;
+                ctx.beginPath(); ctx.arc(d.x, d.y, 1 + prox * 2.5, 0, 2 * Math.PI); ctx.fill();
+            }
+
+            // Draw Cursor Trail
+            const now = performance.now();
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+            for (let i = 1; i < trailHistory.length; i++) {
+                const a = trailHistory[i - 1];
+                const b = trailHistory[i];
+                const age = now - b.t;
+                if (age > 300) continue;
+                ctx.globalAlpha = Math.max(0, 1 - age / 300) * 0.8;
+                ctx.strokeStyle = trailColor;
+                ctx.lineWidth = 2.5;
+                ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+            }
+            
+            ctx.globalAlpha = 1;
+            requestAnimationFrame(animateGrid);
+        }
+        animateGrid();
+
+        // -----------------------------------------
+        // LOGIN LOGIC (Sanic API Integration)
+        // -----------------------------------------
         async function handleLogin(e) {
             e.preventDefault();
             const btn = document.getElementById('loginBtn');
             const err = document.getElementById('error-msg');
+            
             const u = document.getElementById('username').value;
             const p = document.getElementById('password').value;
 
-            btn.innerHTML = '<i data-lucide="loader-2" class="lucide-spin" style="width:16px;"></i> Authenticating...';
-            lucide.createIcons();
+            // Trigger the ultra-smooth loading state
+            btn.classList.add('is-loading');
             err.style.opacity = "0";
 
             try {
                 const res = await fetch("/login", {
-                    method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({username: u, password: p})
+                    method: "POST", 
+                    headers: {"Content-Type": "application/json"}, 
+                    body: JSON.stringify({username: u, password: p})
                 });
 
                 if (res.ok) {
-                    btn.innerHTML = '<i data-lucide="check" style="width:16px;"></i> Success';
-                    lucide.createIcons();
-                    btn.style.background = "var(--color-cipher-mint)";
-                    setTimeout(() => window.location.href = "/", 600);
+                    // Trigger the success state morph
+                    btn.classList.remove('is-loading');
+                    btn.classList.add('is-success');
+                    
+                    // Delay slightly to let the user enjoy the animation before redirecting
+                    setTimeout(() => window.location.href = "/", 800);
                 } else {
                     const data = await res.json();
-                    err.innerText = data.error || "Invalid Credentials";
+                    err.innerText = data.error || data.message || "Invalid Credentials";
                     err.style.opacity = "1";
-                    btn.innerHTML = 'Continue';
+                    btn.classList.remove('is-loading');
                 }
             } catch (error) {
-                err.innerText = "Network Error";
+                err.innerText = "Network Error. Please try again.";
                 err.style.opacity = "1";
-                btn.innerHTML = 'Continue';
+                btn.classList.remove('is-loading');
             }
         }
     </script>
