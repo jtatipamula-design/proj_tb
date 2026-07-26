@@ -222,7 +222,7 @@ def check_auth(wrapped):
             # If the DB session ID doesn't match the cookie, they logged in elsewhere!
             if str(current_db_session) != str(session_id):
                 res = response.redirect("/login")
-                del res.cookies["auth_token"]
+                res.delete_cookie("auth_token")
                 return res
 
             # ========================================================
@@ -259,10 +259,23 @@ def check_auth(wrapped):
 
 @app.route('/login', methods=['GET'])
 async def login_view(request):
-    if request.ctx.session.get("user_id"):
-        return response.redirect("/")
+    user_id = request.ctx.session.get("user_id")
+    session_id = request.ctx.session.get("session_id")
+    
+    if user_id and session_id:
+        async with app.ctx.db.acquire() as conn:
+            current_db_session = await conn.fetchval("SELECT pus_session_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
+            # Only redirect to the dashboard if the session is TRULY valid!
+            if str(current_db_session) == str(session_id):
+                return response.redirect("/")
+                
+    # If we reach here, they aren't logged in, OR their session was killed.
     template = env.get_template('login.html')
-    return response.html(template.render())
+    res = response.html(template.render())
+    
+    # Forcefully clear any stale/dead cookies
+    res.delete_cookie("auth_token")
+    return res
 
 @app.route('/login', methods=['POST'])
 async def handle_login(request):
@@ -311,7 +324,7 @@ async def handle_login(request):
 @app.route('/logout')
 async def logout(request):
     res = response.redirect("/login")
-    del res.cookies["auth_token"]
+    res.delete_cookie("auth_token")
     return res
 
 @app.route('/')
