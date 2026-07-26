@@ -3,113 +3,76 @@
 {% block content %}
 <style>
     .content-wrapper {
-        width: 100%; max-width: 800px; margin: 0 auto;
+        width: 100%; max-width: 900px; margin: 0 auto;
         display: flex; flex-direction: column;
-        animation: fadeIn 0.3s ease-out;
     }
 
-    .page-header { margin-bottom: 24px; }
-    .page-header h1 { font-size: 28px; font-weight: 500; color: var(--color-glacier); margin: 0 0 8px 0; letter-spacing: normal; }
-    .page-header p { color: var(--color-fog); font-size: 15px; margin: 0; }
-
+    .page-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; }
+    .page-header h1 { font-size: 28px; font-weight: 500; color: var(--color-glacier); margin-bottom: 6px; }
+    
     .form-card {
         background: var(--glass-surface); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
         border: 1px solid var(--glass-border); border-radius: 12px; padding: 32px;
-        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
     }
 
-    .form-grid {
-        display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
-    }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .full-width { grid-column: 1 / -1; }
 
     .form-group { display: flex; flex-direction: column; gap: 8px; }
-    .form-group.full-width { grid-column: 1 / -1; }
-
-    .form-group label {
-        font-size: 13px; font-weight: 500; color: var(--color-moonlight);
-        display: flex; justify-content: space-between; align-items: center;
-    }
-    
+    .form-group label { font-size: 13px; font-weight: 500; color: var(--color-moonlight); display: flex; justify-content: space-between; }
     .required-star { color: var(--color-ember); margin-left: 4px; }
 
     .form-control {
-        width: 100%; padding: 12px 14px; background: rgba(0,0,0,0.2); 
-        border: 1px solid var(--glass-border); border-radius: 8px;
-        color: var(--color-glacier); font-size: 14px; font-family: var(--font-ui);
-        transition: all 0.2s; outline: none;
+        background: rgba(0, 0, 0, 0.3); border: 1px solid var(--glass-border);
+        color: var(--color-glacier); padding: 12px 14px; border-radius: 8px;
+        font-family: var(--font-ui); font-size: 14px; transition: all 0.2s;
+        width: 100%;
     }
-    html.light-mode .form-control { background: rgba(255,255,255,0.6); color: var(--color-midnight-ink); }
+    html.light-mode .form-control { background: rgba(255, 255, 255, 0.6); color: var(--color-midnight-ink); }
+    .form-control:focus { outline: none; border-color: var(--color-frost-link); box-shadow: 0 0 0 1px var(--color-frost-link); }
+    .form-control:read-only { background: rgba(0,0,0,0.1); color: var(--color-fog); cursor: not-allowed; }
     
-    .form-control:focus {
-        border-color: var(--color-electric-iris); background: rgba(0,0,0,0.4);
-        box-shadow: 0 0 0 1px var(--color-electric-iris);
-    }
-    html.light-mode .form-control:focus { background: #fff; }
-
-    .form-control:read-only {
-        background: rgba(255,255,255,0.02); color: var(--color-fog); cursor: not-allowed;
-    }
-    html.light-mode .form-control:read-only { background: rgba(0,0,0,0.02); }
-
-    select.form-control {
-        appearance: none; cursor: pointer; padding-right: 36px;
-        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2381899b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>');
-        background-repeat: no-repeat; background-position: right 14px center;
-    }
+    textarea.form-control { resize: vertical; min-height: 100px; }
+    select.form-control { appearance: none; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2381899b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>'); background-repeat: no-repeat; background-position: right 12px center; }
     select.form-control option { background: var(--color-midnight-ink); color: var(--color-glacier); }
     html.light-mode select.form-control option { background: #fff; color: var(--color-midnight-ink); }
 
-    textarea.form-control { resize: vertical; min-height: 100px; }
-
-    .status-toggle {
-        display: flex; background: rgba(0,0,0,0.3); border-radius: 8px; 
-        border: 1px solid var(--glass-border); overflow: hidden; height: 44px;
-    }
-    html.light-mode .status-toggle { background: rgba(0,0,0,0.05); }
-    
-    .status-toggle label {
-        flex: 1; text-align: center; cursor: pointer; display: flex; align-items: center; justify-content: center;
-        font-size: 14px; font-weight: 500; color: var(--color-fog); transition: all 0.2s; margin: 0;
-    }
+    /* Custom Status Toggle */
+    .status-toggle { display: flex; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid var(--glass-border); overflow: hidden; height: 43px; }
+    html.light-mode .status-toggle { background: rgba(255, 255, 255, 0.6); }
     .status-toggle input[type="radio"] { display: none; }
+    .status-toggle label {
+        flex: 1; display: flex; align-items: center; justify-content: center;
+        font-size: 13px; font-weight: 500; color: var(--color-fog); cursor: pointer; transition: all 0.2s;
+    }
+    .status-toggle input[type="radio"]:checked + .status-act { background: rgba(38, 150, 132, 0.15); color: var(--color-cipher-mint); }
+    .status-toggle input[type="radio"]:checked + .status-ina { background: rgba(228, 109, 76, 0.15); color: var(--color-ember); }
+
+    .form-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--glass-border); }
+    .action-group { display: flex; gap: 12px; }
     
-    .status-toggle input[type="radio"]:checked + label.status-act { background: rgba(38, 150, 132, 0.15); color: var(--color-cipher-mint); font-weight: 600; }
-    .status-toggle input[type="radio"]:checked + label.status-ina { background: rgba(228, 109, 76, 0.15); color: var(--color-ember); font-weight: 600; }
-
-    .form-actions {
-        display: flex; justify-content: space-between; align-items: center;
-        margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--glass-border);
-    }
-
-    .btn-cancel {
-        padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;
-        background: transparent; border: 1px solid var(--glass-border); color: var(--color-fog); text-decoration: none;
-        transition: all 0.2s; display: flex; align-items: center; gap: 8px;
-    }
-    .btn-cancel:hover { background: rgba(255,255,255,0.05); color: var(--color-moonlight); border-color: var(--color-moonlight); }
-    html.light-mode .btn-cancel:hover { background: rgba(0,0,0,0.05); color: var(--color-midnight-ink); border-color: var(--color-pebble); }
-
-    .btn-clear {
-        padding: 12px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;
-        background: transparent; border: 1px dashed var(--color-fog); color: var(--color-fog);
-        transition: all 0.2s; display: flex; align-items: center; gap: 8px;
-    }
-    .btn-clear:hover { background: rgba(255,255,255,0.05); color: var(--color-moonlight); border-color: var(--color-moonlight); border-style: solid; }
-
     .btn-submit {
-        padding: 12px 24px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer;
-        background: var(--color-electric-iris); border: none; color: white; display: flex; align-items: center; gap: 8px;
-        transition: all 0.2s;
+        background: var(--color-electric-iris); color: white; border: none;
+        padding: 12px 24px; border-radius: 8px; font-weight: 500; font-size: 14px;
+        cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px;
     }
-    .btn-submit:hover { background: #7a52f5; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102, 58, 243, 0.4); }
-
-    .checkbox-list {
-        display: grid; grid-template-columns: 1fr 1fr; gap: 12px; background: rgba(0,0,0,0.2); 
-        padding: 16px; border-radius: 8px; border: 1px solid var(--glass-border); max-height: 300px; overflow-y: auto;
-    }
-    html.light-mode .checkbox-list { background: rgba(255,255,255,0.6); }
+    .btn-submit:hover { background: #552ee6; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102, 58, 243, 0.3); }
     
-    .checkbox-item { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--color-moonlight); cursor: pointer; }
+    .btn-cancel, .btn-clear {
+        background: transparent; color: var(--color-fog); border: 1px solid var(--glass-border);
+        padding: 12px 20px; border-radius: 8px; font-weight: 500; font-size: 14px;
+        cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px; text-decoration: none;
+    }
+    .btn-cancel:hover { color: var(--color-moonlight); background: rgba(255,255,255,0.05); }
+    .btn-clear { border-style: dashed; }
+    .btn-clear:hover { color: var(--color-ember); border-color: var(--color-ember); background: rgba(228, 109, 76, 0.1); }
+    html.light-mode .btn-cancel:hover { background: rgba(0,0,0,0.05); color: var(--color-midnight-ink); }
+
+    /* Virtual Checkboxes for JSONB */
+    .checkbox-list { display: flex; flex-direction: column; gap: 10px; max-height: 200px; overflow-y: auto; padding: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); border-radius: 8px; }
+    html.light-mode .checkbox-list { background: rgba(255,255,255,0.5); }
+    .checkbox-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--color-moonlight); cursor: pointer; }
     .checkbox-item input { accent-color: var(--color-electric-iris); width: 16px; height: 16px; cursor: pointer; }
 </style>
 
@@ -124,19 +87,20 @@
         <span style="color: var(--color-moonlight);">{{ 'Edit' if is_update else 'New' }} Record</span>
     </div>
 
-    <!-- Restored Header Style -->
+    <!-- Header Swapped: Table Title is now the Main Header -->
     <div class="page-header">
         <div>
             <p class="eyebrow-text" style="font-family: var(--font-mono); color: var(--color-fog); font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">DATABASE TABLE</p>
-            <h1>{{ 'Edit Record' if is_update else 'New Record' }}</h1>
-            <p style="color: var(--color-fog); margin-top: 6px;">{{ table_title }}</p>
+            <h1>{{ table_title }}</h1>
+            <p style="color: var(--color-fog); margin-top: 6px;">{{ 'Edit Record' if is_update else 'New Record' }}</p>
         </div>
     </div>
 
     <div class="form-card">
+        <!-- Changed to multipart/form-data to securely stream File Uploads to Python -->
         <form id="recordForm" class="dynamic-form"
               hx-{% if is_update %}put="/api/{{ table_name }}/{{ pk_val }}"{% else %}post="/api/{{ table_name }}"{% endif %} 
-              hx-ext="json-enc"
+              hx-encoding="multipart/form-data"
               hx-swap="none">
               
             <div class="form-grid">
@@ -144,9 +108,10 @@
                     {% set is_who_col = col.column_name.lower().endswith('_created') or col.column_name.lower().endswith('_modified') or col.column_name.lower().endswith('_created_by') or col.column_name.lower().endswith('_modified_by') or col.column_name.lower() in ('creation_date', 'last_update_date', 'created_by', 'last_updated_by') %}
                     {% set is_company_col = col.column_name.lower() == 'company_id' or col.column_name.lower().endswith('_company_id') %}
                     {% set is_large_text = col.data_type in ('text', 'json', 'jsonb') or 'desc' in col.column_name.lower() or 'note' in col.column_name.lower() or 'message' in col.column_name.lower() or 'address' in col.column_name.lower() %}
+                    {% set is_file_col = 'image' in col.column_name.lower() or 'file' in col.column_name.lower() or 'document' in col.column_name.lower() or col.data_type == 'bytea' %}
 
                     {% if not is_who_col and not is_company_col %}
-                        <div class="form-group {% if is_large_text %}full-width{% endif %}">
+                        <div class="form-group {% if is_large_text or is_file_col %}full-width{% endif %}">
                             <label for="{{ col.column_name }}">
                                 <span>{{ col.label }} {% if col.required and not col.is_pk %}<span class="required-star">*</span>{% endif %}</span>
                                 {% if col.is_pk %}
@@ -168,41 +133,52 @@
                                     <label for="{{ col.column_name }}_ina" class="status-ina">Inactive</label>
                                 </div>
 
+                            {# FILE UPLOAD (Restricted Types) #}
+                            {% elif is_file_col %}
+                                <input type="file" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" multiple accept=".docx,.ppt,.pptx,.jpg,.jpeg,.png,.txt" style="padding: 9px 14px; background: rgba(0,0,0,0.1);" {% if col.required and not is_update %}required{% endif %}>
+                                <span style="font-size: 11px; color: var(--color-fog); margin-top: 4px;"><i data-lucide="shield-check" style="width: 12px; display: inline-block; vertical-align: -2px;"></i> Files will be validated and automatically compressed into a secure .ZIP archive.</span>
+
                             {# DROPDOWNS #}
                             {% elif col.options %}
-                                <select id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" {% if col.required %}required{% endif %}>
-                                    <option value="">-- Select Option --</option>
+                                <select id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" {% if col.required and not is_update %}required{% endif %}>
+                                    <option value="" disabled {% if not col.value %}selected{% endif %}>Select {{ col.label }}...</option>
                                     {% for opt in col.options %}
                                         <option value="{{ opt.id }}" {% if col.value|string == opt.id|string %}selected{% endif %}>{{ opt.name }}</option>
                                     {% endfor %}
                                 </select>
 
-                            {# DATES #}
-                            {% elif 'date' in col.data_type or 'timestamp' in col.data_type %}
-                                <input type="date" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" value="{{ (col.value|string)[:10] if col.value else '' }}" {% if col.required %}required{% endif %}>
-
-                            {# PASSWORDS #}
-                            {% elif 'pwd' in col.column_name.lower() or 'password' in col.column_name.lower() %}
-                                <input type="password" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" placeholder="••••••••" {% if not is_update %}required{% endif %}>
-
-                            {# LARGE TEXT AREAS / JSON #}
-                            {% elif is_large_text %}
-                                {% if col.column_name == 'pr_allowed_tables' or col.column_name == 'pu_assigned_roles' %}
-                                    <div class="checkbox-list">
-                                        {% for item in col.json_options %}
-                                            <label class="checkbox-item">
-                                                <input type="checkbox" name="{{ col.column_name }}[]" value="{{ item.id }}" {% if col.value and item.id in col.value %}checked{% endif %}>
-                                                {{ item.name }}
-                                            </label>
-                                        {% endfor %}
+                            {# VIRTUAL CHECKBOXES (For JSON arrays) #}
+                            {% elif col.json_options %}
+                                <div class="checkbox-list">
+                                    <div style="display: flex; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--glass-border);">
+                                        <button type="button" class="btn-cancel" style="padding: 4px 8px; font-size: 11px;" onclick="toggleCheckboxes('{{ col.column_name }}', true)">Select All</button>
+                                        <button type="button" class="btn-cancel" style="padding: 4px 8px; font-size: 11px;" onclick="toggleCheckboxes('{{ col.column_name }}', false)">Clear</button>
                                     </div>
-                                {% else %}
-                                    <textarea id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" placeholder="Enter details here..." {% if col.required %}required{% endif %}>{{ col.value or '' }}</textarea>
-                                {% endif %}
+                                    {% for opt in col.json_options %}
+                                        <label class="checkbox-item">
+                                            <input type="checkbox" data-group="{{ col.column_name }}" value="{{ opt.id }}" 
+                                                {% if col.value and opt.id in col.value %}checked{% endif %}>
+                                            {{ opt.name }}
+                                        </label>
+                                    {% endfor %}
+                                    <input type="hidden" id="{{ col.column_name }}" name="{{ col.column_name }}" value="{{ col.value | default('[]') | forceescape }}">
+                                </div>
 
-                            {# STANDARD TEXT #}
+                            {# DATES #}
+                            {% elif 'date' in col.data_type or 'timestamp' in col.data_type or 'date' in col.column_name.lower() %}
+                                <input type="date" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" 
+                                    value="{{ col.value[:10] if col.value and col.value|string|length >= 10 else col.value }}"
+                                    {% if col.required %}required{% endif %}>
+                            
+                            {# LARGE TEXT #}
+                            {% elif is_large_text %}
+                                <textarea id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" {% if col.required and not is_update %}required{% endif %}>{{ col.value or '' }}</textarea>
+
+                            {# STANDARD INPUT #}
                             {% else %}
-                                <input type="text" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" value="{{ col.value or '' }}" {% if col.required %}required{% endif %}>
+                                <input type="{% if col.data_type in ('integer', 'numeric', 'bigint', 'smallint') %}number{% elif col.column_name == 'pus_pwd' %}password{% else %}text{% endif %}" 
+                                       id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" 
+                                       value="{{ col.value or '' }}" {% if col.required and not is_update and col.column_name != 'pus_pwd' %}required{% endif %}>
                             {% endif %}
                         </div>
                     {% endif %}
@@ -210,133 +186,108 @@
             </div>
 
             <div class="form-actions">
-                <!-- Group 1: Cancel & Clear -->
-                <div style="display: flex; gap: 12px; align-items: center;">
-                    <!-- NATIVE JS CANCEL (Bypasses HTMX perfectly) -->
+                <div class="action-group">
+                    <!-- Native JS redirect guarantees Cancel always works -->
                     <button type="button" class="btn-cancel" onclick="window.location.href='/table/{{ table_name }}'">
-                        <i data-lucide="x" style="width: 16px;"></i> Cancel
+                        <i data-lucide="x"></i> Cancel
                     </button>
                     
-                    <!-- DRAFT CLEAR BUTTON (Only for New Records) -->
                     {% if not is_update %}
-                    <button type="button" class="btn-clear" onclick="clearDraft()">
-                        <i data-lucide="eraser" style="width: 16px;"></i> Clear Form
+                    <button type="button" class="btn-clear" onclick="clearFormDraft()">
+                        <i data-lucide="eraser"></i> Clear Form
                     </button>
                     {% endif %}
                 </div>
                 
-                <!-- Group 2: Delete & Save -->
-                <div style="display: flex; gap: 12px; align-items: center;">
-                    {% if is_update and not ('status' in pk_column.lower()) %}
-                    <button type="button" class="btn-cancel" style="color: var(--color-ember); border-color: rgba(228, 109, 76, 0.3);"
-                            hx-delete="/api/{{ table_name }}/{{ pk_val }}"
-                            hx-confirm="Are you sure you want to delete this record?">
-                        <i data-lucide="trash-2" style="width: 16px;"></i> Delete
-                    </button>
-                    {% endif %}
-                    <button type="submit" class="btn-submit">
-                        <i data-lucide="save" style="width: 18px;"></i> Save Record
-                    </button>
-                </div>
+                <button type="submit" class="btn-submit">
+                    <i data-lucide="save"></i> Save Record
+                </button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
-    document.addEventListener("DOMContentLoaded", () => {
-        lucide.createIcons();
+    lucide.createIcons();
 
-        // ----------------------------------------------------
-        // Auto-Prefill via URL for Master/Detail Lookups
-        // ----------------------------------------------------
-        const urlParams = new URLSearchParams(window.location.search);
-        urlParams.forEach((value, key) => {
-            const field = document.getElementById(key);
-            if (field && !field.value) {
-                field.value = value;
-                if(field.tagName === 'SELECT') {
-                    field.dispatchEvent(new Event('change'));
-                }
-            }
-        });
-
-        const form = document.getElementById('recordForm');
-        
-        // ----------------------------------------------------
-        // SESSION STORAGE DRAFT MANAGER
-        // ----------------------------------------------------
-        {% if not is_update %}
-        const draftKey = `draft_{{ table_name }}`;
-        const draftInputs = form.querySelectorAll('input:not([type="hidden"]):not([readonly]), select, textarea');
-        
-        // 1. Restore from Draft
-        const savedData = sessionStorage.getItem(draftKey);
-        if (savedData) {
-            const dataObj = JSON.parse(savedData);
-            draftInputs.forEach(el => {
-                if (dataObj[el.name] !== undefined) {
-                    if (el.type === 'radio' || el.type === 'checkbox') {
-                        el.checked = (dataObj[el.name] === el.value);
-                    } else if (!el.value || el.type !== 'date') { 
-                        // Only overwrite text/selects if empty. Don't overwrite the auto-date script
-                        el.value = dataObj[el.name];
+    // ----------------------------------------------------
+    // DRAFT AUTO-SAVE LOGIC (Only for New Records)
+    // ----------------------------------------------------
+    const form = document.getElementById('recordForm');
+    
+    {% if not is_update %}
+    const draftKey = `draft_{{ table_name }}`;
+    const draftInputs = form.querySelectorAll('input:not([type="hidden"]):not([readonly]):not([type="file"]), select, textarea');
+    
+    // 1. Restore from Draft
+    const savedDraft = sessionStorage.getItem(draftKey);
+    if (savedDraft) {
+        try {
+            const data = JSON.parse(savedDraft);
+            draftInputs.forEach(input => {
+                if (data[input.name] !== undefined) {
+                    if (input.type === 'radio' || input.type === 'checkbox') {
+                        input.checked = data[input.name] === input.value;
+                    } else {
+                        input.value = data[input.name];
                     }
                 }
             });
-        }
+        } catch(e) { console.error("Draft restore failed", e); }
+    }
 
-        // 2. Save Draft on Typing
-        form.addEventListener('input', () => {
-            const dataObj = {};
-            draftInputs.forEach(el => {
-                if (el.type === 'radio' || el.type === 'checkbox') {
-                    if (el.checked) dataObj[el.name] = el.value;
-                } else {
-                    dataObj[el.name] = el.value;
-                }
-            });
-            sessionStorage.setItem(draftKey, JSON.stringify(dataObj));
-        });
-
-        // 3. Clear Draft Function
-        window.clearDraft = function() {
-            sessionStorage.removeItem(draftKey);
-            window.location.reload(); // Quickest way to completely reset fields and auto-dates
-        };
-
-        // 4. Wipe Draft on Successful Form Submission
-        form.addEventListener('htmx:afterRequest', function(evt) {
-            if(evt.detail.successful) {
-                sessionStorage.removeItem(draftKey);
+    // 2. Save Draft on Input
+    const saveDraft = () => {
+        const data = {};
+        draftInputs.forEach(input => {
+            if (input.type === 'radio' || input.type === 'checkbox') {
+                if(input.checked) data[input.name] = input.value;
+            } else {
+                data[input.name] = input.value;
             }
         });
-        {% endif %}
+        sessionStorage.setItem(draftKey, JSON.stringify(data));
+    };
 
-        // ----------------------------------------------------
-        // Virtual Checkbox Array Handling (For JSONB columns)
-        // ----------------------------------------------------
-        form.addEventListener('submit', function(e) {
-            const arrayInputs = form.querySelectorAll('input[type="checkbox"][name$="[]"]');
-            const arrayData = {};
-            
-            arrayInputs.forEach(input => {
-                const cleanName = input.name.replace('[]', '');
-                if (!arrayData[cleanName]) arrayData[cleanName] = [];
-                if (input.checked) arrayData[cleanName].push(input.value);
-            });
-            
-            for (const [name, arr] of Object.entries(arrayData)) {
-                let hidden = form.querySelector(`input[type="hidden"][name="${name}"]`);
-                if (!hidden) {
-                    hidden = document.createElement('input');
-                    hidden.type = 'hidden';
-                    hidden.name = name;
-                    form.appendChild(hidden);
-                }
-                hidden.value = JSON.stringify(arr);
+    form.addEventListener('input', saveDraft);
+    form.addEventListener('change', saveDraft);
+
+    // 3. Clear Draft Function
+    window.clearFormDraft = function() {
+        sessionStorage.removeItem(draftKey);
+        form.reset();
+        // Reset custom radio states to default (Active usually)
+        const actRadios = form.querySelectorAll('input[type="radio"][value="ACT"]');
+        actRadios.forEach(r => r.checked = true);
+        window.showToast("Form draft cleared.", "success");
+    };
+
+    // 4. Wipe Draft on Successful Form Submission
+    form.addEventListener('htmx:afterRequest', function(evt) {
+        if(evt.detail.successful) {
+            sessionStorage.removeItem(draftKey);
+        }
+    });
+    {% endif %}
+
+    // ----------------------------------------------------
+    // Virtual Checkbox Array Handling (For JSONB columns)
+    // ----------------------------------------------------
+    form.addEventListener('submit', function(e) {
+        const hiddenInputs = form.querySelectorAll('input[type="hidden"]');
+        hiddenInputs.forEach(hidden => {
+            const groupName = hidden.name;
+            const checkboxes = form.querySelectorAll(`input[type="checkbox"][data-group="${groupName}"]`);
+            if (checkboxes.length > 0) {
+                const selected = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+                hidden.value = JSON.stringify(selected);
             }
         });
     });
+
+    window.toggleCheckboxes = function(group, state) {
+        const checkboxes = document.querySelectorAll(`input[type="checkbox"][data-group="${group}"]`);
+        checkboxes.forEach(cb => cb.checked = state);
+    };
 </script>
 {% endblock %}
