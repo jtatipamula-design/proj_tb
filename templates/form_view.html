@@ -167,7 +167,7 @@
                             {# DATES #}
                             {% elif 'date' in col.data_type or 'timestamp' in col.data_type or 'date' in col.column_name.lower() %}
                                 <input type="date" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" 
-                                    value="{{ col.value[:10] if col.value and col.value|string|length >= 10 else col.value }}"
+                                    value="{{ (col.value|string)[:10] if col.value else '' }}"
                                     {% if col.required %}required{% endif %}>
                             
                             {# LARGE TEXT #}
