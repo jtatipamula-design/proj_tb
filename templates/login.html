@@ -18,25 +18,26 @@
 
     <style>
         :root {
-            --color-midnight-ink: #05060f;
-            --color-graphite-plate: #2f343e;
+            /* De-AI-ified Palette: Transitioned from Neon Purples to Enterprise Slate & Azure */
+            --color-midnight-ink: #0f172a; 
+            --color-graphite-plate: #1e293b;
             --color-steel-border: rgba(255, 255, 255, 0.1);
-            --color-fog: #81899b;
-            --color-pebble: #9da7ba;
-            --color-moonlight: #c7d3ea;
-            --color-glacier: #d8ecf8;
-            --color-frost-link: #b6d9fc;
-            --color-electric-iris: #663af3;
-            --color-ember: #e46d4c;
-            --color-cipher-mint: #269684;
-            --glass-surface: rgba(10, 15, 30, 0.6);
+            --color-fog: #94a3b8;
+            --color-pebble: #64748b;
+            --color-moonlight: #e2e8f0;
+            --color-glacier: #f8fafc;
+            --color-frost-link: #3b82f6; 
+            --color-electric-iris: #2563eb; /* Trustworthy Enterprise Blue */
+            --color-ember: #ef4444;
+            --color-cipher-mint: #10b981;
+            --glass-surface: rgba(15, 23, 42, 0.6);
             --glass-border: rgba(255, 255, 255, 0.1);
 
             --font-ui: 'Inter', ui-sans-serif, system-ui, sans-serif;
         }
 
         html.light-mode {
-            --color-midnight-ink: #f8fafc;
+            --color-midnight-ink: #f1f5f9;
             --color-graphite-plate: #ffffff;
             --color-steel-border: #e2e8f0;
             --color-fog: #64748b;
@@ -177,7 +178,17 @@
             overflow: hidden;
         }
         .login-button:hover:not(.is-loading):not(.is-success) { 
-            background: #7a52f5; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(102, 58, 243, 0.4); 
+            background: #1d4ed8; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3); 
+        }
+
+        /* HeroUI Custom Spinner */
+        .heroui-spinner {
+            width: 22px; height: 22px;
+            animation: hero-spin 0.8s linear infinite;
+        }
+        @keyframes hero-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
 
         /* Inner Button Layers */
@@ -251,7 +262,13 @@
 
                 <button type="submit" class="login-button" id="loginBtn">
                     <div class="btn-text">Sign In</div>
-                    <div class="btn-spinner"><i data-lucide="loader-2" class="lucide-spin" style="width: 20px;"></i></div>
+                    <div class="btn-spinner">
+                        <!-- HeroUI Spinner Implementation -->
+                        <svg class="heroui-spinner" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25" stroke-width="3"></circle>
+                            <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"></path>
+                        </svg>
+                    </div>
                     <div class="btn-success"><i data-lucide="check" style="width: 20px;"></i> Authenticated</div>
                 </button>
                 
@@ -377,10 +394,10 @@
         function animateGrid() {
             ctx.clearRect(0, 0, W, H);
             
-            // Dynamic Theme Colors
+            // Dynamic Theme Colors (Updated for Enterprise Blue/Slate)
             const isLight = document.documentElement.classList.contains('light-mode');
-            const dotColor = isLight ? "rgba(0, 0, 0, 0.4)" : "rgba(255, 255, 255, 0.4)";
-            const lineColor = isLight ? "rgba(102, 58, 243, 0.8)" : "rgba(182, 217, 252, 0.8)";
+            const dotColor = isLight ? "rgba(15, 23, 42, 0.15)" : "rgba(248, 250, 252, 0.15)";
+            const lineColor = isLight ? "rgba(37, 99, 235, 0.3)" : "rgba(59, 130, 246, 0.3)";
 
             // Physics Update
             for (const d of dots) {
