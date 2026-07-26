@@ -76,29 +76,33 @@ def sort_columns(col_names, pk_column):
 def get_table_modules(all_tables):
     """Maps purely PHC tables to UI sidebar modules."""
     mapping = {
-        # Enterprise Structure (New Module)
+        # Enterprise Structure
         'phc_companies_t': 'Enterprise', 'phc_cost_center_t': 'Enterprise', 
-        'phc_dept_t': 'Enterprise', 'phc_emp_t': 'Enterprise',
+        'phc_dept_t': 'Enterprise', 'phc_emp_t': 'Enterprise', 
+        'phc_operating_orgs_t': 'Enterprise', 'phc_services_t': 'Enterprise',
+        'phc_partners_t': 'Enterprise', 'phc_locations_t': 'Enterprise',
         
         # Master Data
-        'phc_plant_master': 'MasterData', 'phc_plant_compliance': 'MasterData', 
-        'phc_certifications': 'MasterData', 'phc_plant_equipment': 'MasterData', 
-        'phc_equipment_locations': 'MasterData', 'phc_material_group_master': 'MasterData', 
-        'phc_material_master': 'MasterData', 'phc_uom_master': 'MasterData', 
-        'phc_uom_conversion': 'MasterData', 'phc_lookup_types': 'MasterData', 
-        'phc_lookup_values_t': 'MasterData',
+        'phc_plant_master_t': 'MasterData', 'phc_plant_compliance_t': 'MasterData', 
+        'phc_certifications_t': 'MasterData', 'phc_plant_equipment_t': 'MasterData', 
+        'phc_equipment_locations_t': 'MasterData', 'phc_material_group_master_t': 'MasterData', 
+        'phc_material_master_t': 'MasterData', 'phc_uom_master_t': 'MasterData', 
+        'phc_uom_conversion_t': 'MasterData', 'phc_storage_location_master_t': 'MasterData',
+        'phc_lookup_types': 'MasterData', 'phc_lookup_values_t': 'MasterData',
         
-        # Product Master (New Module)
-        'phc_prod_master': 'Product', 'phc_prod_lifecycle_history': 'Product', 'phc_prod_alt_names': 'Product',
+        # Product Master
+        'phc_prod_master_t': 'Product', 'phc_prod_lifecycle_history_t': 'Product', 'phc_prod_alt_names_t': 'Product',
         
-        # Approvals (New Module)
+        # Approvals
         'phc_approval_types_t': 'Approvals', 'phc_approval_setup_t': 'Approvals', 
         'phc_notifications_setup_t': 'Approvals', 'phc_approval_events_t': 'Approvals',
         
         # App Setup
         'phc_users_t': 'AppSetup', 'phc_roles_t': 'AppSetup', 'phc_apps_t': 'AppSetup',
         'phc_screens_t': 'AppSetup', 'phc_role_screen_assignment_t': 'AppSetup',
-        'phc_user_roles_assignment_t': 'AppSetup', 'phc_menu_folders_t': 'AppSetup'
+        'phc_user_roles_assignment_t': 'AppSetup', 'phc_user_app_roles_assignment_t': 'AppSetup', 
+        'phc_user_group_t': 'AppSetup', 'phc_emp_apps_grant_t': 'AppSetup', 
+        'phc_error_log_t': 'AppSetup', 'phc_user_log_t': 'AppSetup'
     }
 
     # DYNAMIC RULE: Fallbacks in case new PHC tables are created later
@@ -137,7 +141,7 @@ async def get_authorized_tables(conn, user_id, user_role):
               AND s.psn_status = 'ACT'
         """, user_id)
         
-    return [r['tablename'] for r in records if r['tablename'].startswith('phc_')]
+    return [r['tablename'] for r in records]
 
 async def get_global_fk_map(conn):
     """
@@ -314,9 +318,8 @@ async def handle_login(request):
                 }, os.getenv("SECRET_KEY", "fallback_secret"), algorithm="HS256")
                 
                 res = response.json({"status": "success", "message": "Login successful"})
-                res.cookies["auth_token"] = token
-                res.cookies["auth_token"]["httponly"] = True
-                res.cookies["auth_token"]["samesite"] = "Lax"
+                # Fix Sanic Deprecation Warning: Use the modern add_cookie method
+                res.cookies.add_cookie("auth_token", token, httponly=True, samesite="Lax")
                 return res
         
         return response.json({"status": "error", "message": "Invalid credentials"}, status=401)
