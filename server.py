@@ -28,14 +28,16 @@ env = Environment(loader=FileSystemLoader('./templates'))
 SCHEMA_CACHE = {}
 
 def clean_label(col_name):
-    """Removes short prefixes (like pus_) and converts to Title Case"""
+    """Aggressively removes short prefixes (like pus_, pmd_) and converts to Title Case"""
     parts = col_name.split('_')
     if len(parts) > 1 and len(parts[0]) <= 4:
         parts = parts[1:]
-    return ' '.join(parts).title().replace(' Id', ' ID').replace(' Uom', ' UOM')
+    
+    label = ' '.join(parts).title()
+    return label.replace(' Id', ' ID').replace(' Uom', ' UOM').replace(' Nos', ' NOS')
 
 def clean_table_name(t_name):
-    """Removes short prefixes (like phc_) and table suffixes (_t)"""
+    """Strips the _t suffix and any short table prefixes (like phc_)"""
     clean = t_name.replace('_t', '')
     parts = clean.split('_')
     if len(parts) > 1 and len(parts[0]) <= 4:
@@ -43,16 +45,32 @@ def clean_table_name(t_name):
     return ' '.join(parts).title()
 
 def sort_columns(col_names, pk_column):
-    """Sorts columns: PK first, normal columns, audit columns last"""
+    """Sorts columns: PK first, normal columns in original DB order, audit columns last"""
     audit_keywords = ['created', 'modified', 'creation_date', 'last_update_date', 'updated_by', 'created_by', 'status']
     
-    def weight(c):
-        cl = c.lower()
-        if c == pk_column: return 0
-        if any(k in cl for k in audit_keywords): return 2
-        return 1
+    sorted_cols = []
+    
+    # 1. Primary Key always first
+    if pk_column in col_names:
+        sorted_cols.append(pk_column)
         
-    return sorted(col_names, key=lambda c: (weight(c), c))
+    # 2. Standard columns (preserve exact original database order)
+    for c in col_names:
+        if c == pk_column: continue
+        cl = c.lower()
+        # If it is NOT an audit field, append it
+        if not any(k in cl for k in audit_keywords):
+            sorted_cols.append(c)
+            
+    # 3. Audit columns pinned to the end
+    for c in col_names:
+        if c == pk_column: continue
+        cl = c.lower()
+        # If it IS an audit field, append it last
+        if any(k in cl for k in audit_keywords):
+            sorted_cols.append(c)
+            
+    return sorted_cols
 
 def get_table_modules():
     return {
@@ -109,8 +127,7 @@ def get_table_modules():
         'phc_screens_t': 'AppSetup', 'phc_companies_t': 'AppSetup', 'phc_role_screen_assignment_t': 'AppSetup',
         'phc_user_roles_assignment_t': 'AppSetup', 'phc_menu_folders_t': 'AppSetup',
         'phc_approval_types_t': 'AppSetup', 'phc_approval_setup_t': 'AppSetup',
-        'phc_notifications_setup_t': 'AppSetup', 'phc_approval_events_t': 'AppSetup',
-        'phc_lov_types_t': 'AppSetup', 'phc_lov_values_t': 'AppSetup', 'phc_column_lov_map_t': 'AppSetup'
+        'phc_notifications_setup_t': 'AppSetup', 'phc_approval_events_t': 'AppSetup'
     }
 
 @app.before_server_start
@@ -269,6 +286,7 @@ async def show_table(request, table_name):
             """, table_name)
             pk_column = pk_record['column_name'] if pk_record else raw_col_names[0]
             
+            # Apply the smart column sorting logic
             col_names = sort_columns(raw_col_names, pk_column)
             
             where_clause = ""
@@ -297,6 +315,7 @@ async def show_table(request, table_name):
             data_query = f"SELECT * FROM {table_name} {where_clause} ORDER BY {pk_column} DESC LIMIT {per_page} OFFSET {offset}"
             rows = await conn.fetch(data_query, *params)
             
+            # Strip prefixes from columns dynamically
             columns = [{"raw": c, "label": clean_label(c)} for c in col_names if c != 'company_id']
             
             lookup_categories = []
@@ -347,6 +366,8 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         pk_column = pk_record['column_name'] if pk_record else cols[0]['column_name']
         
         raw_col_names = [c['column_name'] for c in cols]
+        
+        # Apply strict logical sorting
         sorted_col_names = sort_columns(raw_col_names, pk_column)
         col_info = {c['column_name']: c for c in cols}
         
@@ -364,16 +385,16 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
             is_pk = (cname == pk_column)
             val = row[cname] if row else request.args.get(cname, '')
             
-            # Pre-fill date fields on new records
+            # PERFECT DATE PRE-FILL LOGIC: Fills ALL date fields with today's date on New Records
             if not is_update and not val:
                 if 'date' in c['data_type'].lower() or 'timestamp' in c['data_type'].lower():
-                    if 'start' in cname.lower() or 'creation' in cname.lower() or 'date' in cname.lower():
-                        val = datetime.now().strftime('%Y-%m-%d')
+                    val = datetime.now().strftime('%Y-%m-%d')
             
             options = []
             if cname == 'status' or cname.endswith('_status'):
                 options = [{'id': 'ACT', 'name': 'Active'}, {'id': 'INA', 'name': 'Inactive'}]
             elif 'lookup_type_code' in cname.lower():
+                # DYNAMIC LOOKUP: Displays Name but saves Code
                 try:
                     types = await conn.fetch("SELECT plt_lookup_type_code, plt_lookup_type FROM phc_lookup_types")
                     options = [{'id': t['plt_lookup_type_code'], 'name': f"{t['plt_lookup_type']} ({t['plt_lookup_type_code']})"} for t in types]
@@ -395,7 +416,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
 
             columns_data.append({
                 "column_name": cname,
-                "label": clean_label(cname),
+                "label": clean_label(cname), # Applies aggressive prefix stripping
                 "data_type": c['data_type'],
                 "required": c['is_nullable'] == 'NO',
                 "is_pk": is_pk,
@@ -409,7 +430,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         
         return response.html(template.render(
             table_name=table_name,
-            table_title=clean_table_name(table_name),
+            table_title=clean_table_name(table_name), # Strips the table prefix
             columns=columns_data,
             pk_column=pk_column,
             is_update=is_update,
@@ -430,7 +451,7 @@ async def show_add_form(request, table_name):
 async def show_edit_form(request, table_name, pk_val):
     return await render_form(request, table_name, is_update=True, pk_val=pk_val)
 
-@app.route('/api/<table_name>', methods=['POST'])
+@app.route('/api/<table_name>', methods=['POST'], name="post_save_data")
 @app.route('/api/<table_name>/<pk_val>', methods=['PUT'], name="put_save_data")
 @check_auth
 async def save_data(request, table_name, pk_val=None):
