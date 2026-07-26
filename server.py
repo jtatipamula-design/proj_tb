@@ -3,6 +3,8 @@ import math
 import json
 import uuid
 import logging
+import zipfile
+import io
 from datetime import datetime
 from functools import wraps
 
@@ -45,35 +47,47 @@ def clean_table_name(t_name):
     return ' '.join(parts).title()
 
 def sort_columns(col_names, pk_column):
-    """Sorts columns: PK first, normal columns in original DB order, audit columns last"""
-    audit_keywords = ['created', 'modified', 'creation_date', 'last_update_date', 'updated_by', 'created_by', 'status']
+    """Sorts columns: PK -> Status -> Start Date -> End Date -> Normal -> Audit"""
+    audit_keywords = ['created', 'modified', 'creation_date', 'last_update_date', 'updated_by', 'created_by']
     
     sorted_cols = []
     
-    # 1. Primary Key always first
+    # 1. Primary Key
     if pk_column in col_names:
         sorted_cols.append(pk_column)
         
-    # 2. Standard columns (preserve exact original database order)
+    # 2. Status
+    status_cols = [c for c in col_names if 'status' in c.lower() and c != pk_column]
+    sorted_cols.extend(status_cols)
+        
+    # 3. Start Date
+    start_date_cols = [c for c in col_names if 'start_date' in c.lower() and c != pk_column and c not in status_cols]
+    sorted_cols.extend(start_date_cols)
+        
+    # 4. End Date
+    end_date_cols = [c for c in col_names if 'end_date' in c.lower() and c != pk_column and c not in status_cols and c not in start_date_cols]
+    sorted_cols.extend(end_date_cols)
+        
+    # 5. Standard Columns (Preserve exact original database order)
+    pinned_so_far = [pk_column] + status_cols + start_date_cols + end_date_cols
     for c in col_names:
-        if c == pk_column: continue
+        if c in pinned_so_far: continue
         cl = c.lower()
-        # If it is NOT an audit field, append it
         if not any(k in cl for k in audit_keywords):
             sorted_cols.append(c)
             
-    # 3. Audit columns pinned to the end
+    # 6. Audit Columns (Pinned to the very end)
     for c in col_names:
-        if c == pk_column: continue
+        if c in pinned_so_far: continue
         cl = c.lower()
-        # If it IS an audit field, append it last
         if any(k in cl for k in audit_keywords):
             sorted_cols.append(c)
             
     return sorted_cols
 
-def get_table_modules():
-    return {
+def get_table_modules(all_tables):
+    """Maps tables to UI sidebar modules. Dynamically groups any 'master' tables."""
+    mapping = {
         # General Ledger
         'pgl_batches_t': 'Ledger', 'pgl_headers_t': 'Ledger', 'pgl_lines_t': 'Ledger',
         'pgl_sources_t': 'Ledger', 'pgl_daily_rates_t': 'Ledger', 'pgl_balances_t': 'Ledger',
@@ -103,15 +117,14 @@ def get_table_modules():
         
         # Inventory
         'mtl_system_items_t': 'Product', 'mtl_item_locations_t': 'Product',
-        'phc_material_group_master': 'Product', 'phc_material_master': 'Product',
-        'phc_prod_master': 'Product', 'phc_prod_lifecycle_history': 'Product', 'phc_prod_alt_names': 'Product',
+        'phc_prod_lifecycle_history': 'Product', 'phc_prod_alt_names': 'Product',
         
         # Master Data
         'pmd_parties_t': 'MasterData', 'pmd_accounts_t': 'MasterData', 'pmd_acct_sites_t': 'MasterData',
         'pmd_locations_t': 'MasterData', 'pmd_person_profiles_t': 'MasterData',
-        'phc_plant_master': 'MasterData', 'phc_plant_compliance': 'MasterData', 'phc_certifications': 'MasterData',
+        'phc_plant_compliance': 'MasterData', 'phc_certifications': 'MasterData',
         'phc_plant_equipment': 'MasterData', 'phc_equipment_locations': 'MasterData',
-        'phc_uom_master': 'MasterData', 'phc_uom_conversion': 'MasterData',
+        'phc_uom_conversion': 'MasterData',
         'phc_lookup_types': 'MasterData', 'phc_lookup_values_t': 'MasterData',
         
         # Employees
@@ -130,6 +143,13 @@ def get_table_modules():
         'phc_notifications_setup_t': 'AppSetup', 'phc_approval_events_t': 'AppSetup'
     }
 
+    # DYNAMIC RULE: Any table with 'master' in its name goes to MasterData
+    for tbl in all_tables:
+        if 'master' in tbl.lower():
+            mapping[tbl] = 'MasterData'
+            
+    return mapping
+
 @app.before_server_start
 async def setup_db(app, loop):
     db_url = os.getenv("DATABASE_URL")
@@ -137,8 +157,6 @@ async def setup_db(app, loop):
         print("\n" + "="*50)
         print("🚀 SERVER PRE-FLIGHT CHECK 🚀")
         print("❌ ERROR: DATABASE_URL is MISSING or EMPTY!")
-        print("❌ Render is completely blind to your database variable.")
-        print("❌ Action: Check Render Dashboard -> Environment Variables.")
         print("="*50 + "\n")
         return
         
@@ -205,9 +223,11 @@ async def handle_login(request):
             is_valid = False
             
             try:
+                # 1. Try standard bcrypt comparison 
                 if bcrypt.checkpw(password.encode('utf-8'), stored_pwd.encode('utf-8')):
                     is_valid = True
             except ValueError:
+                # 2. CATCH THE "INVALID SALT" ERROR! (Checks plain-text passwords)
                 if password == stored_pwd:
                     is_valid = True
                     
@@ -254,7 +274,7 @@ async def dashboard(request):
         user_id=request.ctx.session.get('user_id'),
         stats=stats,
         all_tables=all_tables,
-        table_modules=get_table_modules(),
+        table_modules=get_table_modules(all_tables),
         table_name=None
     ))
 
@@ -344,7 +364,7 @@ async def show_table(request, table_name):
                 lookup_categories=lookup_categories,
                 type_filter=type_filter,
                 all_tables=all_tables,
-                table_modules=get_table_modules(),
+                table_modules=get_table_modules(all_tables),
                 username=request.ctx.session.get('username'),
                 user_id=request.ctx.session.get('user_id')
             ))
@@ -385,9 +405,9 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
             is_pk = (cname == pk_column)
             val = row[cname] if row else request.args.get(cname, '')
             
-            # PERFECT DATE PRE-FILL LOGIC: Fills ALL date fields with today's date on New Records
+            # PERFECT DATE PRE-FILL LOGIC: Fills ONLY start dates with today's date on New Records
             if not is_update and not val:
-                if 'date' in c['data_type'].lower() or 'timestamp' in c['data_type'].lower():
+                if 'start_date' in cname.lower():
                     val = datetime.now().strftime('%Y-%m-%d')
             
             options = []
@@ -436,7 +456,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
             is_update=is_update,
             pk_val=pk_val,
             all_tables=all_tables,
-            table_modules=get_table_modules(),
+            table_modules=get_table_modules(all_tables),
             username=request.ctx.session.get('username'),
             user_id=request.ctx.session.get('user_id')
         ))
@@ -455,8 +475,32 @@ async def show_edit_form(request, table_name, pk_val):
 @app.route('/api/<table_name>/<pk_val>', methods=['PUT'], name="put_save_data")
 @check_auth
 async def save_data(request, table_name, pk_val=None):
-    data = request.json
     is_update = request.method == 'PUT'
+    
+    # Form data mapping (since we switched to multipart/form-data for file uploads)
+    data = {}
+    if request.form:
+        for k in request.form.keys():
+            data[k] = request.form.get(k)
+    elif request.json:
+        data = request.json
+
+    # Secure File Upload & ZIP Engine
+    ALLOWED_EXTENSIONS = {'.docx', '.ppt', '.pptx', '.jpg', '.jpeg', '.png', '.txt'}
+    if request.files:
+        for field_name, files in request.files.items():
+            if files:
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, 'a', zipfile.ZIP_DEFLATED, False) as zip_file:
+                    for file in files:
+                        ext = os.path.splitext(file.name)[1].lower()
+                        if ext not in ALLOWED_EXTENSIONS:
+                            return response.json({"error": f"Security Block: Unsupported file type ({ext})"}, status=400)
+                        # Add safe file to zip
+                        zip_file.writestr(file.name, file.body)
+                
+                # Save raw ZIP binary to database (for bytea columns)
+                data[field_name] = zip_buffer.getvalue()
     
     async with app.ctx.db.acquire() as conn:
         cols = await conn.fetch("SELECT column_name, data_type, character_maximum_length FROM information_schema.columns WHERE table_name = $1", table_name)
