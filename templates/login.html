@@ -6,7 +6,7 @@
     <title>Nexus ERP - Login</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <script>
@@ -18,42 +18,48 @@
 
     <style>
         :root {
-            /* De-AI-ified Palette: Transitioned from Neon Purples to Enterprise Slate & Azure */
-            --color-midnight-ink: #0f172a; 
-            --color-graphite-plate: #1e293b;
-            --color-steel-border: rgba(255, 255, 255, 0.1);
-            --color-fog: #94a3b8;
-            --color-pebble: #64748b;
-            --color-moonlight: #e2e8f0;
-            --color-glacier: #f8fafc;
-            --color-frost-link: #3b82f6; 
-            --color-electric-iris: #2563eb; /* Trustworthy Enterprise Blue */
-            --color-ember: #ef4444;
-            --color-cipher-mint: #10b981;
-            --glass-surface: rgba(15, 23, 42, 0.6);
-            --glass-border: rgba(255, 255, 255, 0.1);
+            /* Minimalist Enterprise SaaS Theme */
+            --color-obsidian-canvas: #101010;
+            --color-carbon-lift: #1d1a18;
+            --color-ash-stroke: #3d3a39;
+            --color-graphite-mid: #4d4947;
+            --color-warm-granite: #8a8380;
+            --color-pale-stone: #b8b3b0;
+            --color-bone: #eeeeee;
+            --color-chalk: #fafafa;
+            --color-signal-orange: #ee6018;
+            --color-metric-green: #a0ca92;
 
-            --font-ui: 'Inter', ui-sans-serif, system-ui, sans-serif;
+            /* Typography */
+            --font-geist: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+            /* Typography — Scale */
+            --text-heading: 32px;
+            --leading-heading: 1.1;
+            --tracking-heading: -1.12px;
+
+            /* Border Radius */
+            --radius-cards: 10px;
+            --radius-buttons: 3px;
         }
 
         html.light-mode {
-            --color-midnight-ink: #f1f5f9;
-            --color-graphite-plate: #ffffff;
-            --color-steel-border: #e2e8f0;
-            --color-fog: #64748b;
-            --color-pebble: #475569;
-            --color-moonlight: #334155;
-            --color-glacier: #0f172a;
-            --glass-surface: rgba(255, 255, 255, 0.8);
-            --glass-border: rgba(0, 0, 0, 0.1);
+            --color-obsidian-canvas: #fafafa;
+            --color-carbon-lift: #eeeeee;
+            --color-ash-stroke: #b8b3b0;
+            --color-graphite-mid: #8a8380;
+            --color-warm-granite: #4d4947;
+            --color-pale-stone: #3d3a39;
+            --color-bone: #1d1a18;
+            --color-chalk: #101010;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: var(--font-ui);
-            background-color: var(--color-midnight-ink);
-            color: var(--color-moonlight);
+            font-family: var(--font-geist);
+            background-color: var(--color-obsidian-canvas);
+            color: var(--color-bone);
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
             min-height: 100vh; overflow: hidden; position: relative;
@@ -63,46 +69,38 @@
         /* Kinetic Grid Canvas Background */
         #kinetic-canvas {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            z-index: 0; pointer-events: none; /* Let the window catch the mouse */
+            z-index: 0; pointer-events: none;
         }
 
         /* Theme Toggle Button */
         .theme-toggle {
             position: absolute; top: 24px; right: 24px; z-index: 20;
-            background: var(--glass-surface); border: 1px solid var(--glass-border);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            border-radius: 50%; width: 44px; height: 44px;
+            background: var(--color-carbon-lift); border: 1px solid var(--color-ash-stroke);
+            border-radius: var(--radius-buttons); width: 44px; height: 44px;
             display: flex; align-items: center; justify-content: center;
-            cursor: pointer; color: var(--color-fog); transition: all 0.2s ease;
+            cursor: pointer; color: var(--color-warm-granite); transition: all 0.2s ease;
         }
-        .theme-toggle:hover { color: var(--color-glacier); transform: scale(1.05); }
-        html.light-mode .theme-toggle:hover { color: var(--color-midnight-ink); }
+        .theme-toggle:hover { color: var(--color-bone); transform: scale(1.05); border-color: var(--color-graphite-mid); }
 
         /* ========================================= */
         /* LOGIN CARD STYLING                        */
         /* ========================================= */
         .login-card {
             position: relative;
-            width: 100%; max-width: 420px;
-            border-radius: 16px;
+            width: 100%; max-width: 400px;
+            border-radius: var(--radius-cards);
             box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5);
             animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
             z-index: 10;
-            border: 1px solid var(--glass-border);
+            background: var(--color-carbon-lift);
+            border: 1px solid var(--color-ash-stroke);
         }
 
         .login-card-inner {
-            background: rgba(10, 15, 30, 0.85);
-            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-            border-radius: 16px; 
             padding: 40px;
             position: relative;
             z-index: 1;
             height: 100%;
-            transition: background 0.3s;
-        }
-        html.light-mode .login-card-inner {
-            background: rgba(255, 255, 255, 0.9);
         }
 
         @keyframes slideUp {
@@ -111,74 +109,65 @@
         }
 
         .login-header { text-align: center; margin-bottom: 32px; }
-        .login-header h1 { font-size: 32px; font-weight: 600; color: var(--color-glacier); margin-bottom: 8px; letter-spacing: -0.02em; }
-        html.light-mode .login-header h1 { color: var(--color-midnight-ink); }
-        .login-header p { color: var(--color-pebble); font-size: 15px; }
+        .login-header h1 { 
+            font-size: var(--text-heading); 
+            line-height: var(--leading-heading);
+            letter-spacing: var(--tracking-heading);
+            font-weight: 500; color: var(--color-bone); margin-bottom: 8px; 
+        }
+        .login-header p { color: var(--color-warm-granite); font-size: 14px; }
 
-        /* Form Inputs & Floating Labels (React active state logic) */
+        /* Form Inputs & Floating Labels */
         .form-field { position: relative; margin-bottom: 24px; }
         .form-field label {
             position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
-            font-size: 15px; color: var(--color-fog); pointer-events: none;
+            font-size: 15px; color: var(--color-warm-granite); pointer-events: none;
             transition: all 0.2s ease; background: transparent; padding: 0 4px;
         }
         
         .form-field.active label {
             top: 0; transform: translateY(-50%) scale(0.85);
-            color: var(--color-frost-link); background: var(--color-midnight-ink);
-            border-radius: 4px;
-        }
-        html.light-mode .form-field.active label {
-            background: var(--color-graphite-plate); color: var(--color-electric-iris);
+            color: var(--color-bone); background: var(--color-obsidian-canvas);
+            border-radius: 2px;
         }
 
         .form-field input {
-            width: 100%; padding: 14px 14px; border: 1px solid var(--glass-border);
-            border-radius: 8px; font-size: 15px; font-family: var(--font-ui);
-            background-color: rgba(0,0,0,0.2); color: var(--color-glacier);
+            width: 100%; padding: 14px 14px; border: 1px solid var(--color-ash-stroke);
+            border-radius: var(--radius-buttons); font-size: 15px; font-family: var(--font-geist);
+            background-color: var(--color-obsidian-canvas); color: var(--color-bone);
             transition: all 0.2s; outline: none;
         }
-        html.light-mode .form-field input {
-            background-color: rgba(255,255,255,0.6); color: var(--color-midnight-ink);
-        }
         .form-field.active input {
-            border-color: var(--color-frost-link);
-            background-color: rgba(0,0,0,0.4);
-            box-shadow: 0 0 0 1px var(--color-frost-link);
-        }
-        html.light-mode .form-field.active input {
-            border-color: var(--color-electric-iris); background-color: #fff;
-            box-shadow: 0 0 0 1px var(--color-electric-iris);
+            border-color: var(--color-pale-stone);
         }
 
         .toggle-password {
             position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
-            background: transparent; border: none; color: var(--color-fog);
+            background: transparent; border: none; color: var(--color-warm-granite);
             cursor: pointer; display: flex; align-items: center; justify-content: center;
             transition: color 0.2s; padding: 4px;
         }
-        .toggle-password:hover { color: var(--color-glacier); }
-        html.light-mode .toggle-password:hover { color: var(--color-midnight-ink); }
+        .toggle-password:hover { color: var(--color-bone); }
 
         .form-options {
             display: flex; justify-content: flex-start; align-items: center;
-            margin-bottom: 28px; font-size: 13px; color: var(--color-pebble);
+            margin-bottom: 28px; font-size: 13px; color: var(--color-warm-granite);
         }
         .remember-me { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
-        .remember-me input { accent-color: var(--color-electric-iris); width: 14px; height: 14px; cursor: pointer; }
+        .remember-me input { accent-color: var(--color-signal-orange); width: 14px; height: 14px; cursor: pointer; }
         
         /* ========================================= */
         /* SMOOTH ANIMATED LOGIN BUTTON              */
         /* ========================================= */
         .login-button {
-            position: relative; width: 100%; height: 50px; 
-            background: var(--color-electric-iris); color: white;
-            border: none; border-radius: 8px; font-size: 16px; font-weight: 500; font-family: var(--font-ui);
+            position: relative; width: 100%; height: 48px; 
+            background: var(--color-signal-orange); color: #ffffff;
+            border: none; border-radius: var(--radius-buttons); font-size: 15px; font-weight: 500; font-family: var(--font-geist);
             cursor: pointer; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
             overflow: hidden;
         }
         .login-button:hover:not(.is-loading):not(.is-success) { 
-            background: #1d4ed8; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3); 
+            background: #f0702d; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(238, 96, 24, 0.25); 
         }
 
         /* HeroUI Custom Spinner */
@@ -211,12 +200,12 @@
         .login-button.is-loading .btn-spinner { opacity: 1; transform: translateY(0); }
 
         /* Success State */
-        .login-button.is-success { background: var(--color-cipher-mint) !important; cursor: default; pointer-events: none; box-shadow: 0 4px 16px rgba(38, 150, 132, 0.5); }
+        .login-button.is-success { background: var(--color-metric-green) !important; color: #101010; cursor: default; pointer-events: none; }
         .login-button.is-success .btn-text, .login-button.is-success .btn-spinner { opacity: 0; transform: translateY(-20px); }
         .login-button.is-success .btn-success { opacity: 1; transform: translateY(0) scale(1); }
 
         #error-msg {
-            color: var(--color-ember); font-size: 14px; font-weight: 500;
+            color: var(--color-signal-orange); font-size: 14px; font-weight: 500;
             margin-top: 16px; min-height: 20px; opacity: 0; transition: opacity 0.3s; text-align: center;
         }
     </style>
@@ -394,10 +383,10 @@
         function animateGrid() {
             ctx.clearRect(0, 0, W, H);
             
-            // Dynamic Theme Colors (Updated for Enterprise Blue/Slate)
+            // Dynamic Theme Colors (Mapped to your new Brutalist palette)
             const isLight = document.documentElement.classList.contains('light-mode');
-            const dotColor = isLight ? "rgba(15, 23, 42, 0.15)" : "rgba(248, 250, 252, 0.15)";
-            const lineColor = isLight ? "rgba(37, 99, 235, 0.3)" : "rgba(59, 130, 246, 0.3)";
+            const dotColor = isLight ? "rgba(29, 26, 24, 0.2)" : "rgba(238, 238, 238, 0.1)"; 
+            const lineColor = isLight ? "rgba(61, 58, 57, 0.15)" : "rgba(138, 131, 128, 0.15)"; 
 
             // Physics Update
             for (const d of dots) {
