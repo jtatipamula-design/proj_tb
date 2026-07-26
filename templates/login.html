@@ -78,41 +78,22 @@
         html.light-mode .theme-toggle:hover { color: var(--color-midnight-ink); }
 
         /* ========================================= */
-        /* ACETERNITY ANIMATED CARD BORDER           */
+        /* LOGIN CARD STYLING                        */
         /* ========================================= */
         .login-card {
             position: relative;
             width: 100%; max-width: 420px;
             border-radius: 16px;
-            padding: 2px; /* This creates the thickness of the animated border */
-            overflow: hidden;
             box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5);
             animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
             z-index: 10;
-        }
-
-        /* The rotating conic gradient beam */
-        .login-card::before {
-            content: '';
-            position: absolute;
-            top: -50%; left: -50%;
-            width: 200%; height: 200%;
-            background: conic-gradient(
-                transparent, transparent, transparent, 
-                var(--color-electric-iris)
-            );
-            animation: rotateBeam 4s linear infinite;
-            z-index: -1;
-        }
-
-        @keyframes rotateBeam {
-            100% { transform: rotate(360deg); }
+            border: 1px solid var(--glass-border);
         }
 
         .login-card-inner {
             background: rgba(10, 15, 30, 0.85);
             backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-            border-radius: 14px; /* Slightly less than the outer card to fit perfectly */
+            border-radius: 16px; 
             padding: 40px;
             position: relative;
             z-index: 1;
@@ -339,7 +320,6 @@
         let H = window.innerHeight;
         let cols = [];
         let dots = [];
-        const trailHistory = [];
         const mouse = { x: -9999, y: -9999, active: false };
         
         // Physics Settings
@@ -382,8 +362,6 @@
             mouse.x = clientX;
             mouse.y = clientY;
             mouse.active = true;
-            trailHistory.push({ x: clientX, y: clientY, t: performance.now() });
-            if (trailHistory.length > 80) trailHistory.shift();
         };
 
         window.addEventListener("mousemove", (e) => setMouse(e.clientX, e.clientY));
@@ -403,7 +381,6 @@
             const isLight = document.documentElement.classList.contains('light-mode');
             const dotColor = isLight ? "rgba(0, 0, 0, 0.4)" : "rgba(255, 255, 255, 0.4)";
             const lineColor = isLight ? "rgba(102, 58, 243, 0.8)" : "rgba(182, 217, 252, 0.8)";
-            const trailColor = "rgba(102, 58, 243, 0.9)"; // Electric Iris
 
             // Physics Update
             for (const d of dots) {
@@ -456,21 +433,6 @@
                 ctx.beginPath(); ctx.arc(d.x, d.y, 1 + prox * 2.5, 0, 2 * Math.PI); ctx.fill();
             }
 
-            // Draw Cursor Trail
-            const now = performance.now();
-            ctx.lineCap = "round";
-            ctx.lineJoin = "round";
-            for (let i = 1; i < trailHistory.length; i++) {
-                const a = trailHistory[i - 1];
-                const b = trailHistory[i];
-                const age = now - b.t;
-                if (age > 300) continue;
-                ctx.globalAlpha = Math.max(0, 1 - age / 300) * 0.8;
-                ctx.strokeStyle = trailColor;
-                ctx.lineWidth = 2.5;
-                ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-            }
-            
             ctx.globalAlpha = 1;
             requestAnimationFrame(animateGrid);
         }
