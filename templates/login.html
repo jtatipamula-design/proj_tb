@@ -92,8 +92,15 @@
             box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5);
             animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
             z-index: 10;
-            background: var(--color-carbon-lift);
-            border: 1px solid var(--color-ash-stroke);
+            background: rgba(29, 26, 24, 0.45);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        html.light-mode .login-card {
+            background: rgba(255, 255, 255, 0.55);
+            border: 1px solid rgba(0, 0, 0, 0.1);
         }
 
         .login-card-inner {
@@ -127,16 +134,19 @@
         
         .form-field.active label {
             top: 0; transform: translateY(-50%) scale(0.85);
-            color: var(--color-bone); background: var(--color-obsidian-canvas);
+            color: var(--color-bone); background: rgba(16, 16, 16, 0.9);
             border-radius: 2px;
         }
+        html.light-mode .form-field.active label { background: rgba(250, 250, 250, 0.9); color: var(--color-obsidian-canvas); }
 
         .form-field input {
             width: 100%; padding: 14px 14px; border: 1px solid var(--color-ash-stroke);
             border-radius: var(--radius-buttons); font-size: 15px; font-family: var(--font-geist);
-            background-color: var(--color-obsidian-canvas); color: var(--color-bone);
+            background-color: rgba(16, 16, 16, 0.4); color: var(--color-bone);
             transition: all 0.2s; outline: none;
         }
+        html.light-mode .form-field input { background-color: rgba(255, 255, 255, 0.4); color: var(--color-obsidian-canvas); }
+
         .form-field.active input {
             border-color: var(--color-pale-stone);
         }
@@ -383,10 +393,10 @@
         function animateGrid() {
             ctx.clearRect(0, 0, W, H);
             
-            // Dynamic Theme Colors (Mapped to your new Brutalist palette)
+            // Dynamic Theme Colors (Brighter Grid)
             const isLight = document.documentElement.classList.contains('light-mode');
-            const dotColor = isLight ? "rgba(29, 26, 24, 0.2)" : "rgba(238, 238, 238, 0.1)"; 
-            const lineColor = isLight ? "rgba(61, 58, 57, 0.15)" : "rgba(138, 131, 128, 0.15)"; 
+            const dotColor = isLight ? "rgba(29, 26, 24, 0.6)" : "rgba(255, 255, 255, 0.5)"; 
+            const lineColor = isLight ? "rgba(61, 58, 57, 0.3)" : "rgba(255, 255, 255, 0.2)"; 
 
             // Physics Update
             for (const d of dots) {
@@ -417,13 +427,13 @@
                     const prox = mouse.active ? Math.max(0, 1 - Math.sqrt((mouse.x - d.x) ** 2 + (mouse.y - d.y) ** 2) / radius) : 0;
                     
                     if (right) {
-                        ctx.globalAlpha = 0.03 + prox * 0.5;
+                        ctx.globalAlpha = 0.15 + prox * 0.6;
                         ctx.strokeStyle = lineColor;
                         ctx.lineWidth = 0.5 + prox * 1.5;
                         ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(right.x, right.y); ctx.stroke();
                     }
                     if (down) {
-                        ctx.globalAlpha = 0.03 + prox * 0.5;
+                        ctx.globalAlpha = 0.15 + prox * 0.6;
                         ctx.strokeStyle = lineColor;
                         ctx.lineWidth = 0.5 + prox * 1.5;
                         ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(down.x, down.y); ctx.stroke();
@@ -434,7 +444,7 @@
             // Draw Dots
             for (const d of dots) {
                 const prox = mouse.active ? Math.max(0, 1 - Math.sqrt((mouse.x - d.x) ** 2 + (mouse.y - d.y) ** 2) / radius) : 0;
-                ctx.globalAlpha = 0.15 + prox * 0.85;
+                ctx.globalAlpha = 0.4 + prox * 0.6;
                 ctx.fillStyle = dotColor;
                 ctx.beginPath(); ctx.arc(d.x, d.y, 1 + prox * 2.5, 0, 2 * Math.PI); ctx.fill();
             }
