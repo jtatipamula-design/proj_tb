@@ -69,73 +69,75 @@ def sort_columns(col_names, pk_column):
     # 5. Standard Columns (Names, Emails, Normal Data)
     standard_cols = [c for c in col_names if c not in pinned_so_far]
             
-    # Assemble the final list in the requested order
+    # Assemble the final list in the requested order (Dates and Audit at the bottom!)
     final_list = sorted_cols + status_cols + standard_cols + start_date_cols + end_date_cols + audit_cols
     return final_list
 
 def get_table_modules(all_tables):
-    """Maps tables to UI sidebar modules."""
+    """Maps purely PHC tables to UI sidebar modules."""
     mapping = {
-        # General Ledger
-        'pgl_batches_t': 'Ledger', 'pgl_headers_t': 'Ledger', 'pgl_lines_t': 'Ledger',
-        'pgl_sources_t': 'Ledger', 'pgl_daily_rates_t': 'Ledger', 'pgl_balances_t': 'Ledger',
-        'pgl_acc_periods_t': 'Ledger', 'pgl_period_sets_t': 'Ledger', 'pgl_code_combinations_t': 'Ledger',
-        
-        # Receivables
-        'pra_customer_trx_t': 'Receivables', 'pra_customer_trx_lines_t': 'Receivables',
-        'pra_cust_trx_line_dist_t': 'Receivables', 'pra_cust_trx_types_t': 'Receivables',
-        'par_payment_schedules_t': 'Receivables', 'par_batch_sources_t': 'Receivables',
-        'par_vat_tax_t': 'Receivables', 'par_terms_t': 'Receivables', 'par_periods_t': 'Receivables',
-        'par_period_types_t': 'Receivables',
-        
-        # Payables & Purchasing
-        'po_requisition_headers_t': 'Payables', 'po_requisition_lines_t': 'Payables',
-        'po_req_distributions_t': 'Payables', 'po_headers_t': 'Payables',
-        'po_lines_t': 'Payables', 'po_distributions_t': 'Payables',
-        'ap_invoices_t': 'Payables', 'ap_invoice_distributions_t': 'Payables',
-        'ap_payments_schedules_t': 'Payables',
-        
-        # Order Management
-        'poe_order_headers_t': 'OrderMgmt', 'poe_order_lines_t': 'OrderMgmt',
-        'poe_order_sources_t': 'OrderMgmt', 'poe_transaction_types_t': 'OrderMgmt',
-        
-        # Projects
-        'pa_projects_t': 'Project', 'pa_tasks_t': 'Project', 'pa_expenditures_t': 'Project',
-        'pa_expenditure_items_t': 'Project', 'pa_resource_assignments_t': 'Project',
-        
-        # Inventory
-        'mtl_system_items_t': 'Product', 'mtl_item_locations_t': 'Product',
-        'phc_prod_lifecycle_history': 'Product', 'phc_prod_alt_names': 'Product',
+        # Enterprise Structure (New Module)
+        'phc_companies_t': 'Enterprise', 'phc_cost_center_t': 'Enterprise', 
+        'phc_dept_t': 'Enterprise', 'phc_emp_t': 'Enterprise',
         
         # Master Data
-        'pmd_parties_t': 'MasterData', 'pmd_accounts_t': 'MasterData', 'pmd_acct_sites_t': 'MasterData',
-        'pmd_locations_t': 'MasterData', 'pmd_person_profiles_t': 'MasterData',
-        'phc_plant_compliance': 'MasterData', 'phc_certifications': 'MasterData',
-        'phc_plant_equipment': 'MasterData', 'phc_equipment_locations': 'MasterData',
-        'phc_uom_conversion': 'MasterData',
-        'phc_lookup_types': 'MasterData', 'phc_lookup_values_t': 'MasterData',
+        'phc_plant_master': 'MasterData', 'phc_plant_compliance': 'MasterData', 
+        'phc_certifications': 'MasterData', 'phc_plant_equipment': 'MasterData', 
+        'phc_equipment_locations': 'MasterData', 'phc_material_group_master': 'MasterData', 
+        'phc_material_master': 'MasterData', 'phc_uom_master': 'MasterData', 
+        'phc_uom_conversion': 'MasterData', 'phc_lookup_types': 'MasterData', 
+        'phc_lookup_values_t': 'MasterData',
         
-        # Employees
-        'phc_emp_t': 'Employee', 'phc_dept_t': 'Employee', 'phc_cost_center_t': 'Employee',
+        # Product Master (New Module)
+        'phc_prod_master': 'Product', 'phc_prod_lifecycle_history': 'Product', 'phc_prod_alt_names': 'Product',
         
-        # Cleaning Validation
-        'cv_product_registration_t': 'Cleaning', 'cv_equipment_registration_t': 'Cleaning',
-        'cv_product_equipment_map_t': 'Cleaning', 'cv_product_apis_t': 'Cleaning',
+        # Approvals (New Module)
+        'phc_approval_types_t': 'Approvals', 'phc_approval_setup_t': 'Approvals', 
+        'phc_notifications_setup_t': 'Approvals', 'phc_approval_events_t': 'Approvals',
         
         # App Setup
         'phc_users_t': 'AppSetup', 'phc_roles_t': 'AppSetup', 'phc_apps_t': 'AppSetup',
-        'phc_screens_t': 'AppSetup', 'phc_companies_t': 'AppSetup', 'phc_role_screen_assignment_t': 'AppSetup',
-        'phc_user_roles_assignment_t': 'AppSetup', 'phc_menu_folders_t': 'AppSetup',
-        'phc_approval_types_t': 'AppSetup', 'phc_approval_setup_t': 'AppSetup',
-        'phc_notifications_setup_t': 'AppSetup', 'phc_approval_events_t': 'AppSetup'
+        'phc_screens_t': 'AppSetup', 'phc_role_screen_assignment_t': 'AppSetup',
+        'phc_user_roles_assignment_t': 'AppSetup', 'phc_menu_folders_t': 'AppSetup'
     }
 
-    # DYNAMIC RULE: Any table with 'master' in its name goes to MasterData
+    # DYNAMIC RULE: Fallbacks in case new PHC tables are created later
     for tbl in all_tables:
-        if 'master' in tbl.lower():
-            mapping[tbl] = 'MasterData'
+        if tbl not in mapping:
+            if 'master' in tbl.lower():
+                mapping[tbl] = 'MasterData'
+            elif 'approval' in tbl.lower() or 'notif' in tbl.lower():
+                mapping[tbl] = 'Approvals'
+            elif 'prod' in tbl.lower():
+                mapping[tbl] = 'Product'
+            elif 'emp' in tbl.lower() or 'dept' in tbl.lower():
+                mapping[tbl] = 'Enterprise'
+            else:
+                mapping[tbl] = 'Other'
             
     return mapping
+
+async def get_authorized_tables(conn, user_id, user_role):
+    """
+    DYNAMIC RBAC: Only fetches tables the logged-in user has explicit rights to see.
+    """
+    if user_role == 'ADM':
+        # Admins see all active registered screens
+        records = await conn.fetch("SELECT psn_screen_code as tablename FROM phc_screens_t WHERE psn_status = 'ACT'")
+    else:
+        # Standard users only see screens explicitly mapped to their active roles
+        records = await conn.fetch("""
+            SELECT DISTINCT s.psn_screen_code as tablename 
+            FROM phc_user_roles_assignment_t ura
+            JOIN phc_role_screen_assignment_t rsa ON ura.pua_role_id = rsa.prs_role_id
+            JOIN phc_screens_t s ON rsa.prs_screen_id = s.psn_screen_id
+            WHERE ura.pua_user_id = $1 
+              AND ura.pua_status = 'ACT'
+              AND rsa.prs_status = 'ACT'
+              AND s.psn_status = 'ACT'
+        """, user_id)
+        
+    return [r['tablename'] for r in records if r['tablename'].startswith('phc_')]
 
 async def get_global_fk_map(conn):
     """
@@ -151,11 +153,8 @@ async def get_global_fk_map(conn):
         'dept_id': "SELECT pdp_dept_id as id, pdp_dept_name as name FROM phc_dept_t",
         'company_id': "SELECT pcp_company_id as id, pcp_company_name as name FROM phc_companies_t",
         'menu_id': "SELECT menu_id as id, menu_name as name FROM phc_menu_folders_t",
-        'equipment_id': "SELECT equipment_id as id, equipment_name as name FROM cv_equipment_registration_t",
-        'product_id': "SELECT product_id as id, product_name as name FROM cv_product_registration_t"
     }
     
-    # Safely try to fetch each table. If a table doesn't exist (like orgs), it gracefully skips.
     for f_key, q in queries.items():
         try:
             res = await conn.fetch(q)
@@ -175,12 +174,6 @@ async def setup_db(app, loop):
         print("="*50 + "\n")
         return
         
-    print("\n" + "="*50)
-    print("🚀 SERVER PRE-FLIGHT CHECK 🚀")
-    print(f"✅ DATABASE_URL Found: {db_url[:35]}...")
-    print("✅ Environment Variables are loaded correctly.")
-    print("="*50 + "\n")
-    
     app.ctx.db = await asyncpg.create_pool(dsn=db_url, min_size=2, max_size=20)
 
 @app.after_server_stop
@@ -198,6 +191,7 @@ async def add_session(request):
             request.ctx.session['user_id'] = payload.get("user_id")
             request.ctx.session['username'] = payload.get("username")
             request.ctx.session['role'] = payload.get("role")
+            request.ctx.session['session_id'] = payload.get("session_id")
         except jwt.ExpiredSignatureError:
             pass
         except jwt.InvalidTokenError:
@@ -212,8 +206,54 @@ async def add_security_headers(request, response):
 def check_auth(wrapped):
     @wraps(wrapped)
     async def decorator(request, *args, **kwargs):
-        if not request.ctx.session.get("user_id"):
+        user_id = request.ctx.session.get("user_id")
+        user_role = request.ctx.session.get("role")
+        session_id = request.ctx.session.get("session_id")
+        
+        if not user_id or not session_id:
             return response.redirect("/login")
+            
+        async with app.ctx.db.acquire() as conn:
+            # ========================================================
+            # 1. STRICT SINGLE-SESSION ENFORCEMENT
+            # ========================================================
+            current_db_session = await conn.fetchval("SELECT pus_session_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
+            
+            # If the DB session ID doesn't match the cookie, they logged in elsewhere!
+            if str(current_db_session) != str(session_id):
+                res = response.redirect("/login")
+                del res.cookies["auth_token"]
+                return res
+
+            # ========================================================
+            # 2. BULLETPROOF RBAC ENGINE (Blocks URL Hacks)
+            # ========================================================
+            table_name = kwargs.get("table_name")
+            if table_name and user_role != 'ADM':
+                has_access = await conn.fetchval("""
+                    SELECT 1 FROM phc_user_roles_assignment_t ura
+                    JOIN phc_role_screen_assignment_t rsa ON ura.pua_role_id = rsa.prs_role_id
+                    JOIN phc_screens_t s ON rsa.prs_screen_id = s.psn_screen_id
+                    WHERE ura.pua_user_id = $1 
+                      AND s.psn_screen_code = $2
+                      AND ura.pua_status = 'ACT'
+                      AND rsa.prs_status = 'ACT'
+                      AND s.psn_status = 'ACT'
+                """, user_id, table_name)
+                
+                if not has_access:
+                    # They hacked the URL! Block the request.
+                    if request.method in ['POST', 'PUT', 'DELETE']:
+                        return response.json({"error": "RBAC Violation: You do not have permission to modify this table."}, status=403)
+                    else:
+                        return response.html(
+                            "<div style='padding:50px; background:#101010; height:100vh; color:white; font-family:sans-serif; text-align:center;'>"
+                            "<h1 style='color:#ee6018; margin-bottom:10px;'>Access Denied</h1>"
+                            f"<p style='color:#b8b3b0;'>Your assigned role does not have authorization to view or edit <b>{table_name}</b>.</p>"
+                            "<a href='/' style='color:#80ACFF; text-decoration:none; display:inline-block; margin-top:20px;'>Return to Dashboard</a></div>", 
+                            status=403
+                        )
+        
         return await wrapped(request, *args, **kwargs)
     return decorator
 
@@ -238,20 +278,26 @@ async def handle_login(request):
             is_valid = False
             
             try:
-                # 1. Try standard bcrypt comparison 
                 if bcrypt.checkpw(password.encode('utf-8'), stored_pwd.encode('utf-8')):
                     is_valid = True
             except ValueError:
-                # 2. Checks plain-text passwords if salt fails
                 if password == stored_pwd:
                     is_valid = True
                     
             if is_valid:
+                # --- SECURE SESSION GENERATION ---
+                new_session_id = str(uuid.uuid4())
+                
+                # Update DB so this device is now the ONLY valid session
+                await conn.execute("UPDATE phc_users_t SET pus_session_id = $1 WHERE pus_user_id = $2", new_session_id, user['pus_user_id'])
+                
+                from datetime import timezone, datetime
                 token = jwt.encode({
                     "user_id": user['pus_user_id'],
                     "username": user['pus_user_name'],
                     "role": user.get('pus_user_type', 'STD'),
-                    "exp": datetime.utcnow().timestamp() + 86400
+                    "session_id": new_session_id,
+                    "exp": datetime.now(timezone.utc).timestamp() + 86400
                 }, os.getenv("SECRET_KEY", "fallback_secret"), algorithm="HS256")
                 
                 res = response.json({"status": "success", "message": "Login successful"})
@@ -274,9 +320,13 @@ async def dashboard(request):
     template = env.get_template('dashboard.html')
     
     async with app.ctx.db.acquire() as conn:
-        all_tables_records = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
-        all_tables = [r['tablename'] for r in all_tables_records if not r['tablename'].startswith('pg_')]
+        user_id = request.ctx.session.get('user_id')
+        user_role = request.ctx.session.get('role')
         
+        # Only fetch tables allowed by RBAC
+        all_tables = await get_authorized_tables(conn, user_id, user_role)
+        
+        # Gracefully handle dashboard stats. If they lack access, it shows 0 without crashing.
         stats = {
             'emp_count': await conn.fetchval("SELECT COUNT(*) FROM phc_emp_t") if 'phc_emp_t' in all_tables else 0,
             'comp_count': await conn.fetchval("SELECT COUNT(*) FROM phc_companies_t") if 'phc_companies_t' in all_tables else 0,
@@ -286,7 +336,7 @@ async def dashboard(request):
         
     return response.html(template.render(
         username=request.ctx.session.get('username'),
-        user_id=request.ctx.session.get('user_id'),
+        user_id=user_id,
         stats=stats,
         all_tables=all_tables,
         table_modules=get_table_modules(all_tables),
@@ -351,7 +401,6 @@ async def show_table(request, table_name):
             raw_rows = await conn.fetch(data_query, *params)
             
             # --- MAGIC ID RESOLVER ---
-            # Converts raw IDs like `role_id: 2` into `role_id: HR Manager` in the Table View!
             fk_map = await get_global_fk_map(conn)
             rows = []
             for row in raw_rows:
@@ -363,10 +412,9 @@ async def show_table(request, table_name):
                         for f_key, f_dict in fk_map.items():
                             if str(col).endswith(f_key) and val in f_dict:
                                 row_dict[col] = f_dict[val]
-                                break # Stop searching once mapped
+                                break 
                 rows.append(row_dict)
             
-            # Strip prefixes from columns dynamically
             columns = [{"raw": c, "label": clean_label(c)} for c in col_names if c != 'company_id']
             
             lookup_categories = []
@@ -377,8 +425,10 @@ async def show_table(request, table_name):
                 except Exception:
                     pass
 
-            all_tables_records = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
-            all_tables = [r['tablename'] for r in all_tables_records if not r['tablename'].startswith('pg_')]
+            # Fetch Authorized Sidebar Tables
+            user_id = request.ctx.session.get('user_id')
+            user_role = request.ctx.session.get('role')
+            all_tables = await get_authorized_tables(conn, user_id, user_role)
             
             return response.html(template.render(
                 table_name=table_name,
@@ -438,9 +488,9 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
             is_pk = (cname == pk_column)
             val = row[cname] if row else request.args.get(cname, '')
             
-            # PERFECT DATE PRE-FILL LOGIC: Fills ONLY start dates with today's date on New Records
+            # PERFECT DATE PRE-FILL LOGIC: Fills ONLY start dates/creation dates with today's date
             if not is_update and not val:
-                if 'start_date' in cname.lower():
+                if 'start_date' in cname.lower() or 'creation_date' in cname.lower():
                     val = datetime.now().strftime('%Y-%m-%d')
             
             options = []
@@ -467,8 +517,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
                         json_options = [{'id': str(r['prl_role_id']), 'name': r['prl_role_name']} for r in roles]
                     except Exception: pass
                     
-            # --- DYNAMIC FK DROPDOWNS (The "Foolproof" Assignments logic) ---
-            # If the column requires an ID, we render a dropdown with the actual Names instead!
+            # DYNAMIC FK DROPDOWNS
             elif cname.endswith('_id') and not is_pk:
                 for f_key, f_dict in fk_map.items():
                     if cname.endswith(f_key):
@@ -486,8 +535,9 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
                 "json_options": json_options
             })
             
-        all_tables_records = await conn.fetch("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
-        all_tables = [r['tablename'] for r in all_tables_records if not r['tablename'].startswith('pg_')]
+        user_id = request.ctx.session.get('user_id')
+        user_role = request.ctx.session.get('role')
+        all_tables = await get_authorized_tables(conn, user_id, user_role)
         
         return response.html(template.render(
             table_name=table_name,
