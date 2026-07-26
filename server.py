@@ -358,7 +358,8 @@ async def show_table(request, table_name):
                 row_dict = dict(row)
                 for col in col_names:
                     val = row_dict[col]
-                    if val is not None and str(col).endswith('_id'):
+                    # FIX: Explicitly exclude the pk_column so we don't break the Edit button links!
+                    if val is not None and str(col).endswith('_id') and col != pk_column:
                         for f_key, f_dict in fk_map.items():
                             if str(col).endswith(f_key) and val in f_dict:
                                 row_dict[col] = f_dict[val]
