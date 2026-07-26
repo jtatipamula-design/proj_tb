@@ -30,7 +30,7 @@ env = Environment(loader=FileSystemLoader('./templates'))
 SCHEMA_CACHE = {}
 
 def clean_label(col_name):
-    """Aggressively removes short prefixes (like pus_, pmd_) and converts to Title Case"""
+    """Aggressively removes short prefixes and converts to Title Case"""
     parts = col_name.split('_')
     if len(parts) > 1 and len(parts[0]) <= 4:
         parts = parts[1:]
@@ -39,7 +39,7 @@ def clean_label(col_name):
     return label.replace(' Id', ' ID').replace(' Uom', ' UOM').replace(' Nos', ' NOS')
 
 def clean_table_name(t_name):
-    """Strips the _t suffix and any short table prefixes (like phc_)"""
+    """Strips the _t suffix and any short table prefixes"""
     clean = t_name.replace('_t', '')
     parts = clean.split('_')
     if len(parts) > 1 and len(parts[0]) <= 4:
@@ -47,46 +47,34 @@ def clean_table_name(t_name):
     return ' '.join(parts).title()
 
 def sort_columns(col_names, pk_column):
-    """Sorts columns: PK -> Status -> Start Date -> End Date -> Normal -> Audit"""
+    """Strict Logical Order: PK -> Status -> Normal Data -> Dates -> Audit"""
     audit_keywords = ['created', 'modified', 'creation_date', 'last_update_date', 'updated_by', 'created_by']
     
-    sorted_cols = []
-    
     # 1. Primary Key
-    if pk_column in col_names:
-        sorted_cols.append(pk_column)
+    sorted_cols = [pk_column] if pk_column in col_names else []
         
     # 2. Status
     status_cols = [c for c in col_names if 'status' in c.lower() and c != pk_column]
-    sorted_cols.extend(status_cols)
-        
-    # 3. Start Date
+    
+    # 3. Start & End Dates (Pulled out to be moved to the bottom)
     start_date_cols = [c for c in col_names if 'start_date' in c.lower() and c != pk_column and c not in status_cols]
-    sorted_cols.extend(start_date_cols)
-        
-    # 4. End Date
     end_date_cols = [c for c in col_names if 'end_date' in c.lower() and c != pk_column and c not in status_cols and c not in start_date_cols]
-    sorted_cols.extend(end_date_cols)
-        
-    # 5. Standard Columns (Preserve exact original database order)
-    pinned_so_far = [pk_column] + status_cols + start_date_cols + end_date_cols
-    for c in col_names:
-        if c in pinned_so_far: continue
-        cl = c.lower()
-        if not any(k in cl for k in audit_keywords):
-            sorted_cols.append(c)
+    
+    # 4. Audit Fields
+    audit_cols = [c for c in col_names if any(k in c.lower() for k in audit_keywords) and c != pk_column and c not in status_cols]
+    
+    # Track everything we've pinned so far
+    pinned_so_far = sorted_cols + status_cols + start_date_cols + end_date_cols + audit_cols
+
+    # 5. Standard Columns (Names, Emails, Normal Data)
+    standard_cols = [c for c in col_names if c not in pinned_so_far]
             
-    # 6. Audit Columns (Pinned to the very end)
-    for c in col_names:
-        if c in pinned_so_far: continue
-        cl = c.lower()
-        if any(k in cl for k in audit_keywords):
-            sorted_cols.append(c)
-            
-    return sorted_cols
+    # Assemble the final list in the requested order
+    final_list = sorted_cols + status_cols + standard_cols + start_date_cols + end_date_cols + audit_cols
+    return final_list
 
 def get_table_modules(all_tables):
-    """Maps tables to UI sidebar modules. Dynamically groups any 'master' tables."""
+    """Maps tables to UI sidebar modules."""
     mapping = {
         # General Ledger
         'pgl_batches_t': 'Ledger', 'pgl_headers_t': 'Ledger', 'pgl_lines_t': 'Ledger',
@@ -129,7 +117,6 @@ def get_table_modules(all_tables):
         
         # Employees
         'phc_emp_t': 'Employee', 'phc_dept_t': 'Employee', 'phc_cost_center_t': 'Employee',
-        'phc_orgs_t': 'Employee',
         
         # Cleaning Validation
         'cv_product_registration_t': 'Cleaning', 'cv_equipment_registration_t': 'Cleaning',
@@ -149,6 +136,34 @@ def get_table_modules(all_tables):
             mapping[tbl] = 'MasterData'
             
     return mapping
+
+async def get_global_fk_map(conn):
+    """
+    DYNAMIC FOREIGN KEY RESOLVER:
+    Fetches common IDs and their human-readable Names so we can swap them out
+    in Table Views and render Dropdowns in Form Views.
+    """
+    fk_map = {}
+    queries = {
+        'role_id': "SELECT prl_role_id as id, prl_role_name as name FROM phc_roles_t",
+        'user_id': "SELECT pus_user_id as id, pus_user_name as name FROM phc_users_t",
+        'screen_id': "SELECT psn_screen_id as id, psn_screen_name as name FROM phc_screens_t",
+        'dept_id': "SELECT pdp_dept_id as id, pdp_dept_name as name FROM phc_dept_t",
+        'company_id': "SELECT pcp_company_id as id, pcp_company_name as name FROM phc_companies_t",
+        'menu_id': "SELECT menu_id as id, menu_name as name FROM phc_menu_folders_t",
+        'equipment_id': "SELECT equipment_id as id, equipment_name as name FROM cv_equipment_registration_t",
+        'product_id': "SELECT product_id as id, product_name as name FROM cv_product_registration_t"
+    }
+    
+    # Safely try to fetch each table. If a table doesn't exist (like orgs), it gracefully skips.
+    for f_key, q in queries.items():
+        try:
+            res = await conn.fetch(q)
+            fk_map[f_key] = {r['id']: r['name'] for r in res}
+        except Exception:
+            pass
+            
+    return fk_map
 
 @app.before_server_start
 async def setup_db(app, loop):
@@ -227,7 +242,7 @@ async def handle_login(request):
                 if bcrypt.checkpw(password.encode('utf-8'), stored_pwd.encode('utf-8')):
                     is_valid = True
             except ValueError:
-                # 2. CATCH THE "INVALID SALT" ERROR! (Checks plain-text passwords)
+                # 2. Checks plain-text passwords if salt fails
                 if password == stored_pwd:
                     is_valid = True
                     
@@ -333,7 +348,22 @@ async def show_table(request, table_name):
             total_pages = math.ceil(total_count / per_page) if total_count > 0 else 1
             
             data_query = f"SELECT * FROM {table_name} {where_clause} ORDER BY {pk_column} DESC LIMIT {per_page} OFFSET {offset}"
-            rows = await conn.fetch(data_query, *params)
+            raw_rows = await conn.fetch(data_query, *params)
+            
+            # --- MAGIC ID RESOLVER ---
+            # Converts raw IDs like `role_id: 2` into `role_id: HR Manager` in the Table View!
+            fk_map = await get_global_fk_map(conn)
+            rows = []
+            for row in raw_rows:
+                row_dict = dict(row)
+                for col in col_names:
+                    val = row_dict[col]
+                    if val is not None and str(col).endswith('_id'):
+                        for f_key, f_dict in fk_map.items():
+                            if str(col).endswith(f_key) and val in f_dict:
+                                row_dict[col] = f_dict[val]
+                                break # Stop searching once mapped
+                rows.append(row_dict)
             
             # Strip prefixes from columns dynamically
             columns = [{"raw": c, "label": clean_label(c)} for c in col_names if c != 'company_id']
@@ -341,7 +371,7 @@ async def show_table(request, table_name):
             lookup_categories = []
             if table_name == 'phc_lookup_values_t':
                 try:
-                    cats = await conn.fetch("SELECT plt_lookup_type_code as code, plt_lookup_type as name FROM phc_lookup_types WHERE plt_status = 'ACT'")
+                    cats = await conn.fetch("SELECT plt_lookup_type_code as code, plt_lookup_type as name FROM phc_lookup_types")
                     lookup_categories = [dict(c) for c in cats]
                 except Exception:
                     pass
@@ -387,7 +417,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         
         raw_col_names = [c['column_name'] for c in cols]
         
-        # Apply strict logical sorting
+        # Apply strict logical sorting (Dates & Audits at the bottom!)
         sorted_col_names = sort_columns(raw_col_names, pk_column)
         col_info = {c['column_name']: c for c in cols}
         
@@ -398,6 +428,8 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
                 row = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1", cast_val)
             except Exception as e:
                 return response.html(f"Error fetching record: {str(e)}")
+        
+        fk_map = await get_global_fk_map(conn)
             
         columns_data = []
         for cname in sorted_col_names:
@@ -430,9 +462,17 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
                     except Exception: pass
                 elif cname == 'pu_assigned_roles':
                     try:
-                        roles = await conn.fetch("SELECT prl_role_id, prl_role_name FROM phc_roles_t WHERE prl_status = 'ACT'")
+                        roles = await conn.fetch("SELECT prl_role_id, prl_role_name FROM phc_roles_t")
                         json_options = [{'id': str(r['prl_role_id']), 'name': r['prl_role_name']} for r in roles]
                     except Exception: pass
+                    
+            # --- DYNAMIC FK DROPDOWNS (The "Foolproof" Assignments logic) ---
+            # If the column requires an ID, we render a dropdown with the actual Names instead!
+            elif cname.endswith('_id') and not is_pk:
+                for f_key, f_dict in fk_map.items():
+                    if cname.endswith(f_key):
+                        options = [{'id': k, 'name': v} for k, v in f_dict.items()]
+                        break
 
             columns_data.append({
                 "column_name": cname,
@@ -477,7 +517,7 @@ async def show_edit_form(request, table_name, pk_val):
 async def save_data(request, table_name, pk_val=None):
     is_update = request.method == 'PUT'
     
-    # Form data mapping (since we switched to multipart/form-data for file uploads)
+    # Form data mapping
     data = {}
     if request.form:
         for k in request.form.keys():
