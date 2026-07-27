@@ -137,20 +137,18 @@
             display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--glass-border);
         }
 
-        /* FLEXBOX REORDERING LOGIC FOR PINNING TO TOP */
         .nav-menu { 
             padding: 20px 12px; flex-grow: 1; overflow-y: auto; 
             display: flex; flex-direction: column; gap: 4px; 
         }
         
-        .nav-menu > * { order: 3; } /* Default order for all groups */
-        .nav-menu > .always-top { order: 1 !important; } /* Dashboard, Search, Header always fixed at top */
+        .nav-menu > * { order: 3; }
+        .nav-menu > .always-top { order: 1 !important; }
         .nav-group.pinned { 
-            order: 2 !important; /* Forces the active module directly under the header! */
-            margin-bottom: 16px; /* Extra breathing room */
+            order: 2 !important;
+            margin-bottom: 16px;
         }
         
-        /* ACCORDION (BENTO BOX) NAVIGATION STYLES */
         .nav-group { margin-bottom: 4px; transition: all 0.3s ease; }
         .nav-group-header {
             padding: 10px 12px; border-radius: 6px; color: var(--color-moonlight);
@@ -164,7 +162,6 @@
         .nav-group.expanded .nav-chevron { transform: rotate(180deg); color: var(--color-electric-iris); }
         .nav-group.expanded .nav-group-header { color: var(--color-glacier); }
         
-        /* Pinned Group Visuals */
         .nav-group.pinned .nav-group-header { 
             background: rgba(102, 58, 243, 0.1); 
             color: var(--color-electric-iris); 
@@ -192,7 +189,6 @@
         .nav-item:hover .nav-bullet { background: var(--color-fog); transform: scale(1.2); }
         .nav-item.active .nav-bullet { background: var(--color-electric-iris); box-shadow: 0 0 8px var(--color-electric-iris); }
 
-        /* COLLAPSED SIDEBAR STATE */
         .sidebar.collapsed { width: 78px; }
         .sidebar.collapsed .brand-text, .sidebar.collapsed .nav-text, 
         .sidebar.collapsed .sidebar-search-wrap, .sidebar.collapsed .eyebrow-text, 
@@ -311,17 +307,11 @@
                 setTimeout(() => toast.remove(), 4000);
             };
 
-            // Expand/Collapse Folders & PIN to Top
             window.toggleNavGroup = function(groupKey) {
                 const sidebar = document.getElementById('sidebar');
-                
-                // Smart Expand
                 if (sidebar && sidebar.classList.contains('collapsed')) {
                     window.toggleSidebar();
                 }
-
-                // If user clicks a module in the sidebar, treat it like a Dashboard click
-                // and pin it to the top!
                 window.filterSidebarByModule(groupKey);
             };
 
@@ -369,20 +359,16 @@
                         if (matchSearch) hasVisibleItem = true;
                     });
 
-                    // PIN TO TOP LOGIC: 
-                    // If this group is the active filter, pin it via CSS Order!
                     if (groupKey === moduleFilter && moduleFilter !== 'ALL') {
                         group.classList.add('pinned');
                     } else {
                         group.classList.remove('pinned');
                     }
 
-                    // Expansion Logic
                     if (searchFilter !== "") {
                         group.style.display = hasVisibleItem ? "block" : "none";
                         group.classList.add('expanded');
                     } else {
-                        // If not "ALL", hide groups that aren't the pinned one
                         if (moduleFilter !== 'ALL' && groupKey !== moduleFilter) {
                             group.style.display = "none";
                         } else {
@@ -516,6 +502,7 @@
                 <button id="showAllTablesBtn" onclick="filterSidebarByModule('ALL')">Show All Modules</button>
             </div>
             
+            <!-- Accordion List of Oracle Modules -->
             {% set modules = [
                 ('ERPAdmin', 'shield', 'ERP Admin'),
                 ('MasterData', 'database', 'Master Data'),
@@ -534,7 +521,7 @@
                 {% if mod_key != 'ERPAdmin' or user_role == 'ADM' %}
                     {% set has_tables = namespace(value=false) %}
                     {% for tbl in all_tables %}
-                        {% set t_mod = table_modules.get(tbl, 'Unknown') if table_modules else 'Unknown' %}
+                        {% set t_mod = table_modules.get(tbl.lower(), 'Other') if table_modules else 'Other' %}
                         {% if t_mod == mod_key %}{% set has_tables.value = true %}{% endif %}
                     {% endfor %}
 
@@ -553,7 +540,7 @@
                             <!-- Accordion Content (List of specific Tables) -->
                             <div class="nav-group-content" id="group-content-{{ mod_key }}">
                                 {% for tbl in all_tables %}
-                                    {% set t_mod = table_modules.get(tbl, 'Unknown') if table_modules else 'Unknown' %}
+                                    {% set t_mod = table_modules.get(tbl.lower(), 'Other') if table_modules else 'Other' %}
                                     {% if t_mod == mod_key %}
                                         {% set clean_name = tbl.split('_', 1)[-1].replace('_t', '').replace('_', ' ').title() %}
                                         <a href="/table/{{ tbl }}" class="nav-item {% if table_name == tbl %}active{% endif %}" data-search="{{ clean_name.lower() }}">
@@ -585,7 +572,7 @@
                     <div style="font-size: 11px; color: var(--color-fog);">Edit Profile</div>
                 </div>
             </a>
-            <!-- HTMX bypass on Logout to prevent layout bugs -->
+            <!-- hx-boost="false" ensures the session cookie is destroyed and redirects properly -->
             <a href="/logout" class="logout-btn" title="Logout" hx-boost="false"><i data-lucide="log-out" style="width: 18px;"></i></a>
         </section>
     </aside>
