@@ -169,7 +169,7 @@ def check_auth(f):
             if cached and now < cached["expires"]:
                 if cached["session_id"] != session_id:
                     res = response.redirect("/login")
-                    del res.cookies["auth_token"]
+                    res.delete_cookie("auth_token")
                     return add_security_headers(res)
                 request.ctx.user_id = user_id
                 request.ctx.username = payload.get("username")
@@ -180,7 +180,7 @@ def check_auth(f):
                     user = await conn.fetchrow("SELECT pus_session_id, pus_user_type FROM phc_users_t WHERE pus_user_id = $1", user_id)
                     if not user or user["pus_session_id"] != session_id:
                         res = response.redirect("/login")
-                        del res.cookies["auth_token"]
+                        res.delete_cookie("auth_token")
                         return add_security_headers(res)
                     
                     role = user["pus_user_type"] or "STD"
@@ -196,7 +196,7 @@ def check_auth(f):
             return await f(request, *args, **kwargs)
         except Exception:
             res = response.redirect("/login")
-            del res.cookies["auth_token"]
+            res.delete_cookie("auth_token")
             return add_security_headers(res)
     return decorated_function
 
@@ -207,7 +207,8 @@ async def login(request):
         res = response.html(template.render())
         return add_security_headers(res)
     
-    data = request.json
+    # Safely handle requests missing a JSON payload to prevent NoneType crashes
+    data = request.json or {}
     username = data.get("username", "")
     password = data.get("password", "")
     
@@ -233,7 +234,7 @@ async def login(request):
                     "user_id": user['pus_user_id'],
                     "username": user['pus_user_name'],
                     "session_id": session_id,
-                    "exp": datetime.utcnow().timestamp() + 86400
+                    "exp": time.time() + 86400  # Deprecation fix for datetime.utcnow()
                 }
                 token = jwt.encode(token_payload, JWT_SECRET, algorithm="HS256")
                 USER_AUTH_CACHE.pop(user['pus_user_id'], None)
@@ -248,7 +249,7 @@ async def login(request):
 @app.route('/logout', methods=['GET'])
 async def logout(request):
     res = response.redirect("/login")
-    del res.cookies["auth_token"]
+    res.delete_cookie("auth_token")
     return add_security_headers(res)
 
 async def get_pk_column(conn, table_name):
@@ -541,11 +542,17 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
     )
     return add_security_headers(response.html(html))
 
-# FIX: explicitly named routes to prevent Sanic Duplicate Route error
-@app.route('/api/<table_name>', methods=['POST'], name='api_create')
-@app.route('/api/<table_name>/<pk_val>', methods=['PUT', 'DELETE'], name='api_update_delete')
+@app.route('/api/<table_name>', methods=['POST'], name="api_create")
 @check_auth
-async def api_table_action(request, table_name, pk_val=None):
+async def api_create_record(request, table_name):
+    return await process_api_action(request, table_name, None)
+
+@app.route('/api/<table_name>/<pk_val>', methods=['PUT', 'DELETE'], name="api_update_delete")
+@check_auth
+async def api_modify_record(request, table_name, pk_val):
+    return await process_api_action(request, table_name, pk_val)
+
+async def process_api_action(request, table_name, pk_val):
     user_id = request.ctx.user_id
     role = request.ctx.role
     table_name = table_name.lower()
