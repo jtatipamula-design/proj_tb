@@ -23,127 +23,51 @@ USER_AUTH_CACHE = {}
 CACHE_TTL = 30  # Live checking every 30 seconds
 SCHEMA_CACHE = {"pks": {}}
 
-def get_table_modules():
-    return {
-        # ERP Admin
-        'phc_companies_t': 'ERPAdmin',
-        'phc_operating_orgs_t': 'ERPAdmin',
-        'phc_number_range_master_t': 'ERPAdmin',
-        'phc_lookup_types': 'ERPAdmin',
-        
-        # Master Data
-        'phc_dept_t': 'MasterData',
-        'phc_services_t': 'MasterData',
-        'phc_cost_center_t': 'MasterData',
-        'phc_locations_t': 'MasterData',
-        'phc_apps_t': 'MasterData',
-        'phc_emp_apps_grant_t': 'MasterData',
-        'phc_lookup_values_t': 'MasterData',
-        'phc_plant_master_t': 'MasterData',
-        'phc_plant_compliance_t': 'MasterData',
-        'phc_certifications_t': 'MasterData',
-        'phc_storage_location_master_t': 'MasterData',
-        'phc_partners_t': 'MasterData',
-        'phc_uom_master_t': 'MasterData',
-        'phc_uom_conversion_t': 'MasterData',
-        'phc_prod_master_t': 'MasterData',
-        'phc_prod_lifecycle_history_t': 'MasterData',
-        'phc_prod_alt_names_t': 'MasterData',
-        
-        # HR & People
-        'phc_emp_t': 'HR',
-        'phc_users_t': 'People',
-        
-        # User Mgmt & App Admin
-        'phc_screens_t': 'UserMgmt',
-        'phc_roles_t': 'UserMgmt',
-        'phc_role_screen_assignment_t': 'UserMgmt',
-        'phc_user_roles_assignment_t': 'UserMgmt',
-        'phc_user_group_t': 'UserMgmt',
-        'phc_user_log_t': 'UserMgmt',
-        'phc_error_log_t': 'AppAdmin',
-        
-        # Purchasing
-        'phc_plant_equipment_t': 'Purchasing',
-        'phc_material_master_t': 'Purchasing',
-        'phc_material_group_master_t': 'Purchasing',
-        'phc_vendors_t': 'Purchasing',
-        'phc_vend_sites_t': 'Purchasing',
-        'phc_vend_contact_points_t': 'Purchasing',
-        'phc_vend_site_locations_t': 'Purchasing',
-        
-        # Supply Chain
-        'phc_equipment_locations_t': 'SupplyChain',
-        'phc_prod_formulation': 'SupplyChain',
-        'phc_prod_ingredients': 'SupplyChain',
-        'phc_prod_pack_presentation': 'SupplyChain',
-        'phc_prod_regulatory_status': 'SupplyChain',
-        'phc_prod_regulatory_variations': 'SupplyChain',
-        'phc_prod_ectd_documents': 'SupplyChain',
-        'phc_product_indications': 'SupplyChain',
-        'phc_prod_pharmacology': 'SupplyChain',
-        'phc_prod_dosing_regimen': 'SupplyChain',
-        'phc_prod_contraindications': 'SupplyChain',
-        'phc_prod_warnings': 'SupplyChain',
-        'phc_prod_drug_interactions': 'SupplyChain',
-        'phc_prod_adverse_events': 'SupplyChain',
-        'phc_prod_special_populations': 'SupplyChain',
-        'phc_clinical_trials': 'SupplyChain',
-        'phc_prod_immunogenicity_data': 'SupplyChain',
-        'phc_prod_manufacturing_site': 'SupplyChain',
-        'phc_prod_batch_specification': 'SupplyChain',
-        'phc_prod_process_parameters': 'SupplyChain',
-        'phc_prod_finished_specifications': 'SupplyChain',
-        'phc_prod_reference_standards': 'SupplyChain',
-        'phc_prod_stability_studies': 'SupplyChain',
-        'phc_prod_container_closure': 'SupplyChain',
-        'phc_prod_deviations_capa': 'SupplyChain',
-        'phc_prod_gmp_certificates': 'SupplyChain',
-        'phc_prod_site_inspections': 'SupplyChain',
-        'phc_prod_packaging_spec': 'SupplyChain',
-        'phc_prod_labeling': 'SupplyChain',
-        'phc_prod_serialization': 'SupplyChain',
-        'phc_prod_patents': 'SupplyChain',
-        'phc_prod_exclusivity': 'SupplyChain',
-        'phc_prod_loe': 'SupplyChain',
-        'phc_prod_competitor_filings': 'SupplyChain',
-        
-        # Workflow
-        'phc_approval_types_t': 'WorkflowSetup',
-        'phc_approval_setup_t': 'WorkflowSetup',
-        'phc_notifications_setup_t': 'WorkflowSetup',
-        'phc_approval_events_t': 'WorkflowOpps',
-        
-        # CRM
-        'phc_customer_t': 'CRM',
-        'phc_cust_site_t': 'CRM',
-        'phc_cust_contact_points_t': 'CRM',
-        'phc_cust_site_locations_t': 'CRM'
-    }
-
 async def get_authorized_tables(conn, user_id, role):
     # ILIKE ensures case-insensitive matching so PHC_OPERATING_ORGS_T works perfectly
     if role == 'ADM':
-        rows = await conn.fetch("SELECT psn_screen_code, psn_screen_name FROM phc_screens_t WHERE psn_screen_code ILIKE 'phc_%'")
-        return {r['psn_screen_code'].lower(): r['psn_screen_name'] for r in rows}
-    
-    query = """
-        SELECT DISTINCT s.psn_screen_code, s.psn_screen_name 
-        FROM phc_screens_t s
-        JOIN phc_role_screen_assignment_t rsa ON s.psn_screen_id = rsa.prs_screen_id
-        JOIN phc_user_roles_assignment_t ura ON rsa.prs_role_id = ura.pua_role_id
-        WHERE ura.pua_user_id = $1 AND s.psn_screen_code ILIKE 'phc_%'
-    """
-    rows = await conn.fetch(query, user_id)
-    return {r['psn_screen_code'].lower(): r['psn_screen_name'] for r in rows}
+        # Admin gets everything, joined dynamically with module metadata
+        query = """
+            SELECT s.psn_screen_code, s.psn_screen_name, COALESCE(m.pmd_module_name, 'System Config') as module_name
+            FROM phc_screens_t s
+            LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
+            WHERE s.psn_screen_code ILIKE 'phc_%'
+        """
+        rows = await conn.fetch(query)
+    else:
+        # Strict RBAC: Join assignment tables, ensuring users only fetch their authorized modules
+        query = """
+            SELECT DISTINCT s.psn_screen_code, s.psn_screen_name, COALESCE(m.pmd_module_name, 'Uncategorized') as module_name 
+            FROM phc_screens_t s
+            JOIN phc_role_screen_assignment_t rsa ON s.psn_screen_id = rsa.prs_screen_id
+            JOIN phc_user_roles_assignment_t ura ON rsa.prs_role_id = ura.pua_role_id
+            LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
+            WHERE ura.pua_user_id = $1 AND s.psn_screen_code ILIKE 'phc_%'
+        """
+        rows = await conn.fetch(query, user_id)
+        
+    # Return two structures: Fast-lookup auth dictionary, and module mappings
+    auth_tables = {}
+    table_modules = {}
+    for r in rows:
+        code = r['psn_screen_code'].lower()
+        auth_tables[code] = r['psn_screen_name']
+        table_modules[code] = r['module_name']
+        
+    return auth_tables, table_modules
 
 @app.before_server_start
 async def setup_db(app, loop):
-    app.ctx.pool = await asyncpg.create_pool(dsn=DATABASE_URL, min_size=2, max_size=20)
+    if DATABASE_URL:
+        app.ctx.pool = await asyncpg.create_pool(dsn=DATABASE_URL, min_size=2, max_size=20)
+    else:
+        print("WARNING: DATABASE_URL not set. Running without db pool.")
+        app.ctx.pool = None
 
 @app.after_server_stop
 async def close_db(app, loop):
-    await app.ctx.pool.close()
+    if hasattr(app.ctx, 'pool') and app.ctx.pool:
+        await app.ctx.pool.close()
 
 def add_security_headers(res):
     res.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -272,6 +196,7 @@ async def get_pk_column(conn, table_name):
 async def get_dropdown_options(conn, table_name, column_name):
     options = []
     
+    # Generic mapping for standard lookup tables
     if column_name == 'company_id' or column_name.endswith('_company_id'):
         rows = await conn.fetch("SELECT pcp_company_id as id, pcp_company_name as name FROM phc_companies_t WHERE pcp_status='ACT'")
         return [{"id": str(r['id']), "name": r['name']} for r in rows]
@@ -347,7 +272,7 @@ async def dashboard(request):
     role = request.ctx.role
     
     async with app.ctx.pool.acquire() as conn:
-        all_tables = await get_authorized_tables(conn, user_id, role)
+        all_tables, table_modules = await get_authorized_tables(conn, user_id, role)
         
         emp_count = await conn.fetchval("SELECT COUNT(*) FROM phc_emp_t WHERE pem_status = 'ACT'") if 'phc_emp_t' in all_tables else 0
         comp_count = await conn.fetchval("SELECT COUNT(*) FROM phc_companies_t WHERE pcp_status = 'ACT'") if 'phc_companies_t' in all_tables else 0
@@ -361,13 +286,25 @@ async def dashboard(request):
             "app_count": app_count
         }
         
+    # Dynamically cluster screens under their respective modules for the UI
+    modules_tree = {}
+    for tbl_code, tbl_name in all_tables.items():
+        mod_name = table_modules.get(tbl_code, 'Uncategorized')
+        if mod_name not in modules_tree:
+            modules_tree[mod_name] = []
+        modules_tree[mod_name].append({"code": tbl_code, "name": tbl_name})
+        
+    # Sort modules alphabetically for consistent UI
+    modules_tree = dict(sorted(modules_tree.items()))
+
     template = env.get_template('dashboard.html')
     html = template.render(
         username=username, 
         user_id=user_id,
         user_role=role,
         all_tables=list(all_tables.keys()), 
-        table_modules=get_table_modules(),
+        table_modules=table_modules,
+        modules_tree=modules_tree,
         stats=stats
     )
     return add_security_headers(response.html(html))
@@ -385,7 +322,7 @@ async def show_table(request, table_name):
     search_query = request.args.get("q", "").strip()
 
     async with app.ctx.pool.acquire() as conn:
-        auth_tables = await get_authorized_tables(conn, user_id, role)
+        auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
         if table_name not in auth_tables:
             raise NotFound("Table not found or unauthorized")
         
@@ -455,7 +392,7 @@ async def show_table(request, table_name):
         rows=rows,
         pk_column=pk_column,
         all_tables=list(auth_tables.keys()),
-        table_modules=get_table_modules(),
+        table_modules=table_modules,
         page=page,
         total_pages=total_pages,
         total_count=total_count,
@@ -481,7 +418,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
     table_name = table_name.lower()
 
     async with app.ctx.pool.acquire() as conn:
-        auth_tables = await get_authorized_tables(conn, user_id, role)
+        auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
         if table_name not in auth_tables:
             raise NotFound("Table not found or unauthorized")
         
@@ -538,7 +475,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         is_update=is_update,
         pk_val=pk_val,
         all_tables=list(auth_tables.keys()),
-        table_modules=get_table_modules()
+        table_modules=table_modules
     )
     return add_security_headers(response.html(html))
 
@@ -547,7 +484,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
 async def api_create_record(request, table_name):
     return await process_api_action(request, table_name, None)
 
-@app.route('/api/<table_name>/<pk_val>', methods=['PUT', 'DELETE'], name="api_update_delete")
+@app.route('/api/<table_name>/<pk_val>', methods=['PUT', 'DELETE', 'POST'], name="api_update_delete")
 @check_auth
 async def api_modify_record(request, table_name, pk_val):
     return await process_api_action(request, table_name, pk_val)
@@ -556,15 +493,20 @@ async def process_api_action(request, table_name, pk_val):
     user_id = request.ctx.user_id
     role = request.ctx.role
     table_name = table_name.lower()
+    
+    # Forms sometimes send PUT/DELETE as POST with a special _method field
+    method = request.method
+    if request.form and request.form.get('_method'):
+        method = request.form.get('_method')[0].upper()
 
     async with app.ctx.pool.acquire() as conn:
-        auth_tables = await get_authorized_tables(conn, user_id, role)
+        auth_tables, _ = await get_authorized_tables(conn, user_id, role)
         if table_name not in auth_tables:
             return response.json({"error": "Unauthorized"}, status=403)
         
         pk_column = await get_pk_column(conn, table_name)
 
-        if request.method == 'DELETE':
+        if method == 'DELETE':
             try:
                 await conn.execute(f"DELETE FROM {table_name} WHERE {pk_column} = $1", int(pk_val) if pk_val.isdigit() else pk_val)
                 return response.json({"status": "success"})
@@ -575,7 +517,7 @@ async def process_api_action(request, table_name, pk_val):
         if not data:
             return response.json({"error": "No data provided"}, status=400)
             
-        data_dict = {k: v[0] if isinstance(v, list) else v for k, v in data.items()}
+        data_dict = {k: v[0] if isinstance(v, list) else v for k, v in data.items() if k != '_method'}
 
         columns_info = await conn.fetch("""
             SELECT column_name, data_type, character_maximum_length 
@@ -583,7 +525,7 @@ async def process_api_action(request, table_name, pk_val):
         """, table_name)
         schema_map = {c['column_name']: dict(c) for c in columns_info}
 
-        clean_data = _sanitize_payload(data_dict, pk_column, schema_map, is_update=request.method == 'PUT')
+        clean_data = _sanitize_payload(data_dict, pk_column, schema_map, is_update=(method == 'PUT'))
 
         company_col = next((c for c in schema_map if c.endswith('_company_id') or c == 'company_id'), None)
         if company_col and role != 'ADM':
@@ -595,12 +537,12 @@ async def process_api_action(request, table_name, pk_val):
         for wc in who_cols:
             if 'modified' in wc and 'by' not in wc: clean_data[wc] = datetime.now()
             elif 'modified_by' in wc: clean_data[wc] = "System"
-            elif request.method == 'POST':
+            elif method == 'POST':
                 if 'created' in wc and 'by' not in wc: clean_data[wc] = datetime.now()
                 elif 'created_by' in wc: clean_data[wc] = "System"
 
         try:
-            if request.method == 'POST':
+            if method == 'POST':
                 if schema_map[pk_column]['data_type'] in ('integer', 'bigint', 'numeric'):
                     max_id = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
                     clean_data[pk_column] = (max_id or 0) + 1
@@ -611,16 +553,20 @@ async def process_api_action(request, table_name, pk_val):
                 q = f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({placeholders})"
                 await conn.execute(q, *vals)
 
-            elif request.method == 'PUT':
+            elif method == 'PUT':
                 cols = list(clean_data.keys())
                 vals = list(clean_data.values())
                 set_clause = ", ".join([f"{c} = ${i+1}" for i, c in enumerate(cols)])
                 q = f"UPDATE {table_name} SET {set_clause} WHERE {pk_column} = ${len(vals)+1}"
                 await conn.execute(q, *(vals + [int(pk_val) if pk_val.isdigit() else pk_val]))
 
-            res = response.json({"status": "success"})
-            res.headers["HX-Redirect"] = f"/table/{table_name}"
-            return add_security_headers(res)
+            # Handle both JSON responses and Standard HTML Forms
+            if request.headers.get("HX-Request"):
+                res = response.json({"status": "success"})
+                res.headers["HX-Redirect"] = f"/table/{table_name}"
+                return add_security_headers(res)
+            else:
+                return response.redirect(f"/table/{table_name}")
             
         except Exception as e:
             return response.json({"error": str(e)}, status=400)
