@@ -1,194 +1,82 @@
 {% extends "base.html" %}
 
+{% block head_title %}Dashboard{% endblock %}
+{% block header_title %}Command Center Dashboard{% endblock %}
+
 {% block content %}
-<style>
-    .welcome-section { margin-bottom: 32px; }
-    .welcome-section h1 { font-size: 28px; font-weight: 600; color: var(--color-glacier); margin-bottom: 8px; }
-    .welcome-section p { color: var(--color-fog); font-size: 15px; }
-
-    /* Bento Box Grid */
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 24px;
-        margin-bottom: 40px;
-    }
-
-    .stat-card {
-        background: var(--glass-surface); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-        border: 1px solid var(--glass-border); border-radius: 24px; padding: 24px;
-        display: flex; flex-direction: column; justify-content: space-between;
-        position: relative; overflow: hidden;
-        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.3);
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .stat-card:hover { transform: translateY(-4px); box-shadow: 0 15px 40px -10px rgba(0, 0, 0, 0.5); }
-    
-    .stat-card-title { font-size: 14px; font-weight: 500; color: var(--color-fog); margin-bottom: 12px; z-index: 2; }
-    .stat-card-value { font-size: 36px; font-weight: 600; color: var(--color-glacier); z-index: 2; }
-    .stat-card-icon {
-        position: absolute; right: 20px; top: 24px; color: var(--color-electric-iris); opacity: 0.2;
-        width: 48px; height: 48px; z-index: 1;
-    }
-
-    .modules-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-        gap: 16px;
-    }
-
-    .module-card {
-        background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border);
-        border-radius: 16px; padding: 16px; display: flex; align-items: center; gap: 16px;
-        cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    html.light-mode .module-card { background: rgba(0, 0, 0, 0.02); }
-    .module-card:hover { background: rgba(186, 215, 247, 0.08); border-color: var(--color-electric-iris); transform: translateY(-2px); box-shadow: 0 10px 20px -10px rgba(102, 58, 243, 0.3); }
-    html.light-mode .module-card:hover { background: rgba(0, 0, 0, 0.05); }
-
-    .module-icon-wrap {
-        width: 48px; height: 48px; border-radius: 12px; background: rgba(0,0,0,0.2);
-        display: flex; align-items: center; justify-content: center; color: var(--color-moonlight);
-    }
-    html.light-mode .module-icon-wrap { background: rgba(255,255,255,0.8); }
-    .module-card:hover .module-icon-wrap { color: var(--color-electric-iris); }
-
-    .module-title { font-weight: 600; font-size: 15px; color: var(--color-glacier); margin-bottom: 2px; }
-    .module-desc { font-size: 12px; color: var(--color-fog); }
-
-    .section-title { font-family: var(--font-mono); color: var(--color-fog); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 16px; margin-top: 32px; }
-</style>
-
-<div class="welcome-section">
-    <h1>Hello, {{ username.title() }} 👋</h1>
-    <p>Welcome to your ERP Control Center. Here is what is happening today.</p>
-</div>
-
-<div class="section-title">System Overview</div>
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-card-title">Total Employees</div>
-        <div class="stat-card-value">{{ stats.emp_count | default('0') }}</div>
-        <i data-lucide="users" class="stat-card-icon"></i>
+<!-- Quick Stats -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+    <div class="glass-card rounded-2xl p-6 shadow-lg">
+        <div class="flex items-center justify-between mb-4">
+            <p class="text-sm font-medium text-slate-400">Active Employees</p>
+            <div class="p-2 bg-blue-500/20 text-blue-400 rounded-lg"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div>
+        </div>
+        <p class="text-4xl font-bold text-white tracking-tight">{{ stats.emp_count }}</p>
     </div>
-    <div class="stat-card">
-        <div class="stat-card-title">Active Companies</div>
-        <div class="stat-card-value">{{ stats.comp_count | default('0') }}</div>
-        <i data-lucide="building-2" class="stat-card-icon"></i>
+    <div class="glass-card rounded-2xl p-6 shadow-lg">
+        <div class="flex items-center justify-between mb-4">
+            <p class="text-sm font-medium text-slate-400">Companies</p>
+            <div class="p-2 bg-purple-500/20 text-purple-400 rounded-lg"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg></div>
+        </div>
+        <p class="text-4xl font-bold text-white tracking-tight">{{ stats.comp_count }}</p>
     </div>
-    <div class="stat-card">
-        <div class="stat-card-title">Departments</div>
-        <div class="stat-card-value">{{ stats.dept_count | default('0') }}</div>
-        <i data-lucide="network" class="stat-card-icon"></i>
+    <div class="glass-card rounded-2xl p-6 shadow-lg">
+        <div class="flex items-center justify-between mb-4">
+            <p class="text-sm font-medium text-slate-400">Departments</p>
+            <div class="p-2 bg-emerald-500/20 text-emerald-400 rounded-lg"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg></div>
+        </div>
+        <p class="text-4xl font-bold text-white tracking-tight">{{ stats.dept_count }}</p>
     </div>
-    <div class="stat-card">
-        <div class="stat-card-title">System Apps</div>
-        <div class="stat-card-value">{{ stats.app_count | default('0') }}</div>
-        <i data-lucide="layout-grid" class="stat-card-icon"></i>
+    <div class="glass-card rounded-2xl p-6 shadow-lg">
+        <div class="flex items-center justify-between mb-4">
+            <p class="text-sm font-medium text-slate-400">System Apps</p>
+            <div class="p-2 bg-amber-500/20 text-amber-400 rounded-lg"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg></div>
+        </div>
+        <p class="text-4xl font-bold text-white tracking-tight">{{ stats.app_count }}</p>
     </div>
 </div>
 
-<div class="section-title">Enterprise Modules</div>
-<div class="modules-grid">
-    <!-- 1. ERP Admin -->
-    {% if user_role == 'ADM' %}
-    <div class="module-card" onclick="filterSidebarByModule('ERPAdmin')">
-        <div class="module-icon-wrap"><i data-lucide="shield"></i></div>
-        <div class="module-details">
-            <div class="module-title">ERP Admin</div>
-            <div class="module-desc">Core Configuration</div>
-        </div>
-    </div>
-    {% endif %}
+<div class="flex items-center justify-between mb-6">
+    <h3 class="text-2xl font-bold text-white">Dynamic Modules</h3>
+    <div class="h-px bg-white/10 flex-1 ml-6"></div>
+</div>
 
-    <!-- 2. Master Data -->
-    <div class="module-card" onclick="filterSidebarByModule('MasterData')">
-        <div class="module-icon-wrap"><i data-lucide="database"></i></div>
-        <div class="module-details">
-            <div class="module-title">Master Data</div>
-            <div class="module-desc">Central Entities</div>
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-12">
+    {% for module_name, screens in modules_tree.items() %}
+    <div class="glass-panel rounded-2xl shadow-xl overflow-hidden flex flex-col h-full border border-white/10 hover:border-white/20 transition-all group">
+        
+        <!-- Module Header -->
+        <div class="bg-white/5 border-b border-white/10 px-6 py-5 relative overflow-hidden">
+            <div class="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <h3 class="font-semibold text-white flex items-center gap-3 relative z-10 text-lg">
+                <span class="w-2.5 h-2.5 rounded-full bg-indigo-400 shadow-[0_0_10px_rgba(129,140,248,0.8)]"></span>
+                {{ module_name }}
+            </h3>
+        </div>
+        
+        <!-- Module Screens List -->
+        <div class="p-6 flex-1 flex flex-col">
+            <ul class="space-y-3 flex-1">
+                {% for screen in screens[:5] %} <!-- Show first 5 -->
+                <li>
+                    <a href="/table/{{ screen.code }}" @click="isNavigating = true"
+                       class="flex items-center justify-between p-3 rounded-xl hover:bg-white/10 border border-transparent hover:border-white/10 transition-all duration-200">
+                        <span class="text-sm text-slate-300 font-medium">{{ screen.name }}</span>
+                        <svg class="w-4 h-4 text-slate-500 opacity-0 -translate-x-2 group-hover/link:opacity-100 group-hover/link:translate-x-0 transition-all group-hover:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+            
+            {% if screens|length > 5 %}
+            <div class="mt-6 pt-4 border-t border-white/10 flex justify-between items-center">
+                <span class="text-xs font-semibold text-slate-400 bg-slate-800/50 px-3 py-1 rounded-full border border-white/5">
+                    + {{ screens|length - 5 }} More Screens
+                </span>
+            </div>
+            {% endif %}
         </div>
     </div>
-
-    <!-- 3. HR -->
-    <div class="module-card" onclick="filterSidebarByModule('HR')">
-        <div class="module-icon-wrap"><i data-lucide="users"></i></div>
-        <div class="module-details">
-            <div class="module-title">HR</div>
-            <div class="module-desc">Human Resources</div>
-        </div>
-    </div>
-
-    <!-- 4. People -->
-    <div class="module-card" onclick="filterSidebarByModule('People')">
-        <div class="module-icon-wrap"><i data-lucide="user"></i></div>
-        <div class="module-details">
-            <div class="module-title">People</div>
-            <div class="module-desc">Personnel Data</div>
-        </div>
-    </div>
-
-    <!-- 5. User Management -->
-    <div class="module-card" onclick="filterSidebarByModule('UserMgmt')">
-        <div class="module-icon-wrap"><i data-lucide="users-round"></i></div>
-        <div class="module-details">
-            <div class="module-title">User Mgmt</div>
-            <div class="module-desc">Roles & Access</div>
-        </div>
-    </div>
-
-    <!-- 6. App Admin -->
-    <div class="module-card" onclick="filterSidebarByModule('AppAdmin')">
-        <div class="module-icon-wrap"><i data-lucide="settings"></i></div>
-        <div class="module-details">
-            <div class="module-title">App Admin</div>
-            <div class="module-desc">System Settings</div>
-        </div>
-    </div>
-
-    <!-- 7. Purchasing -->
-    <div class="module-card" onclick="filterSidebarByModule('Purchasing')">
-        <div class="module-icon-wrap"><i data-lucide="shopping-cart"></i></div>
-        <div class="module-details">
-            <div class="module-title">Purchasing</div>
-            <div class="module-desc">Procurement</div>
-        </div>
-    </div>
-
-    <!-- 8. Supply Chain -->
-    <div class="module-card" onclick="filterSidebarByModule('SupplyChain')">
-        <div class="module-icon-wrap"><i data-lucide="truck"></i></div>
-        <div class="module-details">
-            <div class="module-title">Supply Chain</div>
-            <div class="module-desc">Logistics & Plant</div>
-        </div>
-    </div>
-
-    <!-- 9. Workflow Setup -->
-    <div class="module-card" onclick="filterSidebarByModule('WorkflowSetup')">
-        <div class="module-icon-wrap"><i data-lucide="git-branch"></i></div>
-        <div class="module-details">
-            <div class="module-title">Workflow Setup</div>
-            <div class="module-desc">Approval Routing</div>
-        </div>
-    </div>
-
-    <!-- 10. Workflow Opps -->
-    <div class="module-card" onclick="filterSidebarByModule('WorkflowOpps')">
-        <div class="module-icon-wrap"><i data-lucide="check-circle"></i></div>
-        <div class="module-details">
-            <div class="module-title">Workflow Opps</div>
-            <div class="module-desc">Active Approvals</div>
-        </div>
-    </div>
-
-    <!-- 11. CRM -->
-    <div class="module-card" onclick="filterSidebarByModule('CRM')">
-        <div class="module-icon-wrap"><i data-lucide="briefcase"></i></div>
-        <div class="module-details">
-            <div class="module-title">CRM</div>
-            <div class="module-desc">Customer Relations</div>
-        </div>
-    </div>
+    {% endfor %}
 </div>
 {% endblock %}
