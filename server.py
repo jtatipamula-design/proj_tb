@@ -1,7 +1,7 @@
 import os
 import uuid
 import time
-from datetime import datetime, date
+from datetime import datetime
 from functools import wraps
 import bcrypt
 import jwt
@@ -12,30 +12,26 @@ from jinja2 import Environment, FileSystemLoader
 
 app = Sanic("ERP_System")
 
-# Environment Variables
 DATABASE_URL = os.environ.get("DATABASE_URL")
 JWT_SECRET = os.environ.get("JWT_SECRET", "super-secret-key-change-in-prod")
 PORT = int(os.environ.get("PORT", 10000))
 
-# Jinja2 Templating
 env = Environment(loader=FileSystemLoader('templates'))
 
 # --- ENTERPRISE PERFORMANCE CACHE ---
-# Stores {user_id: {"session_id": str, "role": str, "expires": float}}
 USER_AUTH_CACHE = {}
-CACHE_TTL = 30  # Number of seconds before it pings the DB again
-
+CACHE_TTL = 30  # Live checking every 30 seconds
 SCHEMA_CACHE = {"pks": {}}
 
-# ==========================================
-# MODULE ROUTING LOGIC
-# ==========================================
 def get_table_modules():
     return {
+        # ERP Admin
         'phc_companies_t': 'ERPAdmin',
         'phc_operating_orgs_t': 'ERPAdmin',
         'phc_number_range_master_t': 'ERPAdmin',
         'phc_lookup_types': 'ERPAdmin',
+        
+        # Master Data
         'phc_dept_t': 'MasterData',
         'phc_services_t': 'MasterData',
         'phc_cost_center_t': 'MasterData',
@@ -53,8 +49,12 @@ def get_table_modules():
         'phc_prod_master_t': 'MasterData',
         'phc_prod_lifecycle_history_t': 'MasterData',
         'phc_prod_alt_names_t': 'MasterData',
+        
+        # HR & People
         'phc_emp_t': 'HR',
         'phc_users_t': 'People',
+        
+        # User Mgmt & App Admin
         'phc_screens_t': 'UserMgmt',
         'phc_roles_t': 'UserMgmt',
         'phc_role_screen_assignment_t': 'UserMgmt',
@@ -62,6 +62,8 @@ def get_table_modules():
         'phc_user_group_t': 'UserMgmt',
         'phc_user_log_t': 'UserMgmt',
         'phc_error_log_t': 'AppAdmin',
+        
+        # Purchasing
         'phc_plant_equipment_t': 'Purchasing',
         'phc_material_master_t': 'Purchasing',
         'phc_material_group_master_t': 'Purchasing',
@@ -69,6 +71,8 @@ def get_table_modules():
         'phc_vend_sites_t': 'Purchasing',
         'phc_vend_contact_points_t': 'Purchasing',
         'phc_vend_site_locations_t': 'Purchasing',
+        
+        # Supply Chain
         'phc_equipment_locations_t': 'SupplyChain',
         'phc_prod_formulation': 'SupplyChain',
         'phc_prod_ingredients': 'SupplyChain',
@@ -103,10 +107,14 @@ def get_table_modules():
         'phc_prod_exclusivity': 'SupplyChain',
         'phc_prod_loe': 'SupplyChain',
         'phc_prod_competitor_filings': 'SupplyChain',
+        
+        # Workflow
         'phc_approval_types_t': 'WorkflowSetup',
         'phc_approval_setup_t': 'WorkflowSetup',
         'phc_notifications_setup_t': 'WorkflowSetup',
         'phc_approval_events_t': 'WorkflowOpps',
+        
+        # CRM
         'phc_customer_t': 'CRM',
         'phc_cust_site_t': 'CRM',
         'phc_cust_contact_points_t': 'CRM',
@@ -114,7 +122,7 @@ def get_table_modules():
     }
 
 async def get_authorized_tables(conn, user_id, role):
-    # Titanium Shield: Only fetch actual phc_ screens. ILIKE makes it case-insensitive!
+    # ILIKE ensures case-insensitive matching so PHC_OPERATING_ORGS_T works perfectly
     if role == 'ADM':
         rows = await conn.fetch("SELECT psn_screen_code, psn_screen_name FROM phc_screens_t WHERE psn_screen_code ILIKE 'phc_%'")
         return {r['psn_screen_code'].lower(): r['psn_screen_name'] for r in rows}
@@ -129,10 +137,6 @@ async def get_authorized_tables(conn, user_id, role):
     rows = await conn.fetch(query, user_id)
     return {r['psn_screen_code'].lower(): r['psn_screen_name'] for r in rows}
 
-
-# ==========================================
-# DATABASE CONNECTION POOLING
-# ==========================================
 @app.before_server_start
 async def setup_db(app, loop):
     app.ctx.pool = await asyncpg.create_pool(dsn=DATABASE_URL, min_size=2, max_size=20)
@@ -141,9 +145,6 @@ async def setup_db(app, loop):
 async def close_db(app, loop):
     await app.ctx.pool.close()
 
-# ==========================================
-# AUTHENTICATION & SECURITY
-# ==========================================
 def add_security_headers(res):
     res.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     res.headers["Pragma"] = "no-cache"
@@ -164,22 +165,22 @@ def check_auth(f):
             now = time.time()
             cached = USER_AUTH_CACHE.get(user_id)
             
-            # Use RAM Cache if it exists and hasn't expired (Lightning Fast)
+            # Use RAM Cache for 30 seconds for blazing fast clicks
             if cached and now < cached["expires"]:
                 if cached["session_id"] != session_id:
                     res = response.redirect("/login")
-                    res.delete_cookie("auth_token")
+                    del res.cookies["auth_token"]
                     return add_security_headers(res)
                 request.ctx.user_id = user_id
                 request.ctx.username = payload.get("username")
                 request.ctx.role = cached["role"]
             else:
-                # Ping Database to refresh cache
+                # Live query to check if their Role changed or if they logged in elsewhere
                 async with app.ctx.pool.acquire() as conn:
                     user = await conn.fetchrow("SELECT pus_session_id, pus_user_type FROM phc_users_t WHERE pus_user_id = $1", user_id)
                     if not user or user["pus_session_id"] != session_id:
                         res = response.redirect("/login")
-                        res.delete_cookie("auth_token")
+                        del res.cookies["auth_token"]
                         return add_security_headers(res)
                     
                     role = user["pus_user_type"] or "STD"
@@ -193,12 +194,11 @@ def check_auth(f):
                     request.ctx.role = role
 
             return await f(request, *args, **kwargs)
-        except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        except Exception:
             res = response.redirect("/login")
-            res.delete_cookie("auth_token")
+            del res.cookies["auth_token"]
             return add_security_headers(res)
     return decorated_function
-
 
 @app.route('/login', methods=['GET', 'POST'])
 async def login(request):
@@ -217,13 +217,11 @@ async def login(request):
         if user:
             stored_pwd = user['pus_pwd']
             is_valid = False
-            
             try:
-                # 1. Try bcrypt
                 if bcrypt.checkpw(password.encode('utf-8'), stored_pwd.encode('utf-8')):
                     is_valid = True
             except ValueError:
-                # 2. Check plain-text
+                # Checks plain-text passwords if bcrypt fails
                 if password == stored_pwd:
                     is_valid = True
                     
@@ -238,12 +236,10 @@ async def login(request):
                     "exp": datetime.utcnow().timestamp() + 86400
                 }
                 token = jwt.encode(token_payload, JWT_SECRET, algorithm="HS256")
-                
-                # Invalidate cache so they get fresh DB pull on next click
                 USER_AUTH_CACHE.pop(user['pus_user_id'], None)
                 
                 res = response.json({"status": "success", "message": "Login successful"})
-                # Set Session Cookie (No max_age!)
+                # Set Session Cookie (No max_age!) - It will expire on browser close
                 res.add_cookie("auth_token", token, httponly=True, samesite="Lax")
                 return add_security_headers(res)
         
@@ -252,12 +248,9 @@ async def login(request):
 @app.route('/logout', methods=['GET'])
 async def logout(request):
     res = response.redirect("/login")
-    res.delete_cookie("auth_token")
+    del res.cookies["auth_token"]
     return add_security_headers(res)
 
-# ==========================================
-# METADATA CACHING UTILS
-# ==========================================
 async def get_pk_column(conn, table_name):
     if table_name in SCHEMA_CACHE["pks"]:
         return SCHEMA_CACHE["pks"][table_name]
@@ -288,18 +281,6 @@ async def get_dropdown_options(conn, table_name, column_name):
 
     if column_name.endswith('_dept_id'):
         rows = await conn.fetch("SELECT pdp_dept_id as id, pdp_dept_name as name FROM phc_dept_t WHERE pdp_status='ACT'")
-        return [{"id": str(r['id']), "name": r['name']} for r in rows]
-
-    if column_name.endswith('_services_id'):
-        rows = await conn.fetch("SELECT psv_services_id as id, psv_services_name as name FROM phc_services_t WHERE psv_status='ACT'")
-        return [{"id": str(r['id']), "name": r['name']} for r in rows]
-
-    if column_name.endswith('_cost_center_id'):
-        rows = await conn.fetch("SELECT pcc_cost_center_id as id, pcc_cost_center_name as name FROM phc_cost_center_t WHERE pcc_status='ACT'")
-        return [{"id": str(r['id']), "name": r['name']} for r in rows]
-
-    if column_name.endswith('_location_id'):
-        rows = await conn.fetch("SELECT pln_location_id as id, pln_location_name as name FROM phc_locations_t WHERE pln_status='ACT'")
         return [{"id": str(r['id']), "name": r['name']} for r in rows]
 
     if table_name == 'phc_user_roles_assignment_t' and column_name == 'pua_user_id':
@@ -357,9 +338,6 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
 
     return clean_data
 
-# ==========================================
-# CORE ROUTES
-# ==========================================
 @app.route('/')
 @check_auth
 async def dashboard(request):
@@ -370,7 +348,6 @@ async def dashboard(request):
     async with app.ctx.pool.acquire() as conn:
         all_tables = await get_authorized_tables(conn, user_id, role)
         
-        # Dashboard stats
         emp_count = await conn.fetchval("SELECT COUNT(*) FROM phc_emp_t WHERE pem_status = 'ACT'") if 'phc_emp_t' in all_tables else 0
         comp_count = await conn.fetchval("SELECT COUNT(*) FROM phc_companies_t WHERE pcp_status = 'ACT'") if 'phc_companies_t' in all_tables else 0
         dept_count = await conn.fetchval("SELECT COUNT(*) FROM phc_dept_t WHERE pdp_status = 'ACT'") if 'phc_dept_t' in all_tables else 0
@@ -393,7 +370,6 @@ async def dashboard(request):
         stats=stats
     )
     return add_security_headers(response.html(html))
-
 
 @app.route('/table/<table_name>')
 @check_auth
@@ -488,7 +464,6 @@ async def show_table(request, table_name):
     )
     return add_security_headers(response.html(html))
 
-
 @app.route('/new/<table_name>', methods=['GET'])
 @check_auth
 async def show_add_form(request, table_name):
@@ -566,9 +541,9 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
     )
     return add_security_headers(response.html(html))
 
-
-@app.route('/api/<table_name>', methods=['POST'])
-@app.route('/api/<table_name>/<pk_val>', methods=['PUT', 'DELETE'])
+# FIX: explicitly named routes to prevent Sanic Duplicate Route error
+@app.route('/api/<table_name>', methods=['POST'], name='api_create')
+@app.route('/api/<table_name>/<pk_val>', methods=['PUT', 'DELETE'], name='api_update_delete')
 @check_auth
 async def api_table_action(request, table_name, pk_val=None):
     user_id = request.ctx.user_id
@@ -619,7 +594,6 @@ async def api_table_action(request, table_name, pk_val=None):
 
         try:
             if request.method == 'POST':
-                # Handle ID Generation
                 if schema_map[pk_column]['data_type'] in ('integer', 'bigint', 'numeric'):
                     max_id = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
                     clean_data[pk_column] = (max_id or 0) + 1
@@ -637,7 +611,6 @@ async def api_table_action(request, table_name, pk_val=None):
                 q = f"UPDATE {table_name} SET {set_clause} WHERE {pk_column} = ${len(vals)+1}"
                 await conn.execute(q, *(vals + [int(pk_val) if pk_val.isdigit() else pk_val]))
 
-            # Htmx Redirect Helper
             res = response.json({"status": "success"})
             res.headers["HX-Redirect"] = f"/table/{table_name}"
             return add_security_headers(res)
