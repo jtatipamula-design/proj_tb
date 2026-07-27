@@ -516,56 +516,55 @@
                 <button id="showAllTablesBtn" onclick="filterSidebarByModule('ALL')">Show All Modules</button>
             </div>
             
-            <!-- Accordion List of Oracle Modules -->
             {% set modules = [
-                ('Ledger', 'book-open', 'General Ledger'),
-                ('Receivables', 'receipt', 'Receivables'),
-                ('Payables', 'credit-card', 'Payables'),
-                ('Procurement', 'shopping-cart', 'Procurement'),
-                ('OrderMgmt', 'package-open', 'Order Management'),
-                ('Project', 'briefcase', 'Project Accounting'),
-                ('Product', 'boxes', 'Inventory'),
+                ('ERPAdmin', 'shield', 'ERP Admin'),
                 ('MasterData', 'database', 'Master Data'),
-                ('CustomerSetup', 'users', 'Customers & Vendors'),
-                ('Employee', 'users-round', 'Employees'),
-                ('Cleaning', 'flask-conical', 'Cleaning Validation'),
-                ('AppSetup', 'settings', 'App Setup'),
-                ('Other', 'folder', 'Other')
+                ('HR', 'users', 'HR'),
+                ('People', 'user', 'People'),
+                ('UserMgmt', 'users-round', 'User Management'),
+                ('AppAdmin', 'settings', 'App Admin'),
+                ('Purchasing', 'shopping-cart', 'Purchasing'),
+                ('SupplyChain', 'truck', 'Supply Chain'),
+                ('WorkflowSetup', 'git-branch', 'Workflow Setup'),
+                ('WorkflowOpps', 'check-circle', 'Workflow Opps'),
+                ('CRM', 'briefcase', 'CRM')
             ] %}
 
             {% for mod_key, icon, mod_label in modules %}
-                {% set has_tables = namespace(value=false) %}
-                {% for tbl in all_tables %}
-                    {% set t_mod = table_modules.get(tbl, 'Other') if table_modules else 'Other' %}
-                    {% if t_mod == mod_key %}{% set has_tables.value = true %}{% endif %}
-                {% endfor %}
+                {% if mod_key != 'ERPAdmin' or user_role == 'ADM' %}
+                    {% set has_tables = namespace(value=false) %}
+                    {% for tbl in all_tables %}
+                        {% set t_mod = table_modules.get(tbl, 'Unknown') if table_modules else 'Unknown' %}
+                        {% if t_mod == mod_key %}{% set has_tables.value = true %}{% endif %}
+                    {% endfor %}
 
-                {% if has_tables.value %}
-                    <div class="nav-group" data-group="{{ mod_key }}">
-                        
-                        <!-- Accordion Header (Click to Expand & Pin) -->
-                        <div class="nav-group-header" onclick="toggleNavGroup('{{ mod_key }}')">
-                            <div style="display: flex; align-items: center; gap: 12px;">
-                                <i data-lucide="{{ icon }}"></i>
-                                <span class="nav-text">{{ mod_label }}</span>
+                    {% if has_tables.value %}
+                        <div class="nav-group" data-group="{{ mod_key }}">
+                            
+                            <!-- Accordion Header (Click to Expand & Pin) -->
+                            <div class="nav-group-header" onclick="toggleNavGroup('{{ mod_key }}')">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <i data-lucide="{{ icon }}"></i>
+                                    <span class="nav-text">{{ mod_label }}</span>
+                                </div>
+                                <i data-lucide="chevron-down" class="nav-chevron"></i>
                             </div>
-                            <i data-lucide="chevron-down" class="nav-chevron"></i>
+                            
+                            <!-- Accordion Content (List of specific Tables) -->
+                            <div class="nav-group-content" id="group-content-{{ mod_key }}">
+                                {% for tbl in all_tables %}
+                                    {% set t_mod = table_modules.get(tbl, 'Unknown') if table_modules else 'Unknown' %}
+                                    {% if t_mod == mod_key %}
+                                        {% set clean_name = tbl.split('_', 1)[-1].replace('_t', '').replace('_', ' ').title() %}
+                                        <a href="/table/{{ tbl }}" class="nav-item {% if table_name == tbl %}active{% endif %}" data-search="{{ clean_name.lower() }}">
+                                            <div class="nav-bullet"></div>
+                                            <span class="nav-text">{{ clean_name }}</span>
+                                        </a>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
                         </div>
-                        
-                        <!-- Accordion Content (List of specific Tables) -->
-                        <div class="nav-group-content" id="group-content-{{ mod_key }}">
-                            {% for tbl in all_tables %}
-                                {% set t_mod = table_modules.get(tbl, 'Other') if table_modules else 'Other' %}
-                                {% if t_mod == mod_key %}
-                                    {% set clean_name = tbl.split('_', 1)[-1].replace('_t', '').replace('_', ' ').title() %}
-                                    <a href="/table/{{ tbl }}" class="nav-item {% if table_name == tbl %}active{% endif %}" data-search="{{ clean_name.lower() }}">
-                                        <div class="nav-bullet"></div>
-                                        <span class="nav-text">{{ clean_name }}</span>
-                                    </a>
-                                {% endif %}
-                            {% endfor %}
-                        </div>
-                    </div>
+                    {% endif %}
                 {% endif %}
             {% endfor %}
         </nav>
@@ -586,7 +585,7 @@
                     <div style="font-size: 11px; color: var(--color-fog);">Edit Profile</div>
                 </div>
             </a>
-            <!-- FIX: hx-boost="false" prevents HTMX from hijacking the logout redirect, solving the random JSON error! -->
+            <!-- HTMX bypass on Logout to prevent layout bugs -->
             <a href="/logout" class="logout-btn" title="Logout" hx-boost="false"><i data-lucide="log-out" style="width: 18px;"></i></a>
         </section>
     </aside>
