@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,100 +8,84 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#14b8a6', 600: '#0d9488', 900: '#134e4a', 950: '#042f2e' },
+                        dark: { bg: '#0b0f19', surface: '#111827', border: '#1f2937' }
+                    }
+                }
+            }
+        }
+    </script>
+    
     <style>
         [x-cloak] { display: none !important; }
         
-        /* Custom Scrollbar for dark theme */
+        /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
-        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.3); border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
 
-        /* Animated Grid Background */
+        /* Dynamic Grid Background */
         .bg-grid {
-            background-size: 50px 50px;
-            background-image: 
-                linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-            mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
-            -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+            background-size: 40px 40px;
+            background-image: linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px);
+            opacity: 0.03;
         }
 
-        /* Floating Animated Blobs */
-        .blob {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(80px);
-            z-index: 0;
-            opacity: 0.5;
-            animation: float 20s infinite ease-in-out alternate;
+        /* Ambient Orbs */
+        .ambient-orb {
+            position: absolute; border-radius: 50%; filter: blur(100px); z-index: 0; opacity: 0.4;
+            animation: float 25s infinite ease-in-out alternate;
         }
         
-        .blob-1 {
-            width: 400px; height: 400px;
-            background: rgba(99, 102, 241, 0.6); /* Indigo */
-            top: -10%; left: -10%;
-            animation-delay: 0s;
-        }
-        
-        .blob-2 {
-            width: 500px; height: 500px;
-            background: rgba(168, 85, 247, 0.5); /* Purple */
-            bottom: -20%; right: -10%;
-            animation-delay: -5s;
-        }
-        
-        .blob-3 {
-            width: 350px; height: 350px;
-            background: rgba(236, 72, 153, 0.4); /* Pink */
-            top: 40%; left: 40%;
-            animation-delay: -10s;
+        /* Light/Dark mode transitions */
+        body { transition: background-color 0.3s ease, color 0.3s ease; }
+        .glass-panel {
+            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            transition: all 0.3s ease;
         }
 
         @keyframes float {
-            0% { transform: translate(0, 0) scale(1) rotate(0deg); }
-            33% { transform: translate(50px, -50px) scale(1.1) rotate(10deg); }
-            66% { transform: translate(-30px, 30px) scale(0.9) rotate(-5deg); }
-            100% { transform: translate(0, 0) scale(1) rotate(0deg); }
-        }
-
-        /* Glassmorphism Utilities */
-        .glass-panel {
-            background: rgba(17, 24, 39, 0.65); /* Slate 900 with transparency */
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-        }
-        
-        .glass-card {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            transition: all 0.3s ease;
-        }
-        
-        .glass-card:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            transform: translateY(-2px);
+            0% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -50px) scale(1.1); }
+            66% { transform: translate(-30px, 30px) scale(0.9); }
+            100% { transform: translate(0, 0) scale(1); }
         }
     </style>
 </head>
-<body class="bg-slate-950 font-sans antialiased text-slate-200 relative overflow-hidden" x-data="{ sidebarOpen: true, isNavigating: false }">
 
-    <div class="fixed inset-0 z-0 pointer-events-none">
-        <div class="blob blob-1"></div>
-        <div class="blob blob-2"></div>
-        <div class="blob blob-3"></div>
-        <div class="absolute inset-0 bg-grid"></div>
+<body class="bg-slate-50 text-slate-900 dark:bg-dark-bg dark:text-slate-200 relative overflow-hidden font-sans antialiased" 
+      x-data="{ 
+          sidebarOpen: true, 
+          isNavigating: false,
+          theme: localStorage.getItem('theme') || 'dark',
+          searchQuery: '',
+          activeModule: null,
+          toggleTheme() {
+              this.theme = this.theme === 'dark' ? 'light' : 'dark';
+              localStorage.setItem('theme', this.theme);
+              if (this.theme === 'dark') { document.documentElement.classList.add('dark'); } 
+              else { document.documentElement.classList.remove('dark'); }
+          }
+      }"
+      x-init="if (theme === 'dark') document.documentElement.classList.add('dark');">
+
+    <!-- Background Effects -->
+    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+        <div class="ambient-orb w-[500px] h-[500px] bg-brand-500/30 dark:bg-brand-600/20 top-[-10%] left-[-10%]"></div>
+        <div class="ambient-orb w-[600px] h-[600px] bg-purple-500/20 dark:bg-purple-600/20 bottom-[-20%] right-[-10%] animate-[float_30s_infinite_reverse]"></div>
+        <div class="absolute inset-0 bg-grid text-slate-900 dark:text-white"></div>
     </div>
 
-    <div class="flex h-screen overflow-hidden relative z-10 text-slate-200">
+    <div class="flex h-screen overflow-hidden relative z-10">
         
-        <!-- DYNAMIC SIDEBAR -->
-        <aside class="glass-panel w-72 flex-shrink-0 flex flex-col transition-all duration-300 z-20 border-r border-white/10"
+        <aside class="glass-panel bg-white/70 dark:bg-dark-surface/80 w-72 flex-shrink-0 flex flex-col transition-all duration-300 z-20 border-r border-slate-200 dark:border-white/10"
                x-show="sidebarOpen" 
                x-transition:enter="transition ease-out duration-300"
                x-transition:enter-start="-translate-x-full opacity-0"
@@ -110,33 +94,47 @@
                x-transition:leave-start="translate-x-0 opacity-100"
                x-transition:leave-end="-translate-x-full opacity-0">
             
-            <div class="p-6 border-b border-white/10 flex items-center justify-between bg-white/5">
+            <!-- Branding -->
+            <div class="p-6 border-b border-slate-200 dark:border-white/10 flex items-center justify-between">
                 <div>
-                    <h1 class="text-xl font-bold text-white tracking-tight drop-shadow-md"><a href="/">ERP Core</a></h1>
-                    <p class="text-xs text-indigo-300 mt-1 uppercase font-semibold tracking-wider">Dynamic Engine</p>
+                    <h1 class="text-2xl font-bold text-brand-600 dark:text-brand-500 tracking-tight"><a href="/">ERP Core</a></h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 uppercase font-semibold tracking-widest">Enterprise</p>
                 </div>
             </div>
 
-            <div class="flex-1 overflow-y-auto py-4 px-3 space-y-2">
+            <div class="px-4 pt-4 pb-2">
+                <div class="relative">
+                    <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <input type="text" x-model="searchQuery" placeholder="Search modules..." 
+                           class="w-full bg-slate-100 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl pl-9 pr-4 py-2 text-sm text-slate-700 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all">
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto py-2 px-3 space-y-1.5">
                 {% for module_name, screens in modules_tree.items() %}
-                <div x-data="{ open: false }" class="mb-2">
-                    <button @click="open = !open" 
-                            class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-white/10 text-slate-300 hover:text-white transition-all shadow-sm">
+                <div x-data="{ open: false }" 
+                     x-init="$watch('activeModule', val => { if(val === '{{ module_name }}') open = true; })"
+                     x-show="searchQuery === '' || '{{ module_name }}'.toLowerCase().includes(searchQuery.toLowerCase()) || {{ screens | map(attribute='name') | list | lower }}.includes(searchQuery.toLowerCase())"
+                     class="mb-1">
+                    
+                    <button @click="open = !open; activeModule = open ? '{{ module_name }}' : null" 
+                            :class="{ 'bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400': open, 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5': !open }"
+                            class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-xl transition-all">
                         <span class="flex items-center gap-3">
-                            <div class="p-1.5 rounded-md bg-indigo-500/20 text-indigo-400">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                            <div class="p-1.5 rounded-lg shadow-sm" :class="{ 'bg-brand-100 dark:bg-brand-500/20': open, 'bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5': !open }">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
                             </div>
                             {{ module_name }}
                         </span>
-                        <svg class="w-4 h-4 transition-transform text-slate-400" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        <svg class="w-4 h-4 transition-transform opacity-60" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
                     </button>
                     
-                    <div x-show="open" x-collapse x-cloak class="mt-2 space-y-1 px-2 border-l border-white/10 ml-5">
+                    <!-- Nested Screens -->
+                    <div x-show="open" x-collapse x-cloak class="mt-1 space-y-1 px-2 border-l-2 border-slate-200 dark:border-white/10 ml-6 py-1">
                         {% for screen in screens %}
                         <a href="/table/{{ screen.code }}" 
                            @click="isNavigating = true"
-                           class="block px-3 py-2 text-sm text-slate-400 rounded-md hover:bg-indigo-500/20 hover:text-indigo-200 transition-colors relative group">
-                            <span class="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-0 bg-indigo-400 rounded-r transition-all group-hover:h-3"></span>
+                           class="block px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors">
                             {{ screen.name }}
                         </a>
                         {% endfor %}
@@ -145,16 +143,16 @@
                 {% endfor %}
             </div>
 
-            <div class="p-4 border-t border-white/10 bg-black/20 backdrop-blur-md">
+            <div class="p-4 border-t border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-black/20 backdrop-blur-md">
                 <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-lg border border-white/20">
-                        {{ username[:1] | upper }}
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-brand-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                        {{ username[:2] | upper }}
                     </div>
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-medium text-white truncate">{{ username }}</p>
-                        <p class="text-xs text-indigo-300">{{ user_role }}</p>
+                        <p class="text-sm font-bold text-slate-900 dark:text-white truncate">{{ username }}</p>
+                        <p class="text-xs text-brand-600 dark:text-brand-400 font-medium">{{ user_role }}</p>
                     </div>
-                    <a href="/logout" class="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-400/10 rounded-lg transition-colors" title="Logout">
+                    <a href="/logout" class="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-colors" title="Logout">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                     </a>
                 </div>
@@ -163,25 +161,33 @@
 
         <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
             
-            <!-- Glassmorphism Loading Overlay -->
+            <!-- Global Loading Spinner -->
             <div x-show="isNavigating" x-cloak 
-                 class="absolute inset-0 z-50 bg-slate-900/40 backdrop-blur-md flex items-center justify-center transition-opacity">
-                <div class="glass-panel p-6 rounded-2xl flex flex-col items-center gap-4 border border-white/20">
-                    <div class="w-10 h-10 border-4 border-indigo-400 border-t-transparent rounded-full animate-spin"></div>
-                    <span class="text-indigo-200 font-medium tracking-wide">Loading Module...</span>
+                 class="absolute inset-0 z-50 bg-white/50 dark:bg-slate-900/40 backdrop-blur-sm flex items-center justify-center transition-opacity">
+                <div class="bg-white dark:bg-dark-surface p-5 rounded-2xl shadow-2xl flex items-center gap-4 border border-slate-200 dark:border-white/10">
+                    <div class="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span class="text-slate-700 dark:text-slate-300 font-semibold">Loading Module...</span>
                 </div>
             </div>
 
-            <!-- Top Header (Glassmorphic) -->
-            <header class="glass-panel border-b border-white/10 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+            <!-- Top Header -->
+            <header class="glass-panel bg-white/70 dark:bg-dark-surface/80 border-b border-slate-200 dark:border-white/10 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
                 <div class="flex items-center gap-4">
-                    <button @click="sidebarOpen = !sidebarOpen" class="text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 p-2 rounded-lg transition-all border border-transparent hover:border-white/10">
+                    <button @click="sidebarOpen = !sidebarOpen" class="text-slate-500 dark:text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 bg-slate-100 dark:bg-white/5 p-2 rounded-xl transition-all">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
                     </button>
-                    <h2 class="text-xl font-semibold text-white tracking-wide">{% block header_title %}Command Center{% endblock %}</h2>
+                    <h2 class="text-xl font-bold text-slate-800 dark:text-white tracking-wide">{% block header_title %}Command Center{% endblock %}</h2>
                 </div>
+                
+                <button @click="toggleTheme()" class="p-2.5 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 hover:text-amber-500 dark:hover:text-amber-400 transition-all border border-slate-200 dark:border-white/5 shadow-sm">
+                    <!-- Sun Icon (shows in dark mode) -->
+                    <svg x-show="theme === 'dark'" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                    <!-- Moon Icon (shows in light mode) -->
+                    <svg x-show="theme === 'light'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                </button>
             </header>
 
+            <!-- Dynamic Content Block -->
             <div class="flex-1 overflow-y-auto p-6 md:p-8 scroll-smooth relative z-0">
                 {% block content %}{% endblock %}
             </div>
