@@ -1,8 +1,7 @@
-import os
-import json
 import uuid
 import time
 from datetime import datetime, date
+from functools import wraps
 import bcrypt
 import jwt
 from sanic import Sanic, response
@@ -122,6 +121,7 @@ async def add_security_headers(request, response):
     response.headers["X-Frame-Options"] = "DENY"
 
 def check_auth(wrapped):
+    @wraps(wrapped)
     async def decorator(request, *args, **kwargs):
         token = request.cookies.get("auth_token")
         if not token:
