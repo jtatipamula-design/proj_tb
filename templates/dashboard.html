@@ -90,13 +90,18 @@
 
 <div class="section-title">Enterprise Modules</div>
 <div class="modules-grid">
-    <div class="module-card" onclick="filterSidebarByModule('Enterprise')">
-        <div class="module-icon-wrap"><i data-lucide="building-2"></i></div>
+    <!-- 1. ERP Admin -->
+    {% if user_role == 'ADM' %}
+    <div class="module-card" onclick="filterSidebarByModule('ERPAdmin')">
+        <div class="module-icon-wrap"><i data-lucide="shield"></i></div>
         <div class="module-details">
-            <div class="module-title">Enterprise Structure</div>
-            <div class="module-desc">Orgs & Employees</div>
+            <div class="module-title">ERP Admin</div>
+            <div class="module-desc">Core Configuration</div>
         </div>
     </div>
+    {% endif %}
+
+    <!-- 2. Master Data -->
     <div class="module-card" onclick="filterSidebarByModule('MasterData')">
         <div class="module-icon-wrap"><i data-lucide="database"></i></div>
         <div class="module-details">
@@ -104,25 +109,85 @@
             <div class="module-desc">Central Entities</div>
         </div>
     </div>
-    <div class="module-card" onclick="filterSidebarByModule('Product')">
-        <div class="module-icon-wrap"><i data-lucide="boxes"></i></div>
+
+    <!-- 3. HR -->
+    <div class="module-card" onclick="filterSidebarByModule('HR')">
+        <div class="module-icon-wrap"><i data-lucide="users"></i></div>
         <div class="module-details">
-            <div class="module-title">Product Management</div>
-            <div class="module-desc">Items & Formulations</div>
+            <div class="module-title">HR</div>
+            <div class="module-desc">Human Resources</div>
         </div>
     </div>
-    <div class="module-card" onclick="filterSidebarByModule('Approvals')">
-        <div class="module-icon-wrap"><i data-lucide="check-square"></i></div>
+
+    <!-- 4. People -->
+    <div class="module-card" onclick="filterSidebarByModule('People')">
+        <div class="module-icon-wrap"><i data-lucide="user"></i></div>
         <div class="module-details">
-            <div class="module-title">Approvals</div>
-            <div class="module-desc">Workflows & Rules</div>
+            <div class="module-title">People</div>
+            <div class="module-desc">Personnel Data</div>
         </div>
     </div>
-    <div class="module-card" onclick="filterSidebarByModule('AppSetup')">
+
+    <!-- 5. User Management -->
+    <div class="module-card" onclick="filterSidebarByModule('UserMgmt')">
+        <div class="module-icon-wrap"><i data-lucide="users-round"></i></div>
+        <div class="module-details">
+            <div class="module-title">User Mgmt</div>
+            <div class="module-desc">Roles & Access</div>
+        </div>
+    </div>
+
+    <!-- 6. App Admin -->
+    <div class="module-card" onclick="filterSidebarByModule('AppAdmin')">
         <div class="module-icon-wrap"><i data-lucide="settings"></i></div>
         <div class="module-details">
-            <div class="module-title">App Setup</div>
-            <div class="module-desc">Security & Roles</div>
+            <div class="module-title">App Admin</div>
+            <div class="module-desc">System Settings</div>
+        </div>
+    </div>
+
+    <!-- 7. Purchasing -->
+    <div class="module-card" onclick="filterSidebarByModule('Purchasing')">
+        <div class="module-icon-wrap"><i data-lucide="shopping-cart"></i></div>
+        <div class="module-details">
+            <div class="module-title">Purchasing</div>
+            <div class="module-desc">Procurement</div>
+        </div>
+    </div>
+
+    <!-- 8. Supply Chain -->
+    <div class="module-card" onclick="filterSidebarByModule('SupplyChain')">
+        <div class="module-icon-wrap"><i data-lucide="truck"></i></div>
+        <div class="module-details">
+            <div class="module-title">Supply Chain</div>
+            <div class="module-desc">Logistics & Plant</div>
+        </div>
+    </div>
+
+    <!-- 9. Workflow Setup -->
+    <div class="module-card" onclick="filterSidebarByModule('WorkflowSetup')">
+        <div class="module-icon-wrap"><i data-lucide="git-branch"></i></div>
+        <div class="module-details">
+            <div class="module-title">Workflow Setup</div>
+            <div class="module-desc">Approval Routing</div>
+        </div>
+    </div>
+
+    <!-- 10. Workflow Opps -->
+    <div class="module-card" onclick="filterSidebarByModule('WorkflowOpps')">
+        <div class="module-icon-wrap"><i data-lucide="check-circle"></i></div>
+        <div class="module-details">
+            <div class="module-title">Workflow Opps</div>
+            <div class="module-desc">Active Approvals</div>
+        </div>
+    </div>
+
+    <!-- 11. CRM -->
+    <div class="module-card" onclick="filterSidebarByModule('CRM')">
+        <div class="module-icon-wrap"><i data-lucide="briefcase"></i></div>
+        <div class="module-details">
+            <div class="module-title">CRM</div>
+            <div class="module-desc">Customer Relations</div>
         </div>
     </div>
 </div>
