@@ -486,7 +486,6 @@
         </header>
         
         <nav class="nav-menu" id="sidebarMenu">
-            <!-- Root Dashboard Link -->
             <a href="/" class="nav-item always-top {% if not table_name %}active{% endif %}" onclick="filterSidebarByModule('ALL')" style="margin-bottom: 12px; font-weight: 500;">
                 <i data-lucide="layout-dashboard"></i> <span class="nav-text">Dashboard</span>
             </a>
@@ -496,13 +495,11 @@
                 <input type="text" id="sidebarSearch" placeholder="Find table..." onkeyup="filterSidebar()">
             </div>
 
-            <!-- Oracle Springboard "Show All" Sub-header -->
             <div class="sidebar-header-row always-top">
                 <span class="eyebrow-text">Enterprise Modules</span>
                 <button id="showAllTablesBtn" onclick="filterSidebarByModule('ALL')">Show All Modules</button>
             </div>
             
-            <!-- Accordion List of Oracle Modules -->
             {% set modules = [
                 ('ERPAdmin', 'shield', 'ERP Admin'),
                 ('MasterData', 'database', 'Master Data'),
@@ -527,8 +524,6 @@
 
                     {% if has_tables.value %}
                         <div class="nav-group" data-group="{{ mod_key }}">
-                            
-                            <!-- Accordion Header (Click to Expand & Pin) -->
                             <div class="nav-group-header" onclick="toggleNavGroup('{{ mod_key }}')">
                                 <div style="display: flex; align-items: center; gap: 12px;">
                                     <i data-lucide="{{ icon }}"></i>
@@ -537,7 +532,6 @@
                                 <i data-lucide="chevron-down" class="nav-chevron"></i>
                             </div>
                             
-                            <!-- Accordion Content (List of specific Tables) -->
                             <div class="nav-group-content" id="group-content-{{ mod_key }}">
                                 {% for tbl in all_tables %}
                                     {% set t_mod = table_modules.get(tbl.lower(), 'Other') if table_modules else 'Other' %}
@@ -572,7 +566,6 @@
                     <div style="font-size: 11px; color: var(--color-fog);">Edit Profile</div>
                 </div>
             </a>
-            <!-- hx-boost="false" ensures the session cookie is destroyed and redirects properly -->
             <a href="/logout" class="logout-btn" title="Logout" hx-boost="false"><i data-lucide="log-out" style="width: 18px;"></i></a>
         </section>
     </aside>
