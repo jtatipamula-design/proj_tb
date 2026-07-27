@@ -3,578 +3,159 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token }}">
-    
-    <title>Nexus ERP</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
-    
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://unpkg.com/htmx.org/dist/ext/json-enc.js"></script>
-    
-    <script>
-        if (localStorage.getItem('theme') === 'light') {
-            document.documentElement.classList.add('light-mode');
-        }
-    </script>
-
+    <title>Enterprise ERP Dashboard</title>
+    <!-- Alpine.js for lightweight state management (Loading, Dropdowns) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root {
-            --color-midnight-ink: #05060f;
-            --color-graphite-plate: #2f343e;
-            --color-steel-border: rgba(255, 255, 255, 0.1);
-            --color-fog: #81899b;
-            --color-pebble: #9da7ba;
-            --color-moonlight: #c7d3ea;
-            --color-glacier: #d8ecf8;
-            --color-frost-link: #b6d9fc;
-            --color-electric-iris: #663af3;
-            --color-ember: #e46d4c;
-            --color-cipher-mint: #269684;
-            --glass-surface: rgba(10, 15, 30, 0.6); 
-            --glass-border: rgba(255, 255, 255, 0.08);
-
-            --font-ui: 'Inter', ui-sans-serif, system-ui, sans-serif;
-            --font-mono: 'JetBrains Mono', monospace;
-        }
-
-        html.light-mode {
-            --color-midnight-ink: #f8fafc;
-            --color-graphite-plate: #ffffff;
-            --color-steel-border: #e2e8f0;
-            --color-fog: #64748b;
-            --color-pebble: #475569;
-            --color-moonlight: #334155;
-            --color-glacier: #0f172a;
-            --glass-surface: rgba(255, 255, 255, 0.7);
-            --glass-border: rgba(0, 0, 0, 0.1);
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: var(--font-ui);
-            color: var(--color-moonlight);
-            display: flex;
-            min-height: 100vh;
-            overflow-x: hidden;
-            background-color: var(--color-midnight-ink);
-            transition: background-color 0.3s, color 0.3s;
-        }
-
-        tr.htmx-swapping td { opacity: 0; transition: opacity 0.4s ease-out; }
-
-        body.htmx-request::before {
-            content: ""; position: fixed; top: 0; left: 0; height: 3px;
-            background: var(--color-electric-iris); z-index: 9999;
-            box-shadow: 0 0 10px var(--color-electric-iris);
-            animation: loadingBar 1.5s infinite ease-out;
-        }
-        @keyframes loadingBar {
-            0% { width: 0%; opacity: 1; }
-            50% { width: 60%; opacity: 1; }
-            100% { width: 100%; opacity: 0; }
-        }
-
-        .animated-bg {
-            position: fixed; inset: 0; z-index: -10; 
-            background: var(--color-midnight-ink); transition: background 0.3s;
-            overflow: hidden; 
-        }
-        .bg-grid-overlay {
-            position: absolute; inset: 0; z-index: 1;
-            background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-                              linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-            background-size: 40px 40px;
-        }
-        html.light-mode .bg-grid-overlay {
-            background-image: linear-gradient(rgba(0, 0, 0, 0.04) 1px, transparent 1px),
-                              linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
-        }
-
-        .gradient-blob {
-            position: absolute; filter: blur(60px); opacity: 0.3; 
-            animation: floatBlob 20s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
-            border-radius: 50%;
-            will-change: transform;
-            transform: translateZ(0); 
-        }
-        .blob-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: #3B82F6; }
-        .blob-2 { bottom: -10%; right: -10%; width: 60vw; height: 60vw; background: #8B5CF6; animation-delay: -5s; animation-direction: alternate-reverse; }
-        .blob-3 { top: 40%; left: 30%; width: 40vw; height: 40vw; background: #10B981; animation-delay: -10s; }
-        .blob-4 { bottom: 10%; left: 10%; width: 45vw; height: 45vw; background: #F43F5E; animation-delay: -15s; opacity: 0.15; }
-        
-        @keyframes floatBlob {
-            0% { transform: translate3d(0, 0, 0) scale(1); }
-            33% { transform: translate3d(5vw, -5vh, 0) scale(1.1); }
-            66% { transform: translate3d(-5vw, 5vh, 0) scale(0.9); }
-            100% { transform: translate3d(2vw, 2vh, 0) scale(1); }
-        }
-
-        /* SIDEBAR BASE */
-        .sidebar {
-            width: 260px; height: 100vh; position: fixed; z-index: 100;
-            display: flex; flex-direction: column;
-            background: var(--glass-surface); 
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); will-change: transform, backdrop-filter;
-            border-right: 1px solid var(--glass-border);
-            transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s;
-        }
-        
-        .sidebar-toggle {
-            position: absolute; right: -14px; top: 34px; width: 28px; height: 28px;
-            background: var(--color-midnight-ink); color: var(--color-fog);
-            border: 1px solid var(--color-steel-border); border-radius: 50%;
-            display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 101;
-        }
-        .sidebar-toggle:hover { color: var(--color-glacier); border-color: var(--color-moonlight); }
-        .sidebar.collapsed .sidebar-toggle svg { transform: rotate(180deg); }
-
-        .brand {
-            padding: 30px 24px; font-size: 20px; font-weight: 500; color: var(--color-glacier); 
-            display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--glass-border);
-        }
-
-        .nav-menu { 
-            padding: 20px 12px; flex-grow: 1; overflow-y: auto; 
-            display: flex; flex-direction: column; gap: 4px; 
-        }
-        
-        .nav-menu > * { order: 3; }
-        .nav-menu > .always-top { order: 1 !important; }
-        .nav-group.pinned { 
-            order: 2 !important;
-            margin-bottom: 16px;
-        }
-        
-        .nav-group { margin-bottom: 4px; transition: all 0.3s ease; }
-        .nav-group-header {
-            padding: 10px 12px; border-radius: 6px; color: var(--color-moonlight);
-            cursor: pointer; display: flex; align-items: center; justify-content: space-between;
-            transition: all 0.2s; font-size: 14px; font-weight: 500; user-select: none;
-        }
-        .nav-group-header:hover { background: rgba(186, 215, 247, 0.08); color: var(--color-glacier); }
-        html.light-mode .nav-group-header:hover { background: rgba(0, 0, 0, 0.05); color: var(--color-midnight-ink); }
-        
-        .nav-chevron { width: 16px; transition: transform 0.3s; color: var(--color-fog); }
-        .nav-group.expanded .nav-chevron { transform: rotate(180deg); color: var(--color-electric-iris); }
-        .nav-group.expanded .nav-group-header { color: var(--color-glacier); }
-        
-        .nav-group.pinned .nav-group-header { 
-            background: rgba(102, 58, 243, 0.1); 
-            color: var(--color-electric-iris); 
-            border: 1px solid rgba(102, 58, 243, 0.2); 
-        }
-        .nav-group.pinned .nav-chevron { color: var(--color-electric-iris); }
-        
-        html.light-mode .nav-group.expanded .nav-group-header { color: var(--color-midnight-ink); }
-
-        .nav-group-content { display: none; flex-direction: column; gap: 2px; margin-top: 4px; overflow: hidden; }
-        .nav-group.expanded .nav-group-content { display: flex; }
-
-        .nav-item {
-            padding: 8px 12px; border-radius: 6px; color: var(--color-moonlight);
-            text-decoration: none; font-size: 14px; display: flex; align-items: center; gap: 8px; 
-            transition: all 0.2s ease; white-space: nowrap;
-        }
-        .nav-item:hover { background: rgba(186, 215, 247, 0.08); color: var(--color-glacier); }
-        .nav-item.active { background: rgba(186, 215, 247, 0.12); color: var(--color-frost-link); font-weight: 500; }
-
-        .nav-bullet {
-            width: 6px; height: 6px; border-radius: 50%; background: var(--glass-border);
-            margin-right: 6px; margin-left: 20px; transition: background 0.2s, transform 0.2s; flex-shrink: 0;
-        }
-        .nav-item:hover .nav-bullet { background: var(--color-fog); transform: scale(1.2); }
-        .nav-item.active .nav-bullet { background: var(--color-electric-iris); box-shadow: 0 0 8px var(--color-electric-iris); }
-
-        .sidebar.collapsed { width: 78px; }
-        .sidebar.collapsed .brand-text, .sidebar.collapsed .nav-text, 
-        .sidebar.collapsed .sidebar-search-wrap, .sidebar.collapsed .eyebrow-text, 
-        .sidebar.collapsed .user-profile-info, .sidebar.collapsed .theme-toggle-wrap, .sidebar.collapsed .logout-btn,
-        .sidebar.collapsed #showAllTablesBtn,
-        .sidebar.collapsed .sidebar-header-row { display: none !important; }
-        
-        .sidebar.collapsed .nav-chevron { display: none; }
-        .sidebar.collapsed .nav-group-header { justify-content: center; }
-        .sidebar.collapsed .nav-group-content { display: none !important; }
-
-        .theme-toggle-wrap { padding: 0 0 20px 0; display: flex; justify-content: center; width: 100%; }
-        .theme-toggle {
-            width: 64px; height: 32px; padding: 3px; border-radius: 999px; cursor: pointer;
-            background: var(--color-midnight-ink); border: 1px solid var(--color-steel-border);
-            position: relative; display: flex; align-items: center; justify-content: space-between;
-        }
-        .theme-toggle-handle {
-            position: absolute; top: 2px; left: 2px; width: 26px; height: 26px; border-radius: 50%;
-            background: var(--color-graphite-plate); display: flex; align-items: center; justify-content: center;
-            transition: transform 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.1); z-index: 2;
-        }
-        html.light-mode .theme-toggle { background: #e2e8f0; border-color: #cbd5e1; }
-        html.light-mode .theme-toggle-handle { transform: translateX(32px); background: white; }
-
-        .user-profile {
-            padding: 24px; border-top: 1px solid var(--glass-border); 
-            display: flex; align-items: center; justify-content: space-between; white-space: nowrap;
-            transition: background 0.2s; cursor: pointer;
-        }
-        .user-profile:hover { background: rgba(255, 255, 255, 0.05); }
-        html.light-mode .user-profile:hover { background: rgba(0, 0, 0, 0.05); }
-        .profile-link { display: flex; align-items: center; gap: 12px; flex-grow: 1; text-decoration: none; }
-        .avatar {
-            width: 36px; height: 36px; border-radius: 6px; background: rgba(186, 215, 247, 0.08); 
-            border: 1px solid var(--glass-border); display: flex; align-items: center; justify-content: center; 
-            font-weight: 500; color: var(--color-glacier); min-width: 36px;
-        }
-        .logout-btn { color: var(--color-fog); transition: color 0.2s; padding: 4px; }
-        .logout-btn:hover { color: var(--color-ember); }
-
-        .main-content {
-            margin-left: 260px; flex-grow: 1; padding: 60px 40px; width: calc(100vw - 260px);
-            transition: margin-left 0.3s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s ease;
-            display: flex; flex-direction: column;
-            animation: fadeIn 0.2s ease-out;
-            position: relative;
-            z-index: 10;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(5px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .sidebar.collapsed ~ .main-content { margin-left: 78px; width: calc(100vw - 78px); }
-
-        .toast-container { position: fixed; bottom: 30px; right: 30px; z-index: 9999; display: flex; flex-direction: column; gap: 12px; }
-        .toast {
-            background: var(--glass-surface); backdrop-filter: blur(12px); border: 1px solid var(--glass-border);
-            color: var(--color-glacier); padding: 14px 18px; border-radius: 10px; display: flex; align-items: center; gap: 12px;
-            animation: slideIn 0.4s ease, fadeOut 0.4s ease 3.5s forwards; font-weight: 500; font-size: 14px;
-        }
-        @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes fadeOut { to { opacity: 0; transform: translateY(10px); } }
-
-        .sidebar-search-wrap { position: relative; margin: 0 4px 15px 4px; }
-        .sidebar-search-wrap input {
-            width: 100%; background: var(--color-midnight-ink); border: 1px solid var(--glass-border); border-radius: 6px;
-            padding: 8px 12px 8px 36px; color: var(--color-moonlight); font-size: 14px;
-        }
-        .sidebar-search-wrap i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--color-fog); width: 16px; height: 16px; }
-
-        .sidebar-header-row {
-            display: flex; justify-content: space-between; align-items: center;
-            margin: 15px 12px 10px 16px;
-        }
-        .eyebrow-text {
-            font-family: var(--font-mono); color: var(--color-fog); font-size: 11px;
-            letter-spacing: 0.1em; text-transform: uppercase; margin: 0;
-        }
-        
-        #showAllTablesBtn {
-            background: rgba(255, 255, 255, 0.05); color: var(--color-electric-iris); 
-            border: 1px solid var(--glass-border); border-radius: 4px; padding: 2px 6px;
-            font-size: 10px; cursor: pointer; display: none; font-family: var(--font-ui);
-            transition: all 0.2s;
-        }
-        #showAllTablesBtn:hover { background: var(--color-electric-iris); color: white; border-color: var(--color-electric-iris); }
-        html.light-mode #showAllTablesBtn { background: rgba(0,0,0,0.03); border-color: rgba(0,0,0,0.1); }
-        html.light-mode #showAllTablesBtn:hover { background: var(--color-electric-iris); color: white; }
+        [x-cloak] { display: none !important; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
     </style>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            window.toggleTheme = function() {
-                const html = document.documentElement;
-                const isLight = html.classList.toggle('light-mode');
-                localStorage.setItem('theme', isLight ? 'light' : 'dark');
-            };
-
-            window.toggleSidebar = function() {
-                const sidebar = document.getElementById('sidebar');
-                sidebar.classList.toggle('collapsed');
-                localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
-            };
-
-            window.showToast = function(message, type = 'success') {
-                const container = document.getElementById('toast-container');
-                if(!container) return;
-                const toast = document.createElement('div');
-                toast.className = `toast toast-${type}`;
-                const icon = type === 'success' ? 'check-circle-2' : 'alert-circle';
-                toast.innerHTML = `<i data-lucide="${icon}" style="color: ${type === 'success' ? 'var(--color-cipher-mint)' : 'var(--color-ember)'}"></i> ${message}`;
-                container.appendChild(toast);
-                lucide.createIcons();
-                setTimeout(() => toast.remove(), 4000);
-            };
-
-            window.toggleNavGroup = function(groupKey) {
-                const sidebar = document.getElementById('sidebar');
-                if (sidebar && sidebar.classList.contains('collapsed')) {
-                    window.toggleSidebar();
-                }
-                window.filterSidebarByModule(groupKey);
-            };
-
-            window.filterSidebarByModule = function(moduleName) {
-                const searchInput = document.getElementById("sidebarSearch");
-                if(searchInput) searchInput.value = "";
-                sessionStorage.setItem('sidebarSearchQuery', "");
-                sessionStorage.setItem('sidebarModuleFilter', moduleName);
-                
-                if (moduleName !== 'ALL') {
-                    sessionStorage.setItem('expandedNavGroups', JSON.stringify([moduleName]));
-                } else {
-                    sessionStorage.setItem('expandedNavGroups', JSON.stringify([]));
-                }
-                
-                const sidebar = document.getElementById('sidebar');
-                if (sidebar && sidebar.classList.contains('collapsed')) {
-                    window.toggleSidebar();
-                }
-                
-                window.filterSidebar();
-            };
-
-            window.filterSidebar = function() {
-                const searchInput = document.getElementById("sidebarSearch");
-                let searchFilter = searchInput ? searchInput.value.toLowerCase().trim() : "";
-                sessionStorage.setItem('sidebarSearchQuery', searchFilter);
-
-                let expandedGroups = JSON.parse(sessionStorage.getItem('expandedNavGroups') || '[]');
-                let moduleFilter = sessionStorage.getItem('sidebarModuleFilter') || 'ALL';
-
-                const showAllBtn = document.getElementById("showAllTablesBtn");
-                if(showAllBtn) {
-                    showAllBtn.style.display = (moduleFilter !== 'ALL') ? 'inline-block' : 'none';
-                }
-
-                document.querySelectorAll('.nav-group').forEach(group => {
-                    let hasVisibleItem = false;
-                    const groupKey = group.getAttribute('data-group');
-                    const items = group.querySelectorAll('.nav-item[data-search]');
-                    
-                    items.forEach(item => {
-                        let matchSearch = item.getAttribute('data-search').includes(searchFilter);
-                        item.style.display = matchSearch ? "flex" : "none";
-                        if (matchSearch) hasVisibleItem = true;
-                    });
-
-                    if (groupKey === moduleFilter && moduleFilter !== 'ALL') {
-                        group.classList.add('pinned');
-                    } else {
-                        group.classList.remove('pinned');
-                    }
-
-                    if (searchFilter !== "") {
-                        group.style.display = hasVisibleItem ? "block" : "none";
-                        group.classList.add('expanded');
-                    } else {
-                        if (moduleFilter !== 'ALL' && groupKey !== moduleFilter) {
-                            group.style.display = "none";
-                        } else {
-                            group.style.display = "block";
-                        }
-                        
-                        if (expandedGroups.includes(groupKey)) {
-                            group.classList.add('expanded');
-                        } else {
-                            group.classList.remove('expanded');
-                        }
-                    }
-                });
-            };
-
-            window.applySidebarState = function() {
-                lucide.createIcons();
-
-                if (localStorage.getItem('sidebarCollapsed') === 'true') {
-                    const sidebar = document.getElementById('sidebar');
-                    if(sidebar) sidebar.classList.add('collapsed');
-                }
-
-                const sidebarMenu = document.getElementById('sidebarMenu');
-                if (sidebarMenu) {
-                    const scrollPos = sessionStorage.getItem('sidebarScrollPos');
-                    if (scrollPos) sidebarMenu.scrollTop = parseInt(scrollPos, 10);
-                    
-                    sidebarMenu.onscroll = function() {
-                        sessionStorage.setItem('sidebarScrollPos', sidebarMenu.scrollTop);
-                    };
-                    
-                    const savedQuery = sessionStorage.getItem('sidebarSearchQuery');
-                    if (savedQuery) {
-                        const searchInput = document.getElementById("sidebarSearch");
-                        if (searchInput) searchInput.value = savedQuery;
-                    }
-                }
-
-                const activeItem = document.querySelector('.nav-item.active');
-                if (activeItem && activeItem.closest('.nav-group') && !sessionStorage.getItem('sidebarModuleFilter')) {
-                    const parentGroup = activeItem.closest('.nav-group');
-                    let groupKey = parentGroup.getAttribute('data-group');
-                    sessionStorage.setItem('sidebarModuleFilter', groupKey);
-                    sessionStorage.setItem('expandedNavGroups', JSON.stringify([groupKey]));
-                }
-
-                window.filterSidebar();
-
-                const pendingToast = sessionStorage.getItem('pendingToast');
-                if (pendingToast) {
-                    const toastData = JSON.parse(pendingToast);
-                    window.showToast(toastData.msg, toastData.type);
-                    sessionStorage.removeItem('pendingToast');
-                }
-            };
-
-            document.body.addEventListener('htmx:configRequest', function(evt) {
-                const csrfToken = document.querySelector('meta[name="csrf-token"]');
-                if (csrfToken) {
-                    evt.detail.headers['X-CSRFToken'] = csrfToken.content;
-                }
-            });
-
-            document.body.addEventListener('htmx:beforeRequest', function(evt) {
-                if (evt.target.tagName === 'FORM') {
-                    const btn = evt.target.querySelector('.btn-submit');
-                    if (btn) {
-                        btn.innerHTML = '<i data-lucide="loader-2" class="lucide-spin" style="width: 18px;"></i> Saving...';
-                        lucide.createIcons();
-                    }
-                }
-            });
-
-            document.body.addEventListener('htmx:responseError', function(evt) {
-                let errorMsg = "Failed to process request.";
-                try {
-                    const response = JSON.parse(evt.detail.xhr.response);
-                    if (response.error) errorMsg = response.error;
-                } catch(e) {}
-                window.showToast("Error: " + errorMsg, "error");
-                
-                const btn = evt.target.querySelector('.btn-submit');
-                if (btn) {
-                    btn.innerHTML = '<i data-lucide="save" style="width: 18px;"></i> Save Record';
-                    lucide.createIcons();
-                }
-            });
-
-            document.body.addEventListener('htmx:afterSwap', function() {
-                window.applySidebarState();
-            });
-
-            window.applySidebarState();
-        });
-    </script>
 </head>
+<body class="bg-slate-50 font-sans antialiased" x-data="{ sidebarOpen: true, isNavigating: false }">
 
-<body hx-boost="true">
-
-    <div class="animated-bg">
-        <div class="bg-grid-overlay"></div>
-        <div class="gradient-blob blob-1"></div>
-        <div class="gradient-blob blob-2"></div>
-        <div class="gradient-blob blob-3"></div>
-        <div class="gradient-blob blob-4"></div>
-    </div>
-
-    <aside class="sidebar" id="sidebar">
-        <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle Sidebar">
-            <i data-lucide="chevron-left"></i>
-        </button>
-        <header class="brand">
-            <i data-lucide="layers"></i> <span class="brand-text">Nexus ERP</span>
-        </header>
+    <div class="flex h-screen overflow-hidden">
         
-        <nav class="nav-menu" id="sidebarMenu">
-            <a href="/" class="nav-item always-top {% if not table_name %}active{% endif %}" onclick="filterSidebarByModule('ALL')" style="margin-bottom: 12px; font-weight: 500;">
-                <i data-lucide="layout-dashboard"></i> <span class="nav-text">Dashboard</span>
-            </a>
-
-            <div class="sidebar-search-wrap always-top">
-                <i data-lucide="search"></i>
-                <input type="text" id="sidebarSearch" placeholder="Find table..." onkeyup="filterSidebar()">
-            </div>
-
-            <div class="sidebar-header-row always-top">
-                <span class="eyebrow-text">Enterprise Modules</span>
-                <button id="showAllTablesBtn" onclick="filterSidebarByModule('ALL')">Show All Modules</button>
-            </div>
+        <!-- DYNAMIC SIDEBAR -->
+        <aside class="bg-slate-900 text-slate-300 w-72 flex-shrink-0 flex flex-col transition-all duration-300"
+               x-show="sidebarOpen" 
+               x-transition:enter="transition ease-out duration-300"
+               x-transition:enter-start="-translate-x-full"
+               x-transition:enter-end="translate-x-0"
+               x-transition:leave="transition ease-in duration-300"
+               x-transition:leave-start="translate-x-0"
+               x-transition:leave-end="-translate-x-full">
             
-            {% set modules = [
-                ('ERPAdmin', 'shield', 'ERP Admin'),
-                ('MasterData', 'database', 'Master Data'),
-                ('HR', 'users', 'HR'),
-                ('People', 'user', 'People'),
-                ('UserMgmt', 'users-round', 'User Management'),
-                ('AppAdmin', 'settings', 'App Admin'),
-                ('Purchasing', 'shopping-cart', 'Purchasing'),
-                ('SupplyChain', 'truck', 'Supply Chain'),
-                ('WorkflowSetup', 'git-branch', 'Workflow Setup'),
-                ('WorkflowOpps', 'check-circle', 'Workflow Opps'),
-                ('CRM', 'briefcase', 'CRM')
-            ] %}
+            <div class="p-6 border-b border-slate-700/50 flex items-center justify-between">
+                <div>
+                    <h1 class="text-xl font-bold text-white tracking-tight">ERP Core</h1>
+                    <p class="text-xs text-indigo-400 mt-1 uppercase font-semibold tracking-wider">Dynamic Modules</p>
+                </div>
+            </div>
 
-            {% for mod_key, icon, mod_label in modules %}
-                {% if mod_key != 'ERPAdmin' or user_role == 'ADM' %}
-                    {% set has_tables = namespace(value=false) %}
-                    {% for tbl in all_tables %}
-                        {% set t_mod = table_modules.get(tbl.lower(), 'Other') if table_modules else 'Other' %}
-                        {% if t_mod == mod_key %}{% set has_tables.value = true %}{% endif %}
-                    {% endfor %}
+            <div class="flex-1 overflow-y-auto py-4 px-3 space-y-2">
+                {% for module_name, screens in modules_tree.items() %}
+                <div x-data="{ open: false }" class="mb-2">
+                    <button @click="open = !open" 
+                            class="w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg hover:bg-slate-800 hover:text-white transition-colors">
+                        <span class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                            {{ module_name }}
+                        </span>
+                        <svg class="w-4 h-4 transition-transform" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </button>
+                    
+                    <div x-show="open" x-collapse x-cloak class="mt-1 space-y-1 px-2 border-l border-slate-700 ml-3">
+                        {% for screen in screens %}
+                        <a href="/table/{{ screen.code }}" 
+                           @click="isNavigating = true"
+                           class="block px-3 py-2 text-sm text-slate-400 rounded hover:bg-indigo-600/10 hover:text-indigo-300 transition-colors">
+                            {{ screen.name }}
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
 
-                    {% if has_tables.value %}
-                        <div class="nav-group" data-group="{{ mod_key }}">
-                            <div class="nav-group-header" onclick="toggleNavGroup('{{ mod_key }}')">
-                                <div style="display: flex; align-items: center; gap: 12px;">
-                                    <i data-lucide="{{ icon }}"></i>
-                                    <span class="nav-text">{{ mod_label }}</span>
-                                </div>
-                                <i data-lucide="chevron-down" class="nav-chevron"></i>
-                            </div>
-                            
-                            <div class="nav-group-content" id="group-content-{{ mod_key }}">
-                                {% for tbl in all_tables %}
-                                    {% set t_mod = table_modules.get(tbl.lower(), 'Other') if table_modules else 'Other' %}
-                                    {% if t_mod == mod_key %}
-                                        {% set clean_name = tbl.split('_', 1)[-1].replace('_t', '').replace('_', ' ').title() %}
-                                        <a href="/table/{{ tbl }}" class="nav-item {% if table_name == tbl %}active{% endif %}" data-search="{{ clean_name.lower() }}">
-                                            <div class="nav-bullet"></div>
-                                            <span class="nav-text">{{ clean_name }}</span>
-                                        </a>
-                                    {% endif %}
-                                {% endfor %}
-                            </div>
+            <div class="p-4 border-t border-slate-700/50 bg-slate-900/50">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-bold text-sm">
+                        {{ username[:1] | upper }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-white truncate">{{ username }}</p>
+                        <p class="text-xs text-slate-400">{{ user_role }}</p>
+                    </div>
+                    <a href="/logout" class="text-slate-400 hover:text-red-400 transition-colors" title="Logout">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    </a>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50 relative">
+            
+            <div x-show="isNavigating" x-cloak 
+                 class="absolute inset-0 z-50 bg-white/80 backdrop-blur-sm flex items-center justify-center">
+                <div class="flex flex-col items-center gap-3">
+                    <svg class="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <span class="text-slate-600 font-medium">Loading Module...</span>
+                </div>
+            </div>
+
+            <!-- Top Header -->
+            <header class="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <button @click="sidebarOpen = !sidebarOpen" class="text-slate-500 hover:text-indigo-600 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </button>
+                    <h2 class="text-xl font-semibold text-slate-800">Module Overview</h2>
+                </div>
+            </header>
+
+            <!-- Dashboard Content -->
+            <div class="flex-1 overflow-y-auto p-6">
+                
+                <!-- Quick Stats (unchanged) -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                        <p class="text-sm font-medium text-slate-500">Active Employees</p>
+                        <p class="text-3xl font-bold text-slate-900 mt-2">{{ stats.emp_count }}</p>
+                    </div>
+                    <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                        <p class="text-sm font-medium text-slate-500">Companies</p>
+                        <p class="text-3xl font-bold text-slate-900 mt-2">{{ stats.comp_count }}</p>
+                    </div>
+                    <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                        <p class="text-sm font-medium text-slate-500">Departments</p>
+                        <p class="text-3xl font-bold text-slate-900 mt-2">{{ stats.dept_count }}</p>
+                    </div>
+                    <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
+                        <p class="text-sm font-medium text-slate-500">System Apps</p>
+                        <p class="text-3xl font-bold text-slate-900 mt-2">{{ stats.app_count }}</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {% for module_name, screens in modules_tree.items() %}
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col h-full">
+                        <div class="bg-slate-50 border-b border-slate-200 px-5 py-4">
+                            <h3 class="font-semibold text-slate-800 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                                {{ module_name }}
+                            </h3>
                         </div>
-                    {% endif %}
-                {% endif %}
-            {% endfor %}
-        </nav>
-        
-        <div class="theme-toggle-wrap">
-            <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle Theme">
-                <div class="theme-toggle-handle">
-                    <i data-lucide="moon" style="position: absolute; width:14px; color:var(--color-electric-iris)"></i>
+                        <div class="p-5 flex-1 bg-white">
+                            <ul class="space-y-2">
+                                {% for screen in screens[:5] %} <!-- Show first 5 for neatness -->
+                                <li>
+                                    <a href="/table/{{ screen.code }}" @click="isNavigating = true"
+                                       class="group flex items-center justify-between p-2 rounded-lg hover:bg-indigo-50 border border-transparent hover:border-indigo-100 transition-all">
+                                        <span class="text-sm text-slate-600 group-hover:text-indigo-700 font-medium">{{ screen.name }}</span>
+                                        <svg class="w-4 h-4 text-slate-400 group-hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                    </a>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            
+                            {% if screens|length > 5 %}
+                            <div class="mt-4 pt-4 border-t border-slate-100">
+                                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                    + {{ screens|length - 5 }} More Screens
+                                </span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
-            </button>
-        </div>
 
-        <section class="user-profile">
-            <a href="/edit/phc_users_t/{{ user_id }}" class="profile-link" title="Edit Profile">
-                <div class="avatar">{{ username[0]|upper if username else 'U' }}</div>
-                <div class="user-profile-info">
-                    <div style="font-size: 14px; font-weight: 500; color: var(--color-glacier);">{{ username.title() if username else 'User' }}</div>
-                    <div style="font-size: 11px; color: var(--color-fog);">Edit Profile</div>
-                </div>
-            </a>
-            <a href="/logout" class="logout-btn" title="Logout" hx-boost="false"><i data-lucide="log-out" style="width: 18px;"></i></a>
-        </section>
-    </aside>
-
-    <div id="toast-container" class="toast-container"></div>
-
-    <main class="main-content">
-        {% block content %}{% endblock %}
-    </main>
-
+            </div>
+        </main>
+    </div>
 </body>
 </html>
