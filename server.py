@@ -81,25 +81,33 @@ def check_auth(f):
         if not token:
             return response.redirect("/login")
         
+        # ONLY catch JWT token errors here so we don't swallow app errors!
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-            user_id = payload.get("user_id")
-            session_id = payload.get("session_id")
-            
-            now = time.time()
-            cached = USER_AUTH_CACHE.get(user_id)
-            
-            # Use RAM Cache for 30 seconds for blazing fast clicks
-            if cached and now < cached["expires"]:
-                if cached["session_id"] != session_id:
-                    res = response.redirect("/login")
-                    res.delete_cookie("auth_token")
-                    return add_security_headers(res)
-                request.ctx.user_id = user_id
-                request.ctx.username = payload.get("username")
-                request.ctx.role = cached["role"]
-            else:
-                # Live query to check if their Role changed or if they logged in elsewhere
+        except Exception as e:
+            print(f"JWT Auth Error: {e}")
+            res = response.redirect("/login")
+            res.delete_cookie("auth_token")
+            return add_security_headers(res)
+
+        user_id = payload.get("user_id")
+        session_id = payload.get("session_id")
+        
+        now = time.time()
+        cached = USER_AUTH_CACHE.get(user_id)
+        
+        # Use RAM Cache for 30 seconds for blazing fast clicks
+        if cached and now < cached["expires"]:
+            if cached["session_id"] != session_id:
+                res = response.redirect("/login")
+                res.delete_cookie("auth_token")
+                return add_security_headers(res)
+            request.ctx.user_id = user_id
+            request.ctx.username = payload.get("username")
+            request.ctx.role = cached["role"]
+        else:
+            # Live query to check if their Role changed or if they logged in elsewhere
+            try:
                 async with app.ctx.pool.acquire() as conn:
                     user = await conn.fetchrow("SELECT pus_session_id, pus_user_type FROM phc_users_t WHERE pus_user_id = $1", user_id)
                     if not user or user["pus_session_id"] != session_id:
@@ -116,12 +124,12 @@ def check_auth(f):
                     request.ctx.user_id = user_id
                     request.ctx.username = payload.get("username")
                     request.ctx.role = role
+            except Exception as db_err:
+                print(f"Database Auth Check Error: {db_err}")
+                return response.text(f"Database connection error: {db_err}", status=500)
 
-            return await f(request, *args, **kwargs)
-        except Exception:
-            res = response.redirect("/login")
-            res.delete_cookie("auth_token")
-            return add_security_headers(res)
+        # Execute the actual route. Any error here will now correctly show in console/browser!
+        return await f(request, *args, **kwargs)
     return decorated_function
 
 @app.route('/login', methods=['GET', 'POST'])
