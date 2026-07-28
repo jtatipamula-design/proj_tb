@@ -101,29 +101,7 @@ async def seed_database(conn):
                 )
         logger.info("Successfully seeded 9 ERP modules into phc_module_t.")
 
-        # Step 2: Discover all phc_% tables and register as screens
-        schema_tables = await conn.fetch("""
-            SELECT table_name 
-            FROM information_schema.tables 
-            WHERE table_schema = 'public' 
-              AND table_type = 'BASE TABLE'
-              AND table_name ILIKE 'phc_%'
-              AND table_name NOT ILIKE 'phc_operating_orgs_t'
-        """)
-
-        for row in schema_tables:
-            tbl = row['table_name']
-            display_name = tbl.replace('phc_', '').replace('_t', '').replace('_', ' ').title()
-            exists = await conn.fetchval(
-                "SELECT 1 FROM phc_screens_t WHERE psn_screen_code = $1", tbl
-            )
-            if not exists:
-                await conn.execute(
-                    "INSERT INTO phc_screens_t (psn_screen_code, psn_screen_name, psn_status) VALUES ($1, $2, 'ACT')",
-                    tbl, display_name
-                )
-
-        # Step 3: Link each screen to its correct module
+        # Step 2 & 3: Link each existing screen to its correct module (no INSERTs)
         all_screens = await conn.fetch("SELECT psn_screen_id, psn_screen_code FROM phc_screens_t")
         updated = 0
         for screen in all_screens:
@@ -134,7 +112,7 @@ async def seed_database(conn):
                 target_mod, screen['psn_screen_id']
             )
             updated += 1
-        logger.info(f"Linked {updated} screens to their modules.")
+        logger.info(f"Linked {updated} existing screens to their modules.")
 
         # Step 4: Drop phc_operating_orgs_t and clean up references
         rsa_exists = await conn.fetchval("""
