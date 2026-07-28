@@ -74,8 +74,8 @@ async def seed_database(conn: asyncpg.Connection):
                 pmd_module_name VARCHAR(100) NOT NULL UNIQUE,
                 pmd_status VARCHAR(10) DEFAULT 'ACT',
                 pmd_admin_only BOOLEAN DEFAULT FALSE,
-                pmd_created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                pmd_edited_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                pmd_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                pmd_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
         await conn.execute("ALTER TABLE phc_module_t ADD COLUMN IF NOT EXISTS pmd_status VARCHAR(10) DEFAULT 'ACT';")
@@ -95,7 +95,7 @@ async def seed_database(conn: asyncpg.Connection):
                 ON CONFLICT (pmd_module_id) DO UPDATE 
                 SET pmd_module_name = EXCLUDED.pmd_module_name,
                     pmd_status = EXCLUDED.pmd_status,
-                    pmd_edited_on = CURRENT_TIMESTAMP;
+                    pmd_modified = CURRENT_TIMESTAMP;
             """, mod_id, mod_name, status)
         logger.info("Successfully upserted 9 ERP modules into phc_module_t.")
 
@@ -107,8 +107,8 @@ async def seed_database(conn: asyncpg.Connection):
                 psn_screen_name VARCHAR(100) NOT NULL,
                 psn_module_id INT REFERENCES phc_module_t(pmd_module_id),
                 psn_status VARCHAR(10) DEFAULT 'ACT',
-                psn_created_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                psn_edited_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                psn_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                psn_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
         await conn.execute("ALTER TABLE phc_screens_t ADD COLUMN IF NOT EXISTS psn_module_id INT;")
