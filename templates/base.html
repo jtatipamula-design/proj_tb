@@ -3,8 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise ERP - {% block head_title %}Dynamic Engine{% endblock %}</title>
+    <title>Nexus ERP - {% block head_title %}Dynamic Engine{% endblock %}</title>
     
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -15,7 +21,11 @@
                 extend: {
                     colors: {
                         brand: { 50: '#f0fdfa', 100: '#ccfbf1', 500: '#14b8a6', 600: '#0d9488', 900: '#134e4a', 950: '#042f2e' },
-                        dark: { bg: '#0b0f19', surface: '#111827', border: '#1f2937' }
+                        dark: { bg: '#05060f', surface: '#111827', border: '#1f2937' }
+                    },
+                    fontFamily: {
+                        ui: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
                     }
                 }
             }
@@ -25,44 +35,91 @@
     <style>
         [x-cloak] { display: none !important; }
         
+        :root {
+            /* Glassmorphism Design Tokens */
+            --color-midnight-ink: #05060f;
+            --color-graphite-plate: #2f343e;
+            --color-steel-border: rgba(255, 255, 255, 0.1);
+            --color-fog: #81899b;
+            --color-pebble: #9da7ba;
+            --color-moonlight: #c7d3ea;
+            --color-glacier: #d8ecf8;
+            --color-frost-link: #b6d9fc;
+            --color-electric-iris: #663af3;
+            --color-ember: #e46d4c;
+            --color-cipher-mint: #269684;
+            --glass-surface: rgba(10, 15, 30, 0.5);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --font-ui: 'Inter', ui-sans-serif, system-ui, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        html:not(.dark) {
+            --color-midnight-ink: #f8fafc;
+            --color-graphite-plate: #ffffff;
+            --color-steel-border: #e2e8f0;
+            --color-fog: #64748b;
+            --color-pebble: #475569;
+            --color-moonlight: #334155;
+            --color-glacier: #0f172a;
+            --glass-surface: rgba(255, 255, 255, 0.7);
+            --glass-border: rgba(0, 0, 0, 0.1);
+        }
+
         /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.3); border-radius: 4px; }
         .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
 
-        /* Dynamic Grid Background */
-        .bg-grid {
-            background-size: 40px 40px;
-            background-image: linear-gradient(to right, currentColor 1px, transparent 1px), linear-gradient(to bottom, currentColor 1px, transparent 1px);
-            opacity: 0.03;
+        /* Animated Background - SVG Floating Paths */
+        .animated-bg {
+            position: fixed; inset: 0; z-index: 0;
+            background-color: var(--color-midnight-ink);
+            color: rgba(255, 255, 255, 0.8);
+            transition: background-color 0.3s, color 0.3s;
+            overflow: hidden;
+            pointer-events: none;
         }
 
-        /* Ambient Orbs */
-        .ambient-orb {
-            position: absolute; border-radius: 50%; filter: blur(100px); z-index: 0; opacity: 0.4;
-            animation: float 25s infinite ease-in-out alternate;
+        html:not(.dark) .animated-bg {
+            color: rgba(15, 23, 42, 0.8);
         }
-        
-        /* Light/Dark mode transitions */
-        body { transition: background-color 0.3s ease, color 0.3s ease; }
+
+        .bg-paths-svg {
+            width: 100%; height: 100%; position: absolute; inset: 0;
+            pointer-events: none;
+        }
+
+        /* Glassmorphism Panels */
         .glass-panel {
-            backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+            background: var(--glass-surface);
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            border-color: var(--glass-border);
             transition: all 0.3s ease;
         }
 
-        @keyframes float {
-            0% { transform: translate(0, 0) scale(1); }
-            33% { transform: translate(30px, -50px) scale(1.1); }
-            66% { transform: translate(-30px, 30px) scale(0.9); }
-            100% { transform: translate(0, 0) scale(1); }
+        /* Light/Dark mode body transition */
+        body {
+            font-family: var(--font-ui);
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
+
+        /* Toast Notifications */
+        .toast-container { position: fixed; bottom: 30px; right: 30px; z-index: 9999; display: flex; flex-direction: column; gap: 12px; }
+        .toast {
+            background: var(--glass-surface); backdrop-filter: blur(12px); border: 1px solid var(--glass-border);
+            color: var(--color-glacier); padding: 14px 18px; border-radius: 10px; display: flex; align-items: center; gap: 12px;
+            animation: slideIn 0.4s ease, fadeOut 0.4s ease 3.5s forwards; font-weight: 500; font-size: 14px;
+        }
+        @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { to { opacity: 0; transform: translateY(10px); } }
     </style>
 </head>
 
-<body class="bg-slate-50 text-slate-900 dark:bg-dark-bg dark:text-slate-200 relative overflow-hidden font-sans antialiased" 
+<body class="bg-slate-50 text-slate-900 dark:bg-[#05060f] dark:text-[#c7d3ea] relative overflow-hidden antialiased font-ui"
       x-data="{ 
-          sidebarOpen: true, 
+          sidebarOpen: localStorage.getItem('sidebarOpen') !== 'false',
           isNavigating: false,
           theme: localStorage.getItem('theme') || 'dark',
           searchQuery: '',
@@ -70,22 +127,24 @@
           toggleTheme() {
               this.theme = this.theme === 'dark' ? 'light' : 'dark';
               localStorage.setItem('theme', this.theme);
-              if (this.theme === 'dark') { document.documentElement.classList.add('dark'); } 
-              else { document.documentElement.classList.remove('dark'); }
+              if (this.theme === 'dark') { document.documentElement.classList.add('dark'); document.documentElement.classList.remove('light-mode'); } 
+              else { document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light-mode'); }
           }
       }"
-      x-init="if (theme === 'dark') document.documentElement.classList.add('dark');">
+      x-init="if (theme === 'dark') { document.documentElement.classList.add('dark'); document.documentElement.classList.remove('light-mode'); } else { document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light-mode'); }"
+      x-effect="localStorage.setItem('sidebarOpen', sidebarOpen)">
 
-    <!-- Background Effects -->
-    <div class="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-        <div class="ambient-orb w-[500px] h-[500px] bg-brand-500/30 dark:bg-brand-600/20 top-[-10%] left-[-10%]"></div>
-        <div class="ambient-orb w-[600px] h-[600px] bg-purple-500/20 dark:bg-purple-600/20 bottom-[-20%] right-[-10%] animate-[float_30s_infinite_reverse]"></div>
-        <div class="absolute inset-0 bg-grid text-slate-900 dark:text-white"></div>
-    </div>
+    <!-- Animated SVG Background Paths (Glassmorphism) -->
+    <div class="animated-bg" id="animatedBg"></div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
 
     <div class="flex h-screen overflow-hidden relative z-10">
         
-        <aside class="glass-panel bg-white/70 dark:bg-dark-surface/80 w-72 flex-shrink-0 flex flex-col transition-all duration-300 z-20 border-r border-slate-200 dark:border-white/10"
+        <!-- Sidebar -->
+        <aside class="glass-panel w-72 flex-shrink-0 flex flex-col transition-all duration-300 z-20 border-r"
+               style="border-color: var(--glass-border);"
                x-show="sidebarOpen" 
                x-transition:enter="transition ease-out duration-300"
                x-transition:enter-start="-translate-x-full opacity-0"
@@ -95,46 +154,58 @@
                x-transition:leave-end="-translate-x-full opacity-0">
             
             <!-- Branding -->
-            <div class="p-6 border-b border-slate-200 dark:border-white/10 flex items-center justify-between">
+            <div class="p-6 flex items-center justify-between" style="border-bottom: 1px solid var(--glass-border);">
                 <div>
-                    <h1 class="text-2xl font-bold text-brand-600 dark:text-brand-500 tracking-tight"><a href="/">ERP Core</a></h1>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 uppercase font-semibold tracking-widest">Enterprise</p>
+                    <h1 class="text-2xl font-bold tracking-tight" style="color: var(--color-glacier);">
+                        <a href="/" class="flex items-center gap-3">
+                            <i data-lucide="layers" class="w-6 h-6"></i>
+                            <span>Nexus ERP</span>
+                        </a>
+                    </h1>
+                    <p class="text-xs mt-0.5 uppercase font-semibold tracking-widest font-mono" style="color: var(--color-fog);">Enterprise</p>
                 </div>
             </div>
 
+            <!-- Sidebar Search -->
             <div class="px-4 pt-4 pb-2">
                 <div class="relative">
-                    <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style="color: var(--color-fog);"></i>
                     <input type="text" x-model="searchQuery" placeholder="Search modules..." 
-                           class="w-full bg-slate-100 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl pl-9 pr-4 py-2 text-sm text-slate-700 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all">
+                           class="w-full rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                           style="background: var(--color-midnight-ink); border: 1px solid var(--glass-border); color: var(--color-moonlight);">
                 </div>
             </div>
 
+            <!-- Module Tree Navigation -->
             <div class="flex-1 overflow-y-auto py-2 px-3 space-y-1.5">
                 {% for module_name, screens in modules_tree.items() %}
                 <div x-data="{ open: false }" 
-                     x-init="$watch('activeModule', val => { if(val === '{{ module_name }}') open = true; })"
-                     x-show="searchQuery === '' || '{{ module_name }}'.toLowerCase().includes(searchQuery.toLowerCase()) || {{ screens | map(attribute='name') | list | lower }}.includes(searchQuery.toLowerCase())"
+                     x-show="searchQuery === '' || '{{ module_name }}'.toLowerCase().includes(searchQuery.toLowerCase()) || [{% for s in screens %}'{{ s.name|lower }}'{% if not loop.last %},{% endif %}{% endfor %}].some(n => n.includes(searchQuery.toLowerCase()))"
                      class="mb-1">
                     
                     <button @click="open = !open; activeModule = open ? '{{ module_name }}' : null" 
-                            :class="{ 'bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-400': open, 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5': !open }"
-                            class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-xl transition-all">
+                            :class="{ 'ring-1 ring-brand-500/30': open }"
+                            class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-all"
+                            :style="open ? 'background: rgba(186, 215, 247, 0.12); color: var(--color-frost-link);' : 'color: var(--color-moonlight);'"
+                            @mouseenter="$el.style.background = open ? 'rgba(186, 215, 247, 0.12)' : 'rgba(186, 215, 247, 0.08)'"
+                            @mouseleave="$el.style.background = open ? 'rgba(186, 215, 247, 0.12)' : 'transparent'">
                         <span class="flex items-center gap-3">
-                            <div class="p-1.5 rounded-lg shadow-sm" :class="{ 'bg-brand-100 dark:bg-brand-500/20': open, 'bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5': !open }">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-                            </div>
+                            <i data-lucide="folder" class="w-4 h-4"></i>
                             {{ module_name }}
                         </span>
-                        <svg class="w-4 h-4 transition-transform opacity-60" :class="{'rotate-180': open}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        <i data-lucide="chevron-down" class="w-4 h-4 transition-transform opacity-60" :class="{'rotate-180': open}"></i>
                     </button>
                     
                     <!-- Nested Screens -->
-                    <div x-show="open" x-collapse x-cloak class="mt-1 space-y-1 px-2 border-l-2 border-slate-200 dark:border-white/10 ml-6 py-1">
+                    <div x-show="open" x-collapse x-cloak class="mt-1 space-y-1 px-2 ml-6 py-1" style="border-left: 2px solid var(--glass-border);">
                         {% for screen in screens %}
                         <a href="/table/{{ screen.code }}" 
                            @click="isNavigating = true"
-                           class="block px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors">
+                           class="block px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-2"
+                           style="color: var(--color-pebble);"
+                           onmouseenter="this.style.background='rgba(186, 215, 247, 0.08)'; this.style.color='var(--color-glacier)';"
+                           onmouseleave="this.style.background='transparent'; this.style.color='var(--color-pebble)';">
+                            <i data-lucide="database" class="w-3.5 h-3.5"></i>
                             {{ screen.name }}
                         </a>
                         {% endfor %}
@@ -143,48 +214,65 @@
                 {% endfor %}
             </div>
 
-            <div class="p-4 border-t border-slate-200 dark:border-white/10 bg-slate-50/50 dark:bg-black/20 backdrop-blur-md">
+            <!-- User Profile & Theme Toggle -->
+            <div class="p-4" style="border-top: 1px solid var(--glass-border); background: var(--glass-surface);">
+                <!-- Theme Toggle -->
+                <div class="flex justify-end mb-3">
+                    <button @click="toggleTheme()" 
+                            class="p-2 rounded-lg transition-all"
+                            style="background: var(--color-midnight-ink); border: 1px solid var(--glass-border); color: var(--color-fog);"
+                            title="Toggle Theme">
+                        <i data-lucide="sun" x-show="theme === 'dark'" x-cloak class="w-4 h-4"></i>
+                        <i data-lucide="moon" x-show="theme === 'light'" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <!-- User Info -->
                 <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-brand-500 to-teal-600 flex items-center justify-center text-white font-bold text-sm shadow-md">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold"
+                         style="background: rgba(186, 215, 247, 0.08); border: 1px solid var(--glass-border); color: var(--color-glacier);">
                         {{ username[:2] | upper }}
                     </div>
                     <div class="flex-1 min-w-0">
-                        <p class="text-sm font-bold text-slate-900 dark:text-white truncate">{{ username }}</p>
-                        <p class="text-xs text-brand-600 dark:text-brand-400 font-medium">{{ user_role }}</p>
+                        <p class="text-sm font-bold truncate" style="color: var(--color-glacier);">{{ username }}</p>
+                        <p class="text-xs font-medium font-mono" style="color: var(--color-cipher-mint);">{{ user_role }}</p>
                     </div>
-                    <a href="/logout" class="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-xl transition-colors" title="Logout">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                    <a href="/logout" class="p-2 rounded-lg transition-colors" 
+                       style="color: var(--color-ember);"
+                       onmouseenter="this.style.background='rgba(228, 109, 76, 0.1)'"
+                       onmouseleave="this.style.background='transparent'"
+                       title="Logout">
+                        <i data-lucide="log-out" class="w-5 h-5"></i>
                     </a>
                 </div>
             </div>
         </aside>
 
+        <!-- Main Content Area -->
         <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
             
             <!-- Global Loading Spinner -->
             <div x-show="isNavigating" x-cloak 
-                 class="absolute inset-0 z-50 bg-white/50 dark:bg-slate-900/40 backdrop-blur-sm flex items-center justify-center transition-opacity">
-                <div class="bg-white dark:bg-dark-surface p-5 rounded-2xl shadow-2xl flex items-center gap-4 border border-slate-200 dark:border-white/10">
+                 class="absolute inset-0 z-50 flex items-center justify-center transition-opacity"
+                 style="background: rgba(5, 6, 15, 0.4); backdrop-filter: blur(4px);">
+                <div class="glass-panel p-5 rounded-2xl shadow-2xl flex items-center gap-4 border" style="border-color: var(--glass-border);">
                     <div class="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span class="text-slate-700 dark:text-slate-300 font-semibold">Loading Module...</span>
+                    <span class="font-semibold" style="color: var(--color-moonlight);">Loading Module...</span>
                 </div>
             </div>
 
             <!-- Top Header -->
-            <header class="glass-panel bg-white/70 dark:bg-dark-surface/80 border-b border-slate-200 dark:border-white/10 px-6 py-4 flex items-center justify-between sticky top-0 z-10">
+            <header class="glass-panel border-b px-6 py-4 flex items-center justify-between sticky top-0 z-10"
+                    style="border-color: var(--glass-border);">
                 <div class="flex items-center gap-4">
-                    <button @click="sidebarOpen = !sidebarOpen" class="text-slate-500 dark:text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 bg-slate-100 dark:bg-white/5 p-2 rounded-xl transition-all">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    <button @click="sidebarOpen = !sidebarOpen" 
+                            class="p-2 rounded-lg transition-all"
+                            style="color: var(--color-fog); background: var(--color-midnight-ink); border: 1px solid var(--glass-border);"
+                            onmouseenter="this.style.color='var(--color-glacier)'"
+                            onmouseleave="this.style.color='var(--color-fog)'">
+                        <i data-lucide="panel-left" class="w-5 h-5"></i>
                     </button>
-                    <h2 class="text-xl font-bold text-slate-800 dark:text-white tracking-wide">{% block header_title %}Command Center{% endblock %}</h2>
+                    <h2 class="text-xl font-bold tracking-wide" style="color: var(--color-glacier);">{% block header_title %}Command Center{% endblock %}</h2>
                 </div>
-                
-                <button @click="toggleTheme()" class="p-2.5 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 hover:text-amber-500 dark:hover:text-amber-400 transition-all border border-slate-200 dark:border-white/5 shadow-sm">
-                    <!-- Sun Icon (shows in dark mode) -->
-                    <svg x-show="theme === 'dark'" x-cloak class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-                    <!-- Moon Icon (shows in light mode) -->
-                    <svg x-show="theme === 'light'" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
-                </button>
             </header>
 
             <!-- Dynamic Content Block -->
@@ -193,5 +281,95 @@
             </div>
         </main>
     </div>
+
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // ======== ANIMATED SVG BACKGROUND PATHS (Glassmorphism Effect) ========
+        function createFloatingPaths(position) {
+            const svgNS = "http://www.w3.org/2000/svg";
+            const g = document.createElementNS(svgNS, "g");
+
+            for (let i = 0; i < 36; i++) {
+                const path = document.createElementNS(svgNS, "path");
+                const d = `M-${380 - i * 5 * position} -${189 + i * 6}C-${
+                    380 - i * 5 * position
+                } -${189 + i * 6} -${312 - i * 5 * position} ${216 - i * 6} ${
+                    152 - i * 5 * position
+                } ${343 - i * 6}C${616 - i * 5 * position} ${470 - i * 6} ${
+                    684 - i * 5 * position
+                } ${875 - i * 6} ${684 - i * 5 * position} ${875 - i * 6}`;
+
+                path.setAttribute("d", d);
+                path.setAttribute("stroke", "currentColor");
+                path.setAttribute("stroke-width", 0.5 + i * 0.03);
+                path.setAttribute("stroke-opacity", 0.1 + i * 0.03);
+                path.setAttribute("fill", "none");
+                path.setAttribute("pathLength", "1");
+
+                path.style.strokeDasharray = "0.3 1";
+                path.style.strokeDashoffset = "0";
+
+                const duration = 20 + Math.random() * 10;
+
+                path.animate([
+                    { strokeDashoffset: '0', opacity: 0.3 },
+                    { strokeDashoffset: '-1', opacity: 0.6 },
+                    { strokeDashoffset: '0', opacity: 0.3 }
+                ], {
+                    duration: duration * 1000,
+                    iterations: Infinity,
+                    easing: 'linear'
+                });
+
+                g.appendChild(path);
+            }
+            return g;
+        }
+
+        function initBackgroundPaths() {
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute("viewBox", "0 0 696 316");
+            svg.setAttribute("preserveAspectRatio", "xMidYMid slice");
+            svg.classList.add("bg-paths-svg");
+
+            svg.appendChild(createFloatingPaths(1));
+            svg.appendChild(createFloatingPaths(-1));
+
+            const container = document.getElementById('animatedBg');
+            if (container) {
+                container.innerHTML = '';
+                container.appendChild(svg);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initBackgroundPaths();
+            lucide.createIcons(); // Re-initialize after Alpine renders
+
+            // Handle pending toast messages
+            const pendingToast = sessionStorage.getItem('pendingToast');
+            if (pendingToast) {
+                const toastData = JSON.parse(pendingToast);
+                showToast(toastData.msg, toastData.type);
+                sessionStorage.removeItem('pendingToast');
+            }
+        });
+
+        // ======== TOAST NOTIFICATIONS ========
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            const icon = type === 'success' ? 'check-circle-2' : 'alert-circle';
+            const iconColor = type === 'success' ? 'var(--color-cipher-mint)' : 'var(--color-ember)';
+            toast.innerHTML = `<i data-lucide="${icon}" style="color: ${iconColor}; min-width: 20px;"></i> ${message}`;
+            container.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => toast.remove(), 4000);
+        }
+    </script>
 </body>
 </html>
