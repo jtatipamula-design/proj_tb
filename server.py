@@ -9,6 +9,7 @@ from sanic import Sanic, response
 from sanic.exceptions import NotFound
 import asyncpg
 from jinja2 import Environment, FileSystemLoader
+from seed_db import seed_database
 
 app = Sanic("ERP_System")
 
@@ -22,6 +23,46 @@ env = Environment(loader=FileSystemLoader('templates'))
 USER_AUTH_CACHE = {}
 CACHE_TTL = 30  # Live checking every 30 seconds
 SCHEMA_CACHE = {"pks": {}}
+
+def build_modules_tree(all_tables, table_modules):
+    modules_tree = {}
+    for tbl_code, tbl_name in all_tables.items():
+        mod_name = table_modules.get(tbl_code, 'Uncategorized')
+        if mod_name not in modules_tree:
+            modules_tree[mod_name] = []
+        modules_tree[mod_name].append({"code": tbl_code, "name": tbl_name})
+    return dict(sorted(modules_tree.items()))
+
+def render_template(template_name, request=None, **context):
+    default_context = {
+        "username": "",
+        "user_id": None,
+        "user_role": "STD",
+        "modules_tree": {},
+        "all_tables": [],
+        "table_modules": {}
+    }
+    if request and hasattr(request, 'ctx'):
+        all_tables = getattr(request.ctx, "all_tables", {})
+        if isinstance(all_tables, dict):
+            all_tables_list = list(all_tables.keys())
+        elif isinstance(all_tables, list):
+            all_tables_list = all_tables
+        else:
+            all_tables_list = []
+
+        default_context.update({
+            "username": getattr(request.ctx, "username", ""),
+            "user_id": getattr(request.ctx, "user_id", None),
+            "user_role": getattr(request.ctx, "role", "STD"),
+            "modules_tree": getattr(request.ctx, "modules_tree", {}),
+            "all_tables": all_tables_list,
+            "table_modules": getattr(request.ctx, "table_modules", {})
+        })
+    default_context.update(context)
+    template = env.get_template(template_name)
+    html = template.render(**default_context)
+    return add_security_headers(response.html(html))
 
 async def get_authorized_tables(conn, user_id, role):
     # ILIKE ensures case-insensitive matching so PHC_OPERATING_ORGS_T works perfectly
@@ -74,6 +115,8 @@ async def get_authorized_tables(conn, user_id, role):
 async def setup_db(app, loop):
     if DATABASE_URL:
         app.ctx.pool = await asyncpg.create_pool(dsn=DATABASE_URL, min_size=2, max_size=20)
+        async with app.ctx.pool.acquire() as conn:
+            await seed_database(conn)
     else:
         print("WARNING: DATABASE_URL not set. Running without db pool.")
         app.ctx.pool = None
@@ -87,6 +130,21 @@ def add_security_headers(res):
     res.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     res.headers["Pragma"] = "no-cache"
     return res
+
+@app.middleware('request')
+async def setup_request_context(request):
+    if not hasattr(request.ctx, 'user_id'):
+        request.ctx.user_id = None
+    if not hasattr(request.ctx, 'username'):
+        request.ctx.username = ''
+    if not hasattr(request.ctx, 'role'):
+        request.ctx.role = 'STD'
+    if not hasattr(request.ctx, 'all_tables'):
+        request.ctx.all_tables = {}
+    if not hasattr(request.ctx, 'table_modules'):
+        request.ctx.table_modules = {}
+    if not hasattr(request.ctx, 'modules_tree'):
+        request.ctx.modules_tree = {}
 
 def check_auth(f):
     @wraps(f)
@@ -111,7 +169,7 @@ def check_auth(f):
         cached = USER_AUTH_CACHE.get(user_id)
         
         # Use RAM Cache for 30 seconds for blazing fast clicks
-        if cached and now < cached["expires"]:
+        if cached and now < cached["expires"] and "all_tables" in cached:
             if cached["session_id"] != session_id:
                 res = response.redirect("/login")
                 res.delete_cookie("auth_token")
@@ -119,6 +177,9 @@ def check_auth(f):
             request.ctx.user_id = user_id
             request.ctx.username = payload.get("username")
             request.ctx.role = cached["role"]
+            request.ctx.all_tables = cached.get("all_tables", {})
+            request.ctx.table_modules = cached.get("table_modules", {})
+            request.ctx.modules_tree = cached.get("modules_tree", {})
         else:
             # Live query to check if their Role changed or if they logged in elsewhere
             try:
@@ -130,14 +191,23 @@ def check_auth(f):
                         return add_security_headers(res)
                     
                     role = user["pus_user_type"] or "STD"
+                    auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
+                    modules_tree = build_modules_tree(auth_tables, table_modules)
+
                     USER_AUTH_CACHE[user_id] = {
                         "session_id": session_id,
                         "role": role,
+                        "all_tables": auth_tables,
+                        "table_modules": table_modules,
+                        "modules_tree": modules_tree,
                         "expires": now + CACHE_TTL
                     }
                     request.ctx.user_id = user_id
                     request.ctx.username = payload.get("username")
                     request.ctx.role = role
+                    request.ctx.all_tables = auth_tables
+                    request.ctx.table_modules = table_modules
+                    request.ctx.modules_tree = modules_tree
             except Exception as db_err:
                 print(f"Database Auth Check Error: {db_err}")
                 return response.text(f"Database connection error: {db_err}", status=500)
@@ -149,9 +219,7 @@ def check_auth(f):
 @app.route('/login', methods=['GET', 'POST'])
 async def login(request):
     if request.method == 'GET':
-        template = env.get_template('login.html')
-        res = response.html(template.render())
-        return add_security_headers(res)
+        return render_template('login.html', request=request)
     
     # Safely handle requests missing a JSON payload to prevent NoneType crashes
     data = request.json or {}
@@ -224,8 +292,8 @@ async def get_dropdown_options(conn, table_name, column_name):
         return [{"id": str(r['id']), "name": r['name']} for r in rows]
 
     if column_name.endswith('_org_id'):
-        rows = await conn.fetch("SELECT pos_org_id as id, pos_org_name as name FROM phc_operating_orgs_t WHERE pos_status='ACT'")
-        return [{"id": str(r['id']), "name": r['name']} for r in rows]
+        # phc_operating_orgs_t table dropped; return empty dropdown options
+        return []
 
     if column_name.endswith('_dept_id'):
         rows = await conn.fetch("SELECT pdp_dept_id as id, pdp_dept_name as name FROM phc_dept_t WHERE pdp_status='ACT'")
@@ -298,39 +366,8 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
 @app.route('/')
 @check_auth
 async def dashboard(request):
-    user_id = request.ctx.user_id
-    username = request.ctx.username
-    role = request.ctx.role
-    
-    async with app.ctx.pool.acquire() as conn:
-        all_tables, table_modules = await get_authorized_tables(conn, user_id, role)
-        
-        # Performance optimization: Removed hardcoded table COUNT(*) queries.
-        # Dashboard UI will dynamically map cards based purely on modules_tree.
-        stats = {}
-        
-    # Dynamically cluster screens under their respective modules for the UI
-    modules_tree = {}
-    for tbl_code, tbl_name in all_tables.items():
-        mod_name = table_modules.get(tbl_code, 'Uncategorized')
-        if mod_name not in modules_tree:
-            modules_tree[mod_name] = []
-        modules_tree[mod_name].append({"code": tbl_code, "name": tbl_name})
-        
-    # Sort modules alphabetically for consistent UI
-    modules_tree = dict(sorted(modules_tree.items()))
-
-    template = env.get_template('dashboard.html')
-    html = template.render(
-        username=username, 
-        user_id=user_id,
-        user_role=role,
-        all_tables=list(all_tables.keys()), 
-        table_modules=table_modules,
-        modules_tree=modules_tree,
-        stats=stats
-    )
-    return add_security_headers(response.html(html))
+    stats = {}
+    return render_template('dashboard.html', request=request, stats=stats)
 
 @app.route('/table/<table_name>')
 @check_auth
@@ -344,8 +381,13 @@ async def show_table(request, table_name):
     offset = (page - 1) * per_page
     search_query = request.args.get("q", "").strip()
 
+    auth_tables = getattr(request.ctx, 'all_tables', None)
+    table_modules = getattr(request.ctx, 'table_modules', None)
+
     async with app.ctx.pool.acquire() as conn:
-        auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
+        if auth_tables is None or table_modules is None:
+            auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
+
         if table_name not in auth_tables:
             raise NotFound("Table not found or unauthorized")
         
@@ -404,18 +446,14 @@ async def show_table(request, table_name):
     start_row = offset + 1 if total_count > 0 else 0
     end_row = min(offset + per_page, total_count)
 
-    template = env.get_template('table_view.html')
-    html = template.render(
-        username=request.ctx.username,
-        user_id=user_id,
-        user_role=role,
+    return render_template(
+        'table_view.html',
+        request=request,
         table_name=table_name,
         table_title=table_title,
         columns=columns,
         rows=rows,
         pk_column=pk_column,
-        all_tables=list(auth_tables.keys()),
-        table_modules=table_modules,
         page=page,
         total_pages=total_pages,
         total_count=total_count,
@@ -423,7 +461,6 @@ async def show_table(request, table_name):
         end_row=end_row,
         search_query=search_query
     )
-    return add_security_headers(response.html(html))
 
 @app.route('/new/<table_name>', methods=['GET'])
 @check_auth
@@ -440,8 +477,13 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
     role = request.ctx.role
     table_name = table_name.lower()
 
+    auth_tables = getattr(request.ctx, 'all_tables', None)
+    table_modules = getattr(request.ctx, 'table_modules', None)
+
     async with app.ctx.pool.acquire() as conn:
-        auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
+        if auth_tables is None or table_modules is None:
+            auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
+
         if table_name not in auth_tables:
             raise NotFound("Table not found or unauthorized")
         
@@ -487,20 +529,15 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
                 "json_options": json_options
             })
 
-    template = env.get_template('form_view.html')
-    html = template.render(
-        username=request.ctx.username,
-        user_id=user_id,
-        user_role=role,
+    return render_template(
+        'form_view.html',
+        request=request,
         table_name=table_name,
         table_title=table_title,
         columns=columns,
         is_update=is_update,
-        pk_val=pk_val,
-        all_tables=list(auth_tables.keys()),
-        table_modules=table_modules
+        pk_val=pk_val
     )
-    return add_security_headers(response.html(html))
 
 @app.route('/export/<table_name>')
 @check_auth
