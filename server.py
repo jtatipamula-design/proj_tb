@@ -28,21 +28,26 @@ async def get_authorized_tables(conn, user_id, role):
     if role == 'ADM':
         # Admin gets everything, joined dynamically with module metadata
         query = """
-            SELECT s.psn_screen_code, s.psn_screen_name, COALESCE(m.pmd_module_name, 'System Config') as module_name
+            SELECT s.psn_screen_code, s.psn_screen_name, COALESCE(m.module_name, 'System Config') as module_name
             FROM phc_screens_t s
-            LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
+            LEFT JOIN phc_module_t m ON s.module_type = m.module_id
             WHERE s.psn_screen_code ILIKE 'phc_%'
+              AND (m.status IS NULL OR m.status = 'ACT')
         """
         rows = await conn.fetch(query)
     else:
         # Strict RBAC: Join assignment tables, ensuring users only fetch their authorized modules
+        # PLUS: Filter out any modules where requires_admin is true for non-admin users
         query = """
-            SELECT DISTINCT s.psn_screen_code, s.psn_screen_name, COALESCE(m.pmd_module_name, 'Uncategorized') as module_name 
+            SELECT DISTINCT s.psn_screen_code, s.psn_screen_name, COALESCE(m.module_name, 'Uncategorized') as module_name 
             FROM phc_screens_t s
             JOIN phc_role_screen_assignment_t rsa ON s.psn_screen_id = rsa.prs_screen_id
             JOIN phc_user_roles_assignment_t ura ON rsa.prs_role_id = ura.pua_role_id
-            LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
-            WHERE ura.pua_user_id = $1 AND s.psn_screen_code ILIKE 'phc_%'
+            LEFT JOIN phc_module_t m ON s.module_type = m.module_id
+            WHERE ura.pua_user_id = $1 
+              AND s.psn_screen_code ILIKE 'phc_%'
+              AND (m.status IS NULL OR m.status = 'ACT')
+              AND (m.requires_admin IS NULL OR m.requires_admin = FALSE)
         """
         rows = await conn.fetch(query, user_id)
         
@@ -291,17 +296,9 @@ async def dashboard(request):
     async with app.ctx.pool.acquire() as conn:
         all_tables, table_modules = await get_authorized_tables(conn, user_id, role)
         
-        emp_count = await conn.fetchval("SELECT COUNT(*) FROM phc_emp_t WHERE pem_status = 'ACT'") if 'phc_emp_t' in all_tables else 0
-        comp_count = await conn.fetchval("SELECT COUNT(*) FROM phc_companies_t WHERE pcp_status = 'ACT'") if 'phc_companies_t' in all_tables else 0
-        dept_count = await conn.fetchval("SELECT COUNT(*) FROM phc_dept_t WHERE pdp_status = 'ACT'") if 'phc_dept_t' in all_tables else 0
-        app_count = await conn.fetchval("SELECT COUNT(*) FROM phc_apps_t WHERE pap_status = 'ACT'") if 'phc_apps_t' in all_tables else 0
-
-        stats = {
-            "emp_count": emp_count,
-            "comp_count": comp_count,
-            "dept_count": dept_count,
-            "app_count": app_count
-        }
+        # Performance optimization: Removed hardcoded table COUNT(*) queries.
+        # Dashboard UI will dynamically map cards based purely on modules_tree.
+        stats = {}
         
     # Dynamically cluster screens under their respective modules for the UI
     modules_tree = {}
