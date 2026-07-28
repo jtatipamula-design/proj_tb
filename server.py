@@ -266,9 +266,18 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
                 elif "status" in k and v.lower() == "inactive": v = "INA"
                 else: v = v[:max_len]
         
-        if target_type in ('integer', 'bigint', 'numeric', 'smallint') and isinstance(v, str):
-             if v.strip().isdigit(): clean_data[k] = int(v)
-        else: clean_data[k] = v
+        if target_type in ('integer', 'bigint', 'smallint') and isinstance(v, str):
+            try:
+                clean_data[k] = int(v)
+            except (ValueError, TypeError):
+                pass  # Skip values that can't be converted to int
+        elif target_type == 'numeric' and isinstance(v, str):
+            try:
+                clean_data[k] = float(v) if '.' in v else int(v)
+            except (ValueError, TypeError):
+                pass  # Skip values that can't be converted to a number
+        else:
+            clean_data[k] = v
 
     return clean_data
 
@@ -487,10 +496,81 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
     )
     return add_security_headers(response.html(html))
 
+@app.route('/export/<table_name>')
+@check_auth
+async def export_table_csv(request, table_name):
+    import csv
+    import io
+    
+    user_id = request.ctx.user_id
+    role = request.ctx.role
+    table_name = table_name.lower()
+
+    async with app.ctx.pool.acquire() as conn:
+        auth_tables, _ = await get_authorized_tables(conn, user_id, role)
+        if table_name not in auth_tables:
+            raise NotFound("Table not found or unauthorized")
+
+        pk_column = await get_pk_column(conn, table_name)
+
+        columns_data = await conn.fetch("""
+            SELECT column_name, data_type
+            FROM information_schema.columns
+            WHERE table_name = $1 AND table_schema = 'public'
+            ORDER BY ordinal_position
+        """, table_name)
+
+        # Build clean column list (same filtering logic as table_view)
+        export_cols = []
+        for c in columns_data:
+            cname = c['column_name']
+            if cname == pk_column: continue
+            if 'created' in cname.lower() or 'modified' in cname.lower(): continue
+            if 'company_id' in cname.lower() and role != 'ADM': continue
+            export_cols.append(cname)
+
+        if not export_cols:
+            return response.text("No exportable columns found.", status=400)
+
+        col_list = ", ".join(export_cols)
+        rows = await conn.fetch(f"SELECT {col_list} FROM {table_name} ORDER BY {pk_column} DESC")
+
+    # Build CSV in-memory
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Header row — clean labels
+    header = [col.split('_', 1)[-1].replace('_', ' ').title() for col in export_cols]
+    writer.writerow(header)
+
+    # Data rows
+    for row in rows:
+        csv_row = []
+        for col in export_cols:
+            val = row[col]
+            if val is None:
+                csv_row.append('')
+            elif isinstance(val, datetime):
+                csv_row.append(val.strftime('%Y-%m-%d'))
+            else:
+                csv_row.append(str(val))
+        writer.writerow(csv_row)
+
+    csv_content = output.getvalue()
+    output.close()
+
+    table_title = auth_tables.get(table_name, table_name)
+    filename = f"{table_title.replace(' ', '_')}_Export.csv"
+
+    res = response.text(csv_content, content_type="text/csv")
+    res.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return add_security_headers(res)
+
 @app.route('/api/<table_name>', methods=['POST'], name="api_create")
 @check_auth
 async def api_create_record(request, table_name):
     return await process_api_action(request, table_name, None)
+
 
 @app.route('/api/<table_name>/<pk_val>', methods=['PUT', 'DELETE', 'POST'], name="api_update_delete")
 @check_auth
