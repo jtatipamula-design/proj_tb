@@ -1,177 +1,27 @@
-{% extends "base.html" %}
-
-{% block head_title %}Dashboard{% endblock %}
-{% block header_title %}Command Center Dashboard{% endblock %}
-
-{% block content %}
-<style>
-    /* GlassIcons CSS */
-    .icon-btns {
-      display: grid;
-      grid-gap: 6em 4em;
-      grid-template-columns: repeat(2, 1fr);
-      margin: auto;
-      padding: 3em 0;
-      overflow: visible;
-      font-size: 24px; /* Scales the entire icon system */
-      justify-items: center;
-    }
-    
-    .icon-btn {
-      background-color: transparent;
-      outline: none;
-      position: relative;
-      width: 4.5em;
-      height: 4.5em;
-      perspective: 24em;
-      transform-style: preserve-3d;
-      -webkit-tap-highlight-color: transparent;
-      border: none;
-      cursor: pointer;
-    }
-    
-    .icon-btn__back,
-    .icon-btn__front,
-    .icon-btn__label {
-      transition:
-        opacity 0.3s cubic-bezier(0.83, 0, 0.17, 1),
-        transform 0.3s cubic-bezier(0.83, 0, 0.17, 1),
-        color 0.3s;
-    }
-    
-    .icon-btn__back,
-    .icon-btn__front {
-      border-radius: 1.25em;
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-    }
-    
-    .icon-btn__back {
-      box-shadow: 0.5em -0.5em 0.75em hsla(223, 10%, 10%, 0.15);
-      display: block;
-      transform: rotate(15deg);
-      transform-origin: 100% 100%;
-      will-change: transform;
-    }
-    
-    .icon-btn__front {
-      background-color: hsla(0, 0%, 100%, 0.15);
-      box-shadow: 0 0 0 0.1em hsla(0, 0%, 100%, 0.3) inset;
-      backdrop-filter: blur(0.75em);
-      -webkit-backdrop-filter: blur(0.75em);
-      -moz-backdrop-filter: blur(0.75em);
-      display: flex;
-      transform-origin: 80% 50%;
-      will-change: transform;
-    }
-    
-    .icon-btn__icon {
-      margin: auto;
-      width: 1.5em;
-      height: 1.5em;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-    }
-    
-    html:not(.dark) .icon-btn__icon { color: #1f2937; }
-    
-    .icon-btn__label {
-      font-size: 0.6em; /* Relative to 24px */
-      font-weight: 600;
-      font-family: var(--font-ui);
-      color: var(--color-moonlight, #c7d3ea);
-      white-space: nowrap;
-      text-align: center;
-      line-height: 2;
-      opacity: 0.8;
-      position: absolute;
-      top: 100%;
-      right: -50%;
-      left: -50%;
-      transform: translateY(15%);
-    }
-    
-    html:not(.dark) .icon-btn__label { color: #475569; }
-    
-    .icon-btn:focus-visible .icon-btn__back,
-    .icon-btn:hover .icon-btn__back {
-      transform: rotate(25deg) translate3d(-0.5em, -0.5em, 0.5em);
-    }
-    
-    .icon-btn:focus-visible .icon-btn__front,
-    .icon-btn:hover .icon-btn__front {
-      transform: translate3d(0, 0, 2em);
-    }
-    
-    .icon-btn:focus-visible .icon-btn__label,
-    .icon-btn:hover .icon-btn__label {
-      opacity: 1;
-      color: #fff;
-      transform: translateY(25%);
-    }
-    
-    html:not(.dark) .icon-btn:hover .icon-btn__label { color: #000; }
-    
-    @media (min-width: 768px) {
-      .icon-btns {
-        grid-template-columns: repeat(3, 1fr);
-      }
-    }
-    @media (min-width: 1024px) {
-      .icon-btns {
-        grid-template-columns: repeat(4, 1fr);
-      }
-    }
-</style>
-
-<div class="mb-10 w-full flex flex-col items-center">
-    <p class="text-sm uppercase tracking-widest font-mono mb-8 w-full text-center" style="color: var(--color-fog);">Active Modules</p>
-    
-    {% set colors = [
-      '#aec6cf', /* Pastel Blue */
-      '#c3b1e1', /* Pastel Purple */
-      '#ffb7b2', /* Pastel Red/Pink */
-      '#b39eb5', /* Pastel Indigo */
-      '#ffdac1', /* Pastel Peach/Orange */
-      '#b5ead7', /* Pastel Mint Green */
-      '#fdfd96'  /* Pastel Yellow */
-    ] %}
-    {% set icons = ['file-text', 'box', 'users', 'database', 'shopping-cart', 'truck', 'user-cog', 'git-merge', 'bar-chart-2'] %}
-
-    <div class="icon-btns">
-        {% for module_name, screens in modules_tree.items() %}
-        {% set c = colors[loop.index0 % colors|length] %}
-        {% set i = icons[loop.index0 % icons|length] %}
-        
-        <button class="icon-btn" aria-label="{{ module_name }}" type="button" @click="activeModule = '{{ module_name }}'; sidebarOpen = true;">
-          <span class="icon-btn__back" style="background: {{ c }};"></span>
-          <span class="icon-btn__front">
-            <span class="icon-btn__icon" aria-hidden="true">
-              <i data-lucide="{{ i }}" style="width: 100%; height: 100%;"></i>
-            </span>
+{% set colors = [
+    '#aec6cf',
+    '#c3b1e1',
+    '#ffb7b2',
+    '#b39eb5',
+    '#ffdac1',
+    '#b5ead7',
+    '#fdfd96'
+  ] %}
+  {% set icons = ['file-text', 'box', 'users', 'database', 'shopping-cart', 'truck', 'user-cog', 'git-merge', 'bar-chart-2'] %}
+  
+  <div class="icon-btns">
+      {% for module_name, screens in modules_tree.items() %}
+      {% set c = colors[loop.index0 % colors|length] %}
+      {% set i = icons[loop.index0 % icons|length] %}
+      
+      <button class="icon-btn" aria-label="{{ module_name }}" type="button" @click="activeModule = '{{ module_name }}'; sidebarOpen = true;">
+        <span class="icon-btn__back" style="background: {{ c }};"></span>
+        <span class="icon-btn__front">
+          <span class="icon-btn__icon" aria-hidden="true">
+            <i data-lucide="{{ i }}" style="width: 100%; height: 100%;"></i>
           </span>
-          <span class="icon-btn__label">{{ module_name }}</span>
-        </button>
-        {% endfor %}
-    </div>
-</div>
-
-{% if not modules_tree %}
-<div style="padding: 80px 0; text-align: center; color: var(--color-fog);">
-    <i data-lucide="folder-search" style="width: 48px; height: 48px; margin: 0 auto 16px; opacity: 0.5;"></i>
-    <p style="font-size: 16px;">No modules available or authorized for your role.</p>
-</div>
-{% endif %}
-
-<script>
-    // Ensure icons in the new cards are rendered
-    document.addEventListener('DOMContentLoaded', () => {
-        lucide.createIcons();
-    });
-</script>
-{% endblock %}
+        </span>
+        <span class="icon-btn__label">{{ module_name }}</span>
+      </button>
+      {% endfor %}
+  </div>
