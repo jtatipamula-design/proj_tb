@@ -5,151 +5,163 @@
 
 {% block content %}
 <style>
-    /* Auros Card Component Styles */
-    .auros-card {
-        background-color: var(--color-liquid-kelp, #003734);
-        border-radius: 16px;
-        padding: 36px;
-        transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.3s;
-        cursor: pointer;
-        display: flex;
-        flex-direction: column;
-        position: relative;
-        overflow: hidden;
+    /* GlassIcons CSS */
+    .icon-btns {
+      display: grid;
+      grid-gap: 6em 4em;
+      grid-template-columns: repeat(2, 1fr);
+      margin: auto;
+      padding: 3em 0;
+      overflow: visible;
+      font-size: 24px; /* Scales the entire icon system */
+      justify-items: center;
     }
     
-    html:not(.dark) .auros-card {
-        background-color: rgba(255, 255, 255, 0.8);
-        border: 1px solid rgba(0,0,0,0.05);
-        box-shadow: 0 4px 20px rgba(0,0,0,0.03);
-    }
-
-    .auros-card:hover {
-        background-color: var(--color-liquid-deep, #011d1c);
-    }
-    
-    html:not(.dark) .auros-card:hover {
-        background-color: rgba(255, 255, 255, 1);
-        border-color: rgba(0,0,0,0.1);
-    }
-
-    .auros-card-eyebrow {
-        font-family: var(--font-mono, 'JetBrains Mono');
-        font-size: 12px;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: var(--color-silver-mist, #bbc7c6);
-        margin-bottom: 12px;
+    .icon-btn {
+      background-color: transparent;
+      outline: none;
+      position: relative;
+      width: 4.5em;
+      height: 4.5em;
+      perspective: 24em;
+      transform-style: preserve-3d;
+      -webkit-tap-highlight-color: transparent;
+      border: none;
+      cursor: pointer;
     }
     
-    html:not(.dark) .auros-card-eyebrow { color: var(--color-fog); }
-
-    .auros-card-title {
-        font-size: 36px;
-        font-weight: 500;
-        color: var(--color-platinum, #ffffff);
-        line-height: 1;
-        letter-spacing: -0.02em;
-        margin-bottom: 24px;
+    .icon-btn__back,
+    .icon-btn__front,
+    .icon-btn__label {
+      transition:
+        opacity 0.3s cubic-bezier(0.83, 0, 0.17, 1),
+        transform 0.3s cubic-bezier(0.83, 0, 0.17, 1),
+        color 0.3s;
     }
     
-    html:not(.dark) .auros-card-title { color: var(--color-midnight-ink); }
-
-    .auros-arrow-btn {
-        width: 32px;
-        height: 32px;
-        border-radius: 6px;
-        background-color: rgba(3, 81, 75, 0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: absolute;
-        top: 36px;
-        right: 36px;
-        color: white;
-        transition: background-color 0.2s, transform 0.2s;
-    }
-
-    html:not(.dark) .auros-arrow-btn {
-        background-color: rgba(0, 0, 0, 0.05);
-        color: var(--color-midnight-ink);
-    }
-
-    .auros-card:hover .auros-arrow-btn {
-        background-color: var(--color-bioluminescent-gradient, #00827c);
-        transform: translate(2px, -2px);
-    }
-
-    .auros-table-list {
-        list-style: none;
-        padding: 0;
-        margin: 0;
-        flex-grow: 1;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-    }
-
-    .auros-table-item {
-        font-size: 16px;
-        color: var(--color-silver-mist, #bbc7c6);
-        display: flex;
-        align-items: center;
-        gap: 12px;
+    .icon-btn__back,
+    .icon-btn__front {
+      border-radius: 1.25em;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
     }
     
-    html:not(.dark) .auros-table-item { color: var(--color-pebble); }
-
-    .auros-table-item::before {
-        content: '';
-        display: inline-block;
-        width: 4px;
-        height: 4px;
-        border-radius: 50%;
-        background-color: var(--color-lavender-phosphor, #fde9ff);
-        opacity: 0.6;
+    .icon-btn__back {
+      box-shadow: 0.5em -0.5em 0.75em hsla(223, 10%, 10%, 0.15);
+      display: block;
+      transform: rotate(15deg);
+      transform-origin: 100% 100%;
+      will-change: transform;
     }
     
-    html:not(.dark) .auros-table-item::before { background-color: var(--color-electric-iris); }
-
-    .auros-more-text {
-        font-size: 14px;
-        color: var(--color-slate-deep, #707777);
-        margin-top: 12px;
-        font-style: italic;
+    .icon-btn__front {
+      background-color: hsla(0, 0%, 100%, 0.15);
+      box-shadow: 0 0 0 0.1em hsla(0, 0%, 100%, 0.3) inset;
+      backdrop-filter: blur(0.75em);
+      -webkit-backdrop-filter: blur(0.75em);
+      -moz-backdrop-filter: blur(0.75em);
+      display: flex;
+      transform-origin: 80% 50%;
+      will-change: transform;
+    }
+    
+    .icon-btn__icon {
+      margin: auto;
+      width: 1.5em;
+      height: 1.5em;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+    
+    html:not(.dark) .icon-btn__icon { color: #1f2937; }
+    
+    .icon-btn__label {
+      font-size: 0.6em; /* Relative to 24px */
+      font-weight: 600;
+      font-family: var(--font-ui);
+      color: var(--color-moonlight, #c7d3ea);
+      white-space: nowrap;
+      text-align: center;
+      line-height: 2;
+      opacity: 0.8;
+      position: absolute;
+      top: 100%;
+      right: -50%;
+      left: -50%;
+      transform: translateY(15%);
+    }
+    
+    html:not(.dark) .icon-btn__label { color: #475569; }
+    
+    .icon-btn:focus-visible .icon-btn__back,
+    .icon-btn:hover .icon-btn__back {
+      transform: rotate(25deg) translate3d(-0.5em, -0.5em, 0.5em);
+    }
+    
+    .icon-btn:focus-visible .icon-btn__front,
+    .icon-btn:hover .icon-btn__front {
+      transform: translate3d(0, 0, 2em);
+    }
+    
+    .icon-btn:focus-visible .icon-btn__label,
+    .icon-btn:hover .icon-btn__label {
+      opacity: 1;
+      color: #fff;
+      transform: translateY(25%);
+    }
+    
+    html:not(.dark) .icon-btn:hover .icon-btn__label { color: #000; }
+    
+    @media (min-width: 768px) {
+      .icon-btns {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    @media (min-width: 1024px) {
+      .icon-btns {
+        grid-template-columns: repeat(4, 1fr);
+      }
     }
 </style>
 
-<div class="mb-10">
-    <p class="text-sm uppercase tracking-widest font-mono mb-4" style="color: var(--color-silver-mist, #bbc7c6);">Active Modules</p>
+<div class="mb-10 w-full flex flex-col items-center">
+    <p class="text-sm uppercase tracking-widest font-mono mb-8 w-full text-center" style="color: var(--color-fog);">Active Modules</p>
     
-    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+    {% set colors = [
+      'linear-gradient(hsl(223, 90%, 50%), hsl(208, 90%, 50%))',
+      'linear-gradient(hsl(283, 90%, 50%), hsl(268, 90%, 50%))',
+      'linear-gradient(hsl(3, 90%, 50%), hsl(348, 90%, 50%))',
+      'linear-gradient(hsl(253, 90%, 50%), hsl(238, 90%, 50%))',
+      'linear-gradient(hsl(43, 90%, 50%), hsl(28, 90%, 50%))',
+      'linear-gradient(hsl(123, 90%, 40%), hsl(108, 90%, 40%))'
+    ] %}
+    {% set icons = ['file-text', 'box', 'users', 'database', 'shopping-cart', 'truck', 'user-cog', 'git-merge', 'bar-chart-2'] %}
+
+    <div class="icon-btns">
         {% for module_name, screens in modules_tree.items() %}
-        <div class="auros-card" @click="activeModule = '{{ module_name }}'; sidebarOpen = true;">
-            <div class="auros-arrow-btn">
-                <i data-lucide="arrow-up-right" style="width: 16px;"></i>
-            </div>
-            
-            <div class="auros-card-eyebrow">{{ screens|length }} TABLES</div>
-            <h3 class="auros-card-title">{{ module_name }}</h3>
-            
-            <ul class="auros-table-list">
-                {% for screen in screens[:4] %}
-                <li class="auros-table-item">{{ screen.name }}</li>
-                {% endfor %}
-            </ul>
-            
-            {% if screens|length > 4 %}
-            <div class="auros-more-text">+ {{ screens|length - 4 }} more tables</div>
-            {% endif %}
-        </div>
+        {% set c = colors[loop.index0 % colors|length] %}
+        {% set i = icons[loop.index0 % icons|length] %}
+        
+        <button class="icon-btn" aria-label="{{ module_name }}" type="button" @click="activeModule = '{{ module_name }}'; sidebarOpen = true;">
+          <span class="icon-btn__back" style="background: {{ c }};"></span>
+          <span class="icon-btn__front">
+            <span class="icon-btn__icon" aria-hidden="true">
+              <i data-lucide="{{ i }}" style="width: 100%; height: 100%;"></i>
+            </span>
+          </span>
+          <span class="icon-btn__label">{{ module_name }}</span>
+        </button>
         {% endfor %}
     </div>
 </div>
 
 {% if not modules_tree %}
-<div style="padding: 80px 0; text-align: center; color: var(--color-slate-deep, #707777);">
+<div style="padding: 80px 0; text-align: center; color: var(--color-fog);">
     <i data-lucide="folder-search" style="width: 48px; height: 48px; margin: 0 auto 16px; opacity: 0.5;"></i>
     <p style="font-size: 16px;">No modules available or authorized for your role.</p>
 </div>
