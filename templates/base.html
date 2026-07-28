@@ -72,22 +72,33 @@
         ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.3); border-radius: 4px; }
         .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
 
-        /* Animated Background - SVG Floating Paths */
-        .animated-bg {
+        /* Abyssal Background System — Grid + Bioluminescent Orbs */
+        .abyssal-bg {
             position: fixed; inset: 0; z-index: 0;
             background-color: var(--color-midnight-ink);
-            color: rgba(255, 255, 255, 0.8);
-            transition: background-color 0.3s, color 0.3s;
+            transition: background-color 0.3s;
             overflow: hidden;
             pointer-events: none;
         }
 
-        html:not(.dark) .animated-bg {
-            color: rgba(15, 23, 42, 0.8);
+        .abyssal-grid {
+            position: absolute; inset: 0;
+            background-size: 48px 48px;
+            background-image:
+                radial-gradient(circle, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+            opacity: 0.5;
+            transition: opacity 0.3s;
         }
 
-        .bg-paths-svg {
-            width: 100%; height: 100%; position: absolute; inset: 0;
+        html:not(.dark) .abyssal-grid {
+            background-image:
+                radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+            opacity: 0.6;
+        }
+
+        .orb-canvas {
+            position: absolute; inset: 0;
+            width: 100%; height: 100%;
             pointer-events: none;
         }
 
@@ -134,8 +145,11 @@
       x-init="if (theme === 'dark') { document.documentElement.classList.add('dark'); document.documentElement.classList.remove('light-mode'); } else { document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light-mode'); }"
       x-effect="localStorage.setItem('sidebarOpen', sidebarOpen)">
 
-    <!-- Animated SVG Background Paths (Glassmorphism) -->
-    <div class="animated-bg" id="animatedBg"></div>
+    <!-- Abyssal Background: Dot Grid + Bioluminescent Orbs -->
+    <div class="abyssal-bg">
+        <div class="abyssal-grid"></div>
+        <canvas class="orb-canvas" id="orbCanvas"></canvas>
+    </div>
 
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
@@ -286,67 +300,106 @@
         // Initialize Lucide Icons
         lucide.createIcons();
 
-        // ======== ANIMATED SVG BACKGROUND PATHS (Glassmorphism Effect) ========
-        function createFloatingPaths(position) {
-            const svgNS = "http://www.w3.org/2000/svg";
-            const g = document.createElementNS(svgNS, "g");
+        // ======== BIOLUMINESCENT ORB BACKGROUND ========
+        (function initOrbField() {
+            const canvas = document.getElementById('orbCanvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
 
-            for (let i = 0; i < 36; i++) {
-                const path = document.createElementNS(svgNS, "path");
-                const d = `M-${380 - i * 5 * position} -${189 + i * 6}C-${
-                    380 - i * 5 * position
-                } -${189 + i * 6} -${312 - i * 5 * position} ${216 - i * 6} ${
-                    152 - i * 5 * position
-                } ${343 - i * 6}C${616 - i * 5 * position} ${470 - i * 6} ${
-                    684 - i * 5 * position
-                } ${875 - i * 6} ${684 - i * 5 * position} ${875 - i * 6}`;
+            let W, H;
+            const dpr = window.devicePixelRatio || 1;
 
-                path.setAttribute("d", d);
-                path.setAttribute("stroke", "currentColor");
-                path.setAttribute("stroke-width", 0.5 + i * 0.03);
-                path.setAttribute("stroke-opacity", 0.1 + i * 0.03);
-                path.setAttribute("fill", "none");
-                path.setAttribute("pathLength", "1");
+            function resize() {
+                W = window.innerWidth;
+                H = window.innerHeight;
+                canvas.width = Math.floor(W * dpr);
+                canvas.height = Math.floor(H * dpr);
+                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+            window.addEventListener('resize', resize);
+            resize();
 
-                path.style.strokeDasharray = "0.3 1";
-                path.style.strokeDashoffset = "0";
+            // Orb color palettes
+            const darkPalette = [
+                { r: 0,   g: 130, b: 124, a: 0.12 },  // Teal-cyan
+                { r: 20,  g: 184, b: 166, a: 0.08 },  // Mint
+                { r: 102, g: 58,  b: 243, a: 0.07 },  // Electric iris
+                { r: 203, g: 180, b: 255, a: 0.06 },  // Lavender phosphor
+                { r: 0,   g: 180, b: 200, a: 0.09 },  // Bright cyan
+                { r: 250, g: 209, b: 255, a: 0.05 },  // Pink phosphor
+            ];
 
-                const duration = 20 + Math.random() * 10;
+            const lightPalette = [
+                { r: 0,   g: 100, b: 95,  a: 0.06 },
+                { r: 14,  g: 165, b: 148, a: 0.05 },
+                { r: 102, g: 58,  b: 243, a: 0.04 },
+                { r: 180, g: 140, b: 210, a: 0.04 },
+                { r: 0,   g: 150, b: 170, a: 0.05 },
+                { r: 220, g: 180, b: 230, a: 0.03 },
+            ];
 
-                path.animate([
-                    { strokeDashoffset: '0', opacity: 0.3 },
-                    { strokeDashoffset: '-1', opacity: 0.6 },
-                    { strokeDashoffset: '0', opacity: 0.3 }
-                ], {
-                    duration: duration * 1000,
-                    iterations: Infinity,
-                    easing: 'linear'
+            // Generate orbs with random properties
+            const ORB_COUNT = 14;
+            const orbs = [];
+
+            for (let i = 0; i < ORB_COUNT; i++) {
+                const palIdx = i % darkPalette.length;
+                orbs.push({
+                    x: Math.random() * 1.4 - 0.2,    // Normalized position (can go slightly off-screen)
+                    y: Math.random() * 1.4 - 0.2,
+                    radius: 80 + Math.random() * 280,  // 80-360px
+                    driftX: (Math.random() - 0.5) * 0.15,
+                    driftY: (Math.random() - 0.5) * 0.12,
+                    phaseX: Math.random() * Math.PI * 2,
+                    phaseY: Math.random() * Math.PI * 2,
+                    freqX: 0.0002 + Math.random() * 0.0003,
+                    freqY: 0.0002 + Math.random() * 0.0003,
+                    breathFreq: 0.0003 + Math.random() * 0.0004,
+                    breathPhase: Math.random() * Math.PI * 2,
+                    palIdx: palIdx,
                 });
-
-                g.appendChild(path);
             }
-            return g;
-        }
 
-        function initBackgroundPaths() {
-            const svgNS = "http://www.w3.org/2000/svg";
-            const svg = document.createElementNS(svgNS, "svg");
-            svg.setAttribute("viewBox", "0 0 696 316");
-            svg.setAttribute("preserveAspectRatio", "xMidYMid slice");
-            svg.classList.add("bg-paths-svg");
+            let t = 0;
 
-            svg.appendChild(createFloatingPaths(1));
-            svg.appendChild(createFloatingPaths(-1));
+            function animate() {
+                ctx.clearRect(0, 0, W, H);
+                t++;
 
-            const container = document.getElementById('animatedBg');
-            if (container) {
-                container.innerHTML = '';
-                container.appendChild(svg);
+                const isDark = document.documentElement.classList.contains('dark');
+                const palette = isDark ? darkPalette : lightPalette;
+
+                for (const orb of orbs) {
+                    // Gentle sinusoidal drift
+                    const cx = (orb.x + Math.sin(t * orb.freqX + orb.phaseX) * 0.08) * W;
+                    const cy = (orb.y + Math.cos(t * orb.freqY + orb.phaseY) * 0.06) * H;
+
+                    // Breathing radius
+                    const breathScale = 1 + Math.sin(t * orb.breathFreq + orb.breathPhase) * 0.15;
+                    const r = orb.radius * breathScale;
+
+                    const c = palette[orb.palIdx];
+                    const breathAlpha = c.a * (0.7 + Math.sin(t * orb.breathFreq * 0.8 + orb.breathPhase) * 0.3);
+
+                    // Radial gradient for soft bioluminescent glow
+                    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+                    grad.addColorStop(0,   `rgba(${c.r}, ${c.g}, ${c.b}, ${breathAlpha * 1.2})`);
+                    grad.addColorStop(0.4, `rgba(${c.r}, ${c.g}, ${c.b}, ${breathAlpha * 0.6})`);
+                    grad.addColorStop(1,   `rgba(${c.r}, ${c.g}, ${c.b}, 0)`);
+
+                    ctx.fillStyle = grad;
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+
+                requestAnimationFrame(animate);
             }
-        }
+
+            animate();
+        })();
 
         document.addEventListener('DOMContentLoaded', () => {
-            initBackgroundPaths();
             lucide.createIcons(); // Re-initialize after Alpine renders
 
             // Handle pending toast messages
