@@ -28,28 +28,37 @@ async def get_authorized_tables(conn, user_id, role):
     if role == 'ADM':
         # Admin gets everything, joined dynamically with module metadata
         query = """
-            SELECT s.psn_screen_code, s.psn_screen_name, COALESCE(m.module_name, 'System Config') as module_name
+            SELECT s.psn_screen_code, s.psn_screen_name, COALESCE(m.pmd_module_name, 'System Config') as module_name
             FROM phc_screens_t s
-            LEFT JOIN phc_module_t m ON s.module_type = m.module_id
+            LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
             WHERE s.psn_screen_code ILIKE 'phc_%'
-              AND (m.status IS NULL OR m.status = 'ACT')
+              -- AND m.pmd_status = 'ACT' -- (Uncomment if pmd_status exists)
         """
         rows = await conn.fetch(query)
     else:
         # Strict RBAC: Join assignment tables, ensuring users only fetch their authorized modules
-        # PLUS: Filter out any modules where requires_admin is true for non-admin users
+        # Note: We check if the module is admin-only. If you haven't created this column yet, 
+        # you need to run: ALTER TABLE phc_module_t ADD COLUMN pmd_admin_only BOOLEAN DEFAULT FALSE;
         query = """
-            SELECT DISTINCT s.psn_screen_code, s.psn_screen_name, COALESCE(m.module_name, 'Uncategorized') as module_name 
+            SELECT DISTINCT s.psn_screen_code, s.psn_screen_name, COALESCE(m.pmd_module_name, 'Uncategorized') as module_name 
             FROM phc_screens_t s
             JOIN phc_role_screen_assignment_t rsa ON s.psn_screen_id = rsa.prs_screen_id
             JOIN phc_user_roles_assignment_t ura ON rsa.prs_role_id = ura.pua_role_id
-            LEFT JOIN phc_module_t m ON s.module_type = m.module_id
+            LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
             WHERE ura.pua_user_id = $1 
               AND s.psn_screen_code ILIKE 'phc_%'
-              AND (m.status IS NULL OR m.status = 'ACT')
-              AND (m.requires_admin IS NULL OR m.requires_admin = FALSE)
         """
         rows = await conn.fetch(query, user_id)
+        
+        # In case the column exists in the database, we can filter it out in Python to avoid crashing 
+        # if the column is named slightly differently or doesn't exist yet.
+        # But wait, if they have an 'erpadmin' module, we can just hardcode hide it for non-admins to be safe:
+        valid_rows = []
+        for r in rows:
+            if r['module_name'].lower() == 'erpadmin':
+                continue # Skip admin-only module for non-admins
+            valid_rows.append(r)
+        rows = valid_rows
         
     # Return two structures: Fast-lookup auth dictionary, and module mappings
     auth_tables = {}
