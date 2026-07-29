@@ -722,10 +722,11 @@ async def process_api_action(request, table_name, pk_val):
         clean_data = _sanitize_payload(data_dict, pk_column, schema_map, is_update=(method == 'PUT'))
 
         company_col = next((c for c in schema_map if c.endswith('_company_id') or c == 'company_id'), None)
-        if company_col and role != 'ADM':
-            user_company = await conn.fetchval("SELECT pus_company_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
-            if user_company:
-                clean_data[company_col] = user_company
+        if company_col:
+            if role != 'ADM' or company_col not in clean_data:
+                user_company = await conn.fetchval("SELECT pus_company_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
+                if user_company:
+                    clean_data[company_col] = user_company
 
         who_cols = [c for c in schema_map if c.endswith(('_created', '_modified', '_created_by', '_modified_by'))]
         for wc in who_cols:
@@ -900,7 +901,7 @@ async def fixdb_route(request):
                 exists = await conn.fetchval("SELECT pmd_module_id FROM phc_module_t WHERE pmd_module_name = $1", mod_name)
                 if not exists:
                     max_id = await conn.fetchval("SELECT MAX(pmd_module_id) FROM phc_module_t")
-                    await conn.execute("INSERT INTO phc_module_t (pmd_module_id, pmd_module_name, pmd_status) VALUES ($1, $2, 'ACT')", (max_id or 0) + 1, mod_name)
+                    await conn.execute("INSERT INTO phc_module_t (pmd_module_id, pmd_module_name, pmd_status, pmd_created_by, pmd_modified_by) VALUES ($1, $2, 'ACT', 'System', 'System')", (max_id or 0) + 1, mod_name)
                     
             # 3. Fetch module mapping dictionary
             mod_rows = await conn.fetch("SELECT pmd_module_id, pmd_module_name FROM phc_module_t")
@@ -919,8 +920,8 @@ async def fixdb_route(request):
                 if not exists:
                     max_scr = await conn.fetchval("SELECT MAX(psn_screen_id) FROM phc_screens_t")
                     await conn.execute("""
-                        INSERT INTO phc_screens_t (psn_screen_id, psn_company_id, psn_module_id, psn_screen_code, psn_screen_name, psn_status) 
-                        VALUES ($1, 1, $2, $3, $4, 'ACT')
+                        INSERT INTO phc_screens_t (psn_screen_id, psn_company_id, psn_module_id, psn_screen_code, psn_screen_name, psn_status, psn_created_by, psn_modified_by) 
+                        VALUES ($1, 1, $2, $3, $4, 'ACT', 'System', 'System')
                     """, (max_scr or 0) + 1, mod_dict['ERPAdmin'], screen_code, screen_name)
 
         return response.html("<h1>Database Fix Applied!</h1><p>Every screen has been perfectly mapped to the Excel spreadsheet layout. Go back to the <a href='/'>dashboard</a> and hit refresh.</p>")
