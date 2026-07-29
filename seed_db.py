@@ -60,8 +60,8 @@ async def seed_database(conn):
             if not exists:
                 try:
                     await conn.execute(
-                        """INSERT INTO phc_screens_t (psn_screen_id, psn_module_id, psn_screen_code, psn_screen_name, psn_status) 
-                           VALUES ($1, $2, $3, $4, 'ACT')""",
+                        """INSERT INTO phc_screens_t (psn_screen_id, psn_company_id, psn_module_id, psn_screen_code, psn_screen_name, psn_status) 
+                           VALUES ($1, 1, $2, $3, $4, 'ACT')""",
                         screen_id, mod_id, code, name
                     )
                     logger.info(f"Registered system screen: {name} under ERPAdmin")
