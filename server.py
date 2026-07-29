@@ -765,5 +765,36 @@ async def process_api_action(request, table_name, pk_val):
         except Exception as e:
             return response.json({"error": str(e)}, status=400)
 
+@app.route('/fixdb', methods=['GET'])
+async def fixdb_route(request):
+    """Temporary route to fix database anomalies from the UI"""
+    try:
+        async with app.ctx.pool.acquire() as conn:
+            # 1. Nuke the ghost testing screens
+            await conn.execute("DELETE FROM phc_screens_t WHERE psn_screen_name = 'Updated Screen'")
+            
+            # 2. Fix the shrinking User Management module
+            await conn.execute("UPDATE phc_module_t SET pmd_module_name = 'User Management' WHERE pmd_module_name = 'UserMgmt'")
+            
+            # 3. Create the ERPAdmin module
+            try:
+                await conn.execute("INSERT INTO phc_module_t (pmd_module_id, pmd_module_name, pmd_status) VALUES (1, 'ERPAdmin', 'ACT') ON CONFLICT (pmd_module_id) DO NOTHING")
+            except Exception: pass
+            
+            # 4. Inject the Module Management screens into ERPAdmin
+            try:
+                await conn.execute("INSERT INTO phc_screens_t (psn_screen_id, psn_company_id, psn_module_id, psn_screen_code, psn_screen_name, psn_status) VALUES (9901, 1, 1, 'phc_module_t', 'Manage Modules', 'ACT') ON CONFLICT DO NOTHING")
+            except Exception: pass
+            try:
+                await conn.execute("INSERT INTO phc_screens_t (psn_screen_id, psn_company_id, psn_module_id, psn_screen_code, psn_screen_name, psn_status) VALUES (9902, 1, 1, 'phc_screens_t', 'Manage Screens', 'ACT') ON CONFLICT DO NOTHING")
+            except Exception: pass
+            
+            # 5. Fix Core Architecture mapping if needed
+            await conn.execute("UPDATE phc_module_t SET pmd_module_name = 'Core Architecture' WHERE pmd_module_id = 1 AND pmd_module_name != 'ERPAdmin'")
+
+        return response.html("<h1>Database Fix Applied!</h1><p>Go back to the <a href='/'>dashboard</a> and hit refresh.</p>")
+    except Exception as e:
+        return response.html(f"<h1>Error</h1><p>{e}</p>")
+
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=PORT, single_process=True)
