@@ -99,7 +99,11 @@
     <div class="form-card">
         <!-- Changed to multipart/form-data to securely stream File Uploads to Python -->
         <form id="recordForm" class="dynamic-form"
-              hx-{% if is_update %}put="/api/{{ table_name }}/{{ pk_val }}"{% else %}post="/api/{{ table_name }}"{% endif %} 
+              {% if is_update %}
+              hx-put="/api/{{ table_name }}/{{ pk_val }}"
+              {% else %}
+              hx-post="/api/{{ table_name }}"
+              {% endif %}
               hx-encoding="multipart/form-data"
               hx-swap="none">
               
@@ -269,6 +273,33 @@
         }
     });
     {% endif %}
+
+    // ----------------------------------------------------
+    // SUCCESS / ERROR HANDLING — Toast + Redirect
+    // ----------------------------------------------------
+    form.addEventListener('htmx:afterRequest', function(evt) {
+        if (evt.detail.successful) {
+            // Store toast so it shows AFTER the redirect page loads
+            sessionStorage.setItem('pendingToast', JSON.stringify({
+                msg: '{{ "Record updated" if is_update else "Record created" }} successfully!',
+                type: 'success'
+            }));
+            // Hard redirect back to the table view
+            window.location.href = '/table/{{ table_name }}';
+        } else {
+            // Try to parse error from server response
+            let errorMsg = 'Something went wrong. Please try again.';
+            try {
+                const body = JSON.parse(evt.detail.xhr.responseText);
+                if (body.error) errorMsg = body.error;
+            } catch(e) {}
+            if (typeof showToast === 'function') {
+                showToast(errorMsg, 'error');
+            } else {
+                alert(errorMsg);
+            }
+        }
+    });
 
     // ----------------------------------------------------
     // Virtual Checkbox Array Handling (For JSONB columns)
