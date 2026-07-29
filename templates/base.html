@@ -98,24 +98,29 @@
         }
 
         .flux-canvas {
-            position: absolute; inset: 0;
-            width: 100%; height: 100%;
+            position: absolute; inset: -15%; /* Oversized so parallax doesn't reveal edges */
+            width: 130%; height: 130%;
             pointer-events: none;
-            opacity: 0.15; /* Drastically reduced so it acts as subtle ambient light */
-            mix-blend-mode: screen; /* Helps it blend smoothly into the dark background */
-            transform: scale(1.2);
-            animation: moveFlux 25s ease-in-out infinite alternate;
+            opacity: 0.40;
+            mix-blend-mode: screen;
+            transform: translate(0px, 0px);
+            animation: moveFlux 30s ease-in-out infinite;
             z-index: 0;
+            transition: opacity 0.3s;
+            will-change: transform;
         }
 
         html:not(.dark) .flux-canvas {
-            opacity: 0.25;
-            mix-blend-mode: multiply; /* Better blending for light mode */
+            opacity: 0.35;
+            mix-blend-mode: multiply;
         }
 
         @keyframes moveFlux {
-            0% { transform: scale(1.2) translate(0%, 0%); }
-            100% { transform: scale(1.2) translate(-3%, -3%); }
+            0%   { transform: translate(var(--flux-mx, 0px), var(--flux-my, 0px)) scale(1.15) translate(0%, 0%); }
+            25%  { transform: translate(var(--flux-mx, 0px), var(--flux-my, 0px)) scale(1.18) translate(-3%, 2%); }
+            50%  { transform: translate(var(--flux-mx, 0px), var(--flux-my, 0px)) scale(1.15) translate(-5%, -2%); }
+            75%  { transform: translate(var(--flux-mx, 0px), var(--flux-my, 0px)) scale(1.18) translate(2%, -4%); }
+            100% { transform: translate(var(--flux-mx, 0px), var(--flux-my, 0px)) scale(1.15) translate(0%, 0%); }
         }
 
         /* Glassmorphism Panels */
@@ -346,7 +351,36 @@
         // Initialize Lucide Icons
         lucide.createIcons();
 
-        // (Background is now handled via CSS and SVG filters)
+        // ======== SUBTLE KINETIC PARALLAX ON GRADIENT ========
+        (function initFluxParallax() {
+            const fluxEl = document.querySelector('.flux-canvas');
+            if (!fluxEl) return;
+
+            let targetX = 0, targetY = 0;
+            let currentX = 0, currentY = 0;
+
+            document.addEventListener('mousemove', (e) => {
+                // Map mouse position to a small offset range (max ±20px)
+                const hw = window.innerWidth / 2;
+                const hh = window.innerHeight / 2;
+                targetX = ((e.clientX - hw) / hw) * 20;
+                targetY = ((e.clientY - hh) / hh) * 20;
+            });
+
+            document.addEventListener('mouseleave', () => {
+                targetX = 0;
+                targetY = 0;
+            });
+
+            function lerp() {
+                currentX += (targetX - currentX) * 0.04;
+                currentY += (targetY - currentY) * 0.04;
+                fluxEl.style.setProperty('--flux-mx', currentX.toFixed(2) + 'px');
+                fluxEl.style.setProperty('--flux-my', currentY.toFixed(2) + 'px');
+                requestAnimationFrame(lerp);
+            }
+            lerp();
+        })();
 
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons(); // Re-initialize after Alpine renders
