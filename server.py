@@ -8,20 +8,69 @@ import jwt
 from sanic import Sanic, response
 from sanic.exceptions import NotFound
 import asyncpg
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 app = Sanic("ERP_System")
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 JWT_SECRET = os.environ.get("JWT_SECRET", "super-secret-key-change-in-prod")
 PORT = int(os.environ.get("PORT", 10000))
 
-env = Environment(loader=FileSystemLoader('templates'))
+env = Environment(
+    loader=FileSystemLoader('templates'),
+    autoescape=select_autoescape(['html', 'xml'])
+)
 
 # --- ENTERPRISE PERFORMANCE CACHE ---
 USER_AUTH_CACHE = {}
 CACHE_TTL = 30  # Live checking every 30 seconds
-SCHEMA_CACHE = {"pks": {}}
+SCHEMA_CACHE = {"pks": {}, "fks": {}, "display_cols": {}}
+
+def quote_ident(name: str) -> str:
+    """Safely quotes SQL identifiers (table names, column names)."""
+    if not name:
+        return '""'
+    return '"' + str(name).replace('"', '""') + '"'
+
+def safe_cast_pk(val, data_type='integer'):
+    """Safely converts primary key values based on column target type."""
+    if val is None:
+        return None
+    val_str = str(val).strip()
+    if not val_str:
+        return None
+    if data_type in ('integer', 'bigint', 'smallint', 'numeric'):
+        try:
+            return int(val_str)
+        except (ValueError, TypeError):
+            return None
+    return val_str
+
+def prune_user_auth_cache():
+    """Prunes expired entries and caps USER_AUTH_CACHE size."""
+    now = time.time()
+    expired = [k for k, v in USER_AUTH_CACHE.items() if now >= v.get("expires", 0)]
+    for k in expired:
+        USER_AUTH_CACHE.pop(k, None)
+    if len(USER_AUTH_CACHE) > 500:
+        keys = list(USER_AUTH_CACHE.keys())[:100]
+        for k in keys:
+            USER_AUTH_CACHE.pop(k, None)
+
+def clear_schema_cache():
+    """Flushes schema and auth caches when schema mutations occur."""
+    SCHEMA_CACHE["pks"].clear()
+    if "fks" in SCHEMA_CACHE:
+        SCHEMA_CACHE["fks"].clear()
+    if "display_cols" in SCHEMA_CACHE:
+        SCHEMA_CACHE["display_cols"].clear()
+    USER_AUTH_CACHE.clear()
 
 def build_modules_tree(all_tables, table_modules):
     modules_tree = {}
@@ -39,7 +88,9 @@ def render_template(template_name, request=None, **context):
         "user_role": "STD",
         "modules_tree": {},
         "all_tables": [],
-        "table_modules": {}
+        "table_modules": {},
+        "lookup_categories": [],
+        "type_filter": ""
     }
     if request and hasattr(request, 'ctx'):
         all_tables = getattr(request.ctx, "all_tables", {})
@@ -64,21 +115,15 @@ def render_template(template_name, request=None, **context):
     return add_security_headers(response.html(html))
 
 async def get_authorized_tables(conn, user_id, role):
-    # ILIKE ensures case-insensitive matching so PHC_OPERATING_ORGS_T works perfectly
     if role == 'ADM':
-        # Admin gets everything, joined dynamically with module metadata
         query = """
             SELECT s.psn_screen_code, s.psn_screen_name, COALESCE(m.pmd_module_name, 'System Config') as module_name
             FROM phc_screens_t s
             LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
-            WHERE s.psn_screen_code ILIKE 'phc_%'
-              -- AND m.pmd_status = 'ACT' -- (Uncomment if pmd_status exists)
+            WHERE s.psn_screen_code ILIKE 'phc_%' OR s.psn_screen_code ILIKE 'pcv_%'
         """
         rows = await conn.fetch(query)
     else:
-        # Strict RBAC: Join assignment tables, ensuring users only fetch their authorized modules
-        # Note: We check if the module is admin-only. If you haven't created this column yet, 
-        # you need to run: ALTER TABLE phc_module_t ADD COLUMN pmd_admin_only BOOLEAN DEFAULT FALSE;
         query = """
             SELECT DISTINCT s.psn_screen_code, s.psn_screen_name, COALESCE(m.pmd_module_name, 'Uncategorized') as module_name 
             FROM phc_screens_t s
@@ -86,21 +131,17 @@ async def get_authorized_tables(conn, user_id, role):
             JOIN phc_user_roles_assignment_t ura ON rsa.prs_role_id = ura.pua_role_id
             LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
             WHERE ura.pua_user_id = $1 
-              AND s.psn_screen_code ILIKE 'phc_%'
+              AND (s.psn_screen_code ILIKE 'phc_%' OR s.psn_screen_code ILIKE 'pcv_%')
         """
         rows = await conn.fetch(query, user_id)
         
-        # In case the column exists in the database, we can filter it out in Python to avoid crashing 
-        # if the column is named slightly differently or doesn't exist yet.
-        # But wait, if they have an 'erpadmin' module, we can just hardcode hide it for non-admins to be safe:
         valid_rows = []
         for r in rows:
             if r['module_name'].lower() == 'erpadmin':
-                continue # Skip admin-only module for non-admins
+                continue
             valid_rows.append(r)
         rows = valid_rows
         
-    # Return two structures: Fast-lookup auth dictionary, and module mappings
     auth_tables = {}
     table_modules = {}
     for r in rows:
@@ -146,18 +187,24 @@ async def setup_request_context(request):
 def check_auth(f):
     @wraps(f)
     async def decorated_function(request, *args, **kwargs):
+        prune_user_auth_cache()
+
+        def unauth_response(req):
+            if req.path.startswith('/api/'):
+                return response.json({"error": "Unauthorized"}, status=401)
+            res = response.redirect("/login")
+            res.delete_cookie("auth_token")
+            return add_security_headers(res)
+
         token = request.cookies.get("auth_token")
         if not token:
-            return response.redirect("/login")
+            return unauth_response(request)
         
-        # ONLY catch JWT token errors here so we don't swallow app errors!
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
         except Exception as e:
             print(f"JWT Auth Error: {e}")
-            res = response.redirect("/login")
-            res.delete_cookie("auth_token")
-            return add_security_headers(res)
+            return unauth_response(request)
 
         user_id = payload.get("user_id")
         session_id = payload.get("session_id")
@@ -165,12 +212,9 @@ def check_auth(f):
         now = time.time()
         cached = USER_AUTH_CACHE.get(user_id)
         
-        # Use RAM Cache for 30 seconds for blazing fast clicks
         if cached and now < cached["expires"] and "all_tables" in cached:
             if cached["session_id"] != session_id:
-                res = response.redirect("/login")
-                res.delete_cookie("auth_token")
-                return add_security_headers(res)
+                return unauth_response(request)
             request.ctx.user_id = user_id
             request.ctx.username = payload.get("username")
             request.ctx.role = cached["role"]
@@ -178,14 +222,11 @@ def check_auth(f):
             request.ctx.table_modules = cached.get("table_modules", {})
             request.ctx.modules_tree = cached.get("modules_tree", {})
         else:
-            # Live query to check if their Role changed or if they logged in elsewhere
             try:
                 async with app.ctx.pool.acquire() as conn:
                     user = await conn.fetchrow("SELECT pus_session_id, pus_user_type FROM phc_users_t WHERE pus_user_id = $1", user_id)
                     if not user or user["pus_session_id"] != session_id:
-                        res = response.redirect("/login")
-                        res.delete_cookie("auth_token")
-                        return add_security_headers(res)
+                        return unauth_response(request)
                     
                     role = user["pus_user_type"] or "STD"
                     auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
@@ -209,7 +250,6 @@ def check_auth(f):
                 print(f"Database Auth Check Error: {db_err}")
                 return response.text(f"Database connection error: {db_err}", status=500)
 
-        # Execute the actual route. Any error here will now correctly show in console/browser!
         return await f(request, *args, **kwargs)
     return decorated_function
 
@@ -218,47 +258,59 @@ async def login(request):
     if request.method == 'GET':
         return render_template('login.html', request=request)
     
-    # Safely handle requests missing a JSON payload to prevent NoneType crashes
     data = request.json or {}
     username = data.get("username", "")
     password = data.get("password", "")
     
+    if not username or not password:
+        return response.json({"status": "error", "message": "Invalid credentials"}, status=401)
+
     async with app.ctx.pool.acquire() as conn:
         user = await conn.fetchrow("SELECT * FROM phc_users_t WHERE pus_user_name = $1", username)
         
         if user:
-            stored_pwd = user['pus_pwd']
+            stored_pwd = user['pus_pwd'] or ""
             is_valid = False
-            try:
-                if bcrypt.checkpw(password.encode('utf-8'), stored_pwd.encode('utf-8')):
-                    is_valid = True
-            except ValueError:
-                # Checks plain-text passwords if bcrypt fails
-                if password == stored_pwd:
-                    is_valid = True
+            if stored_pwd:
+                try:
+                    if bcrypt.checkpw(password.encode('utf-8'), stored_pwd.encode('utf-8')):
+                        is_valid = True
+                except (ValueError, TypeError):
+                    pass
                     
             if is_valid:
                 session_id = str(uuid.uuid4())
-                await conn.execute("UPDATE phc_users_t SET pus_session_id = $1 WHERE pus_user_id = $2", session_id, user['pus_user_id'])
+                async with conn.transaction():
+                    await conn.execute("UPDATE phc_users_t SET pus_session_id = $1 WHERE pus_user_id = $2", session_id, user['pus_user_id'])
                 
                 token_payload = {
                     "user_id": user['pus_user_id'],
                     "username": user['pus_user_name'],
                     "session_id": session_id,
-                    "exp": time.time() + 86400  # Deprecation fix for datetime.utcnow()
+                    "exp": time.time() + 86400
                 }
                 token = jwt.encode(token_payload, JWT_SECRET, algorithm="HS256")
                 USER_AUTH_CACHE.pop(user['pus_user_id'], None)
                 
                 res = response.json({"status": "success", "message": "Login successful"})
-                # Set Session Cookie (No max_age!) - It will expire on browser close
                 res.add_cookie("auth_token", token, httponly=True, samesite="Lax")
                 return add_security_headers(res)
         
         return response.json({"status": "error", "message": "Invalid credentials"}, status=401)
 
 @app.route('/logout', methods=['GET'])
+@check_auth
 async def logout(request):
+    user_id = getattr(request.ctx, 'user_id', None)
+    if user_id:
+        USER_AUTH_CACHE.pop(user_id, None)
+        if hasattr(app.ctx, 'pool') and app.ctx.pool:
+            try:
+                async with app.ctx.pool.acquire() as conn:
+                    async with conn.transaction():
+                        await conn.execute("UPDATE phc_users_t SET pus_session_id = NULL WHERE pus_user_id = $1", user_id)
+            except Exception as e:
+                print(f"Logout session clear error: {e}")
     res = response.redirect("/login")
     res.delete_cookie("auth_token")
     return add_security_headers(res)
@@ -290,6 +342,17 @@ FK_HEURISTICS = {
     'screen_id': 'phc_screens_t',
     'role_id': 'phc_roles_t',
     'user_id': 'phc_users_t',
+    'product_id': 'pcv_products_t',
+    'equipment_id': 'pcv_equipments_t',
+    'execution_id': 'pcv_validation_executions_t',
+    'cpr_id': 'pcv_cleaning_process_records_t',
+    'trf_id': 'pcv_test_request_forms_t',
+    'sampling_record_id': 'pcv_sampling_records_t',
+    'pde_id': 'pcv_pde_registrations_t',
+    'mdd_id': 'pcv_mdd_registrations_t',
+    'training_id': 'pcv_training_records_t',
+    'clearance_id': 'pcv_equipment_clearance_checklists_t',
+    'sampling_loc_id': 'pcv_equipment_sampling_locations_t'
 }
 
 async def get_fk_map(conn, table_name):
@@ -339,19 +402,24 @@ async def get_fk_display_dict(conn, f_table, f_pk, specific_ids=None):
     display_col = info["display"]
     status_col = info["status"]
     
+    q_table = quote_ident(f_table)
+    q_pk = quote_ident(f_pk)
+    q_display = quote_ident(display_col)
+
     if specific_ids is not None:
         if not specific_ids: return {}
-        q = f"SELECT {f_pk} as id, {display_col} as name FROM {f_table} WHERE {f_pk} = ANY($1)"
+        q = f"SELECT {q_pk} as id, {q_display} as name FROM {q_table} WHERE {q_pk} = ANY($1)"
         rows = await conn.fetch(q, list(specific_ids))
         return {r['id']: r['name'] for r in rows}
     else:
-        q = f"SELECT {f_pk} as id, {display_col} as name FROM {f_table}"
-        if status_col: q += f" WHERE {status_col} = 'ACT'"
+        q = f"SELECT {q_pk} as id, {q_display} as name FROM {q_table}"
+        if status_col: q += f" WHERE {quote_ident(status_col)} = 'ACT'"
         rows = await conn.fetch(q)
         return [{"id": str(r['id']), "name": f"{r['name']} (ID: {r['id']})"} for r in rows]
 
 async def get_dropdown_options(conn, table_name, column_name):
-    if column_name.endswith('_org_id'): return []
+    if column_name.endswith('_org_id') or column_name == 'pos_org_id':
+        return []
     f_table, f_pk = await resolve_fk_details(conn, table_name, column_name)
     if f_table and f_pk:
         try:
@@ -359,17 +427,32 @@ async def get_dropdown_options(conn, table_name, column_name):
         except Exception: pass
     return []
 
+def _is_password_column(col_name: str) -> bool:
+    if not col_name:
+        return False
+    c = str(col_name).lower()
+    return c in ('pus_pwd', 'password', 'pus_password') or 'password' in c or c.endswith('pwd')
 
 def _sanitize_payload(data, pk_column, schema_map, is_update=False):
     clean_data = {}
     for k, v in data.items():
-        if v == "" or v is None: continue 
-        if k == pk_column: continue 
-        if k.endswith(('_created', '_modified', '_created_by', '_modified_by')): continue
+        if k == pk_column:
+            continue 
+        if k.endswith(('_created', '_modified', '_created_by', '_modified_by')):
+            continue
 
-        if k == 'pus_pwd' and v:
-            salt = bcrypt.gensalt()
-            v = bcrypt.hashpw(v.encode('utf-8'), salt).decode('utf-8')
+        if is_update and (v == "" or v is None):
+            if _is_password_column(k):
+                continue
+            clean_data[k] = None
+            continue
+        elif not is_update and (v == "" or v is None):
+            continue
+
+        if _is_password_column(k) and v:
+            if isinstance(v, str) and not v.startswith(('$2b$', '$2a$')):
+                salt = bcrypt.gensalt()
+                v = bcrypt.hashpw(v.encode('utf-8'), salt).decode('utf-8')
 
         col_info = schema_map.get(k, {})
         target_type = col_info.get('data_type', '').lower()
@@ -378,12 +461,16 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
         if 'date' in target_type or 'timestamp' in target_type or (isinstance(v, str) and len(v) == 10 and v[4] == '-' and v[7] == '-'):
             if isinstance(v, str) and v:
                 try:
-                    v = datetime.strptime(v, '%Y-%m-%d')
+                    parsed_dt = datetime.strptime(v, '%Y-%m-%d')
+                    v = parsed_dt.date() if target_type == 'date' else parsed_dt
                 except ValueError:
                     try:
-                        v = datetime.fromisoformat(v)
+                        parsed_dt = datetime.fromisoformat(v)
+                        v = parsed_dt.date() if target_type == 'date' else parsed_dt
                     except ValueError:
-                        pass 
+                        pass
+            elif isinstance(v, datetime) and target_type == 'date':
+                v = v.date()
 
         if isinstance(v, str) and max_len is not None:
             if len(v) > max_len:
@@ -391,20 +478,24 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
                 elif "status" in k and v.lower() == "inactive": v = "INA"
                 else: v = v[:max_len]
         
-        if target_type in ('integer', 'bigint', 'smallint') and isinstance(v, str):
-            try:
-                clean_data[k] = int(v)
-            except (ValueError, TypeError):
-                pass  # Skip values that can't be converted to int
+        if target_type in ('integer', 'bigint', 'smallint'):
+            if isinstance(v, bool):
+                clean_data[k] = v
+            else:
+                try:
+                    clean_data[k] = int(float(v))
+                except (ValueError, TypeError, OverflowError):
+                    clean_data[k] = None
         elif target_type == 'numeric' and isinstance(v, str):
             try:
                 clean_data[k] = float(v) if '.' in v else int(v)
             except (ValueError, TypeError):
-                pass  # Skip values that can't be converted to a number
+                clean_data[k] = None
         else:
             clean_data[k] = v
 
     return clean_data
+
 
 @app.route('/')
 @check_auth
@@ -419,10 +510,17 @@ async def show_table(request, table_name):
     role = request.ctx.role
     table_name = table_name.lower()
     
-    page = int(request.args.get("page", 1))
+    try:
+        page = int(request.args.get("page", 1))
+        if page < 1:
+            page = 1
+    except (ValueError, TypeError):
+        page = 1
+
     per_page = 50
     offset = (page - 1) * per_page
     search_query = request.args.get("q", "").strip()
+    type_filter = request.args.get("type_filter", "").strip()
 
     auth_tables = getattr(request.ctx, 'all_tables', None)
     table_modules = getattr(request.ctx, 'table_modules', None)
@@ -451,41 +549,72 @@ async def show_table(request, table_name):
 
         columns = []
         date_columns = []
+        company_col_def = None
         for c in columns_data:
             cname = c['column_name']
             if cname in (pk_column, 'psn_screen_id'): continue
             if 'created' in cname.lower() or 'modified' in cname.lower(): continue
-            if 'company_id' in cname.lower() and role != 'ADM': continue
+            
+            is_company_col = 'company_id' in cname.lower()
+            if is_company_col:
+                if table_name == 'phc_screens_t' and role == 'ADM':
+                    clean_label = cname.split('_', 1)[-1].replace('_', ' ').title()
+                    company_col_def = {"raw": cname, "column_name": cname, "label": clean_label}
+                continue
             
             clean_label = cname.split('_', 1)[-1].replace('_', ' ').title()
             
-            col_def = {"raw": cname, "label": clean_label}
+            col_def = {"raw": cname, "column_name": cname, "label": clean_label}
             if 'date' in c['data_type'] or 'timestamp' in c['data_type']:
                 date_columns.append(col_def)
             else:
                 columns.append(col_def)
                 
         columns.extend(date_columns)
+        if company_col_def:
+            columns.append(company_col_def)
 
-        base_query = f"SELECT * FROM {table_name}"
-        count_query = f"SELECT COUNT(*) FROM {table_name}"
+        lookup_categories = []
+        if table_name == 'phc_lookup_values_t':
+            try:
+                lookup_categories = await conn.fetch(
+                    "SELECT plt_lookup_type_code as code, plt_lookup_type_name as name FROM phc_lookup_types_t WHERE plt_status = 'ACT' ORDER BY plt_lookup_type_name"
+                )
+            except Exception:
+                lookup_categories = []
+
+        q_table = quote_ident(table_name)
+        q_pk = quote_ident(pk_column)
+        
+        base_query = f"SELECT * FROM {q_table}"
+        count_query = f"SELECT COUNT(*) FROM {q_table}"
         params = []
+        where_clauses = []
+
+        if table_name == 'phc_lookup_values_t' and type_filter:
+            params.append(type_filter)
+            where_clauses.append(f"{quote_ident('plv_lookup_type_code')} = ${len(params)}")
 
         if search_query:
             text_cols = [c['column_name'] for c in columns_data if c['data_type'] in ('character varying', 'text', 'character')]
             if text_cols:
-                clauses = [f"{col} ILIKE ${i+1}" for i, col in enumerate(text_cols)]
-                where_clause = " WHERE " + " OR ".join(clauses)
-                base_query += where_clause
-                count_query += where_clause
-                params = [f"%{search_query}%" for _ in text_cols]
+                search_clauses = []
+                for col in text_cols:
+                    params.append(f"%{search_query}%")
+                    search_clauses.append(f"{quote_ident(col)} ILIKE ${len(params)}")
+                where_clauses.append("(" + " OR ".join(search_clauses) + ")")
 
-        base_query += f" ORDER BY {pk_column} DESC LIMIT ${len(params)+1} OFFSET ${len(params)+2}"
+        if where_clauses:
+            where_str = " WHERE " + " AND ".join(where_clauses)
+            base_query += where_str
+            count_query += where_str
+
+        base_query += f" ORDER BY {q_pk} DESC LIMIT ${len(params)+1} OFFSET ${len(params)+2}"
         
         total_count = await conn.fetchval(count_query, *params)
+        total_count = total_count or 0
         raw_rows = await conn.fetch(base_query, *(params + [per_page, offset]))
 
-        # --- DYNAMIC FOREIGN KEY RESOLUTION FOR TABLE VIEW ---
         resolved_rows = [dict(r) for r in raw_rows]
         for c in columns_data:
             cname = c['column_name']
@@ -505,7 +634,7 @@ async def show_table(request, table_name):
                         print(f"Error resolving table FK {cname}: {e}")
         rows = resolved_rows
 
-    total_pages = (total_count + per_page - 1) // per_page
+    total_pages = max(1, (total_count + per_page - 1) // per_page)
     start_row = offset + 1 if total_count > 0 else 0
     end_row = min(offset + per_page, total_count)
 
@@ -522,7 +651,9 @@ async def show_table(request, table_name):
         total_count=total_count,
         start_row=start_row,
         end_row=end_row,
-        search_query=search_query
+        search_query=search_query,
+        lookup_categories=lookup_categories,
+        type_filter=type_filter
     )
 
 @app.route('/new/<table_name>', methods=['GET'])
@@ -533,6 +664,11 @@ async def show_add_form(request, table_name):
 @app.route('/edit/<table_name>/<pk_val>', methods=['GET'])
 @check_auth
 async def show_edit_form(request, table_name, pk_val):
+    return await render_form(request, table_name, is_update=True, pk_val=pk_val)
+
+@app.route('/form/<table_name>/<pk_val>', methods=['GET'])
+@check_auth
+async def show_form_view_alias(request, table_name, pk_val):
     return await render_form(request, table_name, is_update=True, pk_val=pk_val)
 
 async def render_form(request, table_name, is_update=False, pk_val=None):
@@ -560,16 +696,29 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
             ORDER BY ordinal_position
         """, table_name)
 
+        schema_map = {c['column_name']: dict(c) for c in columns_data}
+        pk_type = schema_map.get(pk_column, {}).get('data_type', 'integer')
+
+        q_table = quote_ident(table_name)
+        q_pk = quote_ident(pk_column)
+
         row_data = {}
         if is_update:
-            row_data = await conn.fetchrow(f"SELECT * FROM {table_name} WHERE {pk_column} = $1", int(pk_val) if pk_val.isdigit() else pk_val)
+            cast_pk = safe_cast_pk(pk_val, pk_type)
+            if cast_pk is None:
+                raise NotFound("Invalid primary key format")
+            row_data = await conn.fetchrow(f"SELECT * FROM {q_table} WHERE {q_pk} = $1", cast_pk)
             if not row_data:
                 raise NotFound("Record not found")
 
         columns = []
+        company_form_def = None
         for c in columns_data:
             cname = c['column_name']
-            if 'company_id' in cname.lower() and role != 'ADM': continue
+            is_company_col = 'company_id' in cname.lower()
+            if is_company_col:
+                if not (table_name == 'phc_screens_t' and role == 'ADM'):
+                    continue
             
             clean_label = cname.split('_', 1)[-1].replace('_', ' ').title()
             
@@ -581,7 +730,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
                 json_options = await get_dropdown_options(conn, table_name, cname)
                 options = [] 
                 
-            columns.append({
+            col_def = {
                 "column_name": cname,
                 "label": clean_label,
                 "data_type": c['data_type'],
@@ -590,7 +739,14 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
                 "value": val,
                 "options": options,
                 "json_options": json_options
-            })
+            }
+            if is_company_col:
+                company_form_def = col_def
+            else:
+                columns.append(col_def)
+
+        if company_form_def:
+            columns.append(company_form_def)
 
     return render_template(
         'form_view.html',
@@ -626,30 +782,35 @@ async def export_table_csv(request, table_name):
             ORDER BY ordinal_position
         """, table_name)
 
-        # Build clean column list (same filtering logic as table_view)
         export_cols = []
+        company_csv_col = None
         for c in columns_data:
             cname = c['column_name']
             if cname == pk_column: continue
             if 'created' in cname.lower() or 'modified' in cname.lower(): continue
-            if 'company_id' in cname.lower() and role != 'ADM': continue
+            is_company_col = 'company_id' in cname.lower()
+            if is_company_col:
+                if table_name == 'phc_screens_t' and role == 'ADM':
+                    company_csv_col = cname
+                continue
             export_cols.append(cname)
+        if company_csv_col:
+            export_cols.append(company_csv_col)
 
         if not export_cols:
             return response.text("No exportable columns found.", status=400)
 
-        col_list = ", ".join(export_cols)
-        rows = await conn.fetch(f"SELECT {col_list} FROM {table_name} ORDER BY {pk_column} DESC")
+        col_list = ", ".join(quote_ident(c) for c in export_cols)
+        q_table = quote_ident(table_name)
+        order_clause = f" ORDER BY {quote_ident(pk_column)} DESC" if pk_column else ""
+        rows = await conn.fetch(f"SELECT {col_list} FROM {q_table}{order_clause}")
 
-    # Build CSV in-memory
     output = io.StringIO()
     writer = csv.writer(output)
 
-    # Header row — clean labels
     header = [col.split('_', 1)[-1].replace('_', ' ').title() for col in export_cols]
     writer.writerow(header)
 
-    # Data rows
     for row in rows:
         csv_row = []
         for col in export_cols:
@@ -677,7 +838,6 @@ async def export_table_csv(request, table_name):
 async def api_create_record(request, table_name):
     return await process_api_action(request, table_name, None)
 
-
 @app.route('/api/<table_name>/<pk_val>', methods=['PUT', 'DELETE', 'POST'], name="api_update_delete")
 @check_auth
 async def api_modify_record(request, table_name, pk_val):
@@ -688,7 +848,6 @@ async def process_api_action(request, table_name, pk_val):
     role = request.ctx.role
     table_name = table_name.lower()
     
-    # Forms sometimes send PUT/DELETE as POST with a special _method field
     method = request.method
     if request.form and request.form.get('_method'):
         method = request.form.get('_method')[0].upper()
@@ -699,31 +858,55 @@ async def process_api_action(request, table_name, pk_val):
             return response.json({"error": "Unauthorized"}, status=403)
         
         pk_column = await get_pk_column(conn, table_name)
-
-        if method == 'DELETE':
-            try:
-                await conn.execute(f"DELETE FROM {table_name} WHERE {pk_column} = $1", int(pk_val) if pk_val.isdigit() else pk_val)
-                return response.json({"status": "success"})
-            except Exception as e:
-                return response.json({"error": str(e)}, status=400)
-
-        data = request.form if request.form else request.json
-        if not data:
-            return response.json({"error": "No data provided"}, status=400)
-            
-        data_dict = {k: v[0] if isinstance(v, list) else v for k, v in data.items() if k != '_method'}
-
         columns_info = await conn.fetch("""
             SELECT column_name, data_type, character_maximum_length 
             FROM information_schema.columns WHERE table_name = $1 AND table_schema = 'public'
         """, table_name)
         schema_map = {c['column_name']: dict(c) for c in columns_info}
+        pk_type = schema_map.get(pk_column, {}).get('data_type', 'integer')
+
+        cast_pk = safe_cast_pk(pk_val, pk_type)
+        if method in ('PUT', 'DELETE') and cast_pk is None:
+            return response.json({"error": "Invalid primary key format"}, status=400)
+
+        q_table = quote_ident(table_name)
+        q_pk = quote_ident(pk_column)
+
+        if method == 'DELETE':
+            try:
+                async with conn.transaction():
+                    res = await conn.execute(f"DELETE FROM {q_table} WHERE {q_pk} = $1", cast_pk)
+                if res.endswith(" 0"):
+                    return response.json({"error": "Record not found"}, status=404)
+                return response.json({"status": "success"})
+            except Exception as e:
+                return response.json({"error": str(e)}, status=400)
+
+        try:
+            data = request.form if request.form else request.json
+            if not data:
+                return response.json({"error": "No data provided"}, status=400)
+            data_dict = {k: v[0] if isinstance(v, list) else v for k, v in data.items() if k != '_method'}
+        except Exception:
+            return response.json({"error": "Invalid or malformed payload"}, status=400)
+
+        if request.files:
+            upload_dir = os.path.join(os.getcwd(), 'uploads')
+            os.makedirs(upload_dir, exist_ok=True)
+            for file_key, file_objs in request.files.items():
+                file_obj = file_objs[0] if isinstance(file_objs, list) else file_objs
+                if file_obj and hasattr(file_obj, 'body') and file_obj.body:
+                    fname = f"{uuid.uuid4().hex}_{getattr(file_obj, 'name', 'file')}"
+                    fpath = os.path.join(upload_dir, fname)
+                    with open(fpath, 'wb') as f:
+                        f.write(file_obj.body)
+                    data_dict[file_key] = f"uploads/{fname}"
 
         clean_data = _sanitize_payload(data_dict, pk_column, schema_map, is_update=(method == 'PUT'))
 
         company_col = next((c for c in schema_map if c.endswith('_company_id') or c == 'company_id'), None)
         if company_col:
-            if role != 'ADM' or company_col not in clean_data:
+            if not (table_name == 'phc_screens_t' and role == 'ADM') or company_col not in clean_data or not clean_data[company_col]:
                 user_company = await conn.fetchval("SELECT pus_company_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
                 if user_company:
                     clean_data[company_col] = user_company
@@ -737,25 +920,48 @@ async def process_api_action(request, table_name, pk_val):
                 elif 'created_by' in wc: clean_data[wc] = "System"
 
         try:
-            if method == 'POST':
-                if schema_map[pk_column]['data_type'] in ('integer', 'bigint', 'numeric'):
-                    max_id = await conn.fetchval(f"SELECT MAX({pk_column}) FROM {table_name}")
-                    clean_data[pk_column] = (max_id or 0) + 1
+            async with conn.transaction():
+                if method == 'POST':
+                    if table_name == 'phc_role_screen_assignment_t' and 'prs_screen_id' in data_dict:
+                        raw_scr = data_dict['prs_screen_id']
+                        scr_list = []
+                        if isinstance(raw_scr, str) and raw_scr.startswith('['):
+                            try:
+                                import json
+                                scr_list = json.loads(raw_scr)
+                            except Exception:
+                                scr_list = [raw_scr]
+                        elif isinstance(raw_scr, list):
+                            scr_list = raw_scr
+                        else:
+                            scr_list = [raw_scr]
 
-                cols = list(clean_data.keys())
-                vals = list(clean_data.values())
-                placeholders = ", ".join([f"${i+1}" for i in range(len(vals))])
-                q = f"INSERT INTO {table_name} ({', '.join(cols)}) VALUES ({placeholders})"
-                await conn.execute(q, *vals)
+                        for sid in scr_list:
+                            row_clean = clean_data.copy()
+                            row_clean['prs_screen_id'] = int(sid)
+                            cols = [quote_ident(c) for c in row_clean.keys()]
+                            vals = list(row_clean.values())
+                            placeholders = ", ".join([f"${i+1}" for i in range(len(vals))])
+                            q = f"INSERT INTO {q_table} ({', '.join(cols)}) VALUES ({placeholders})"
+                            await conn.execute(q, *vals)
+                    else:
+                        cols = [quote_ident(c) for c in clean_data.keys()]
+                        vals = list(clean_data.values())
+                        placeholders = ", ".join([f"${i+1}" for i in range(len(vals))])
+                        q = f"INSERT INTO {q_table} ({', '.join(cols)}) VALUES ({placeholders})"
+                        await conn.execute(q, *vals)
 
-            elif method == 'PUT':
-                cols = list(clean_data.keys())
-                vals = list(clean_data.values())
-                set_clause = ", ".join([f"{c} = ${i+1}" for i, c in enumerate(cols)])
-                q = f"UPDATE {table_name} SET {set_clause} WHERE {pk_column} = ${len(vals)+1}"
-                await conn.execute(q, *(vals + [int(pk_val) if pk_val.isdigit() else pk_val]))
+                elif method == 'PUT':
+                    if not clean_data:
+                        return response.json({"error": "No update fields provided"}, status=400)
+                    cols = list(clean_data.keys())
+                    vals = list(clean_data.values())
+                    set_clause = ", ".join([f"{quote_ident(c)} = ${i+1}" for i, c in enumerate(cols)])
+                    q = f"UPDATE {q_table} SET {set_clause} WHERE {q_pk} = ${len(vals)+1}"
+                    res = await conn.execute(q, *(vals + [cast_pk]))
+                    if res.endswith(" 0"):
+                        return response.json({"error": "Record not found"}, status=404)
 
-            # Handle both JSON responses and Standard HTML Forms
             if request.headers.get("HX-Request"):
                 res = response.json({"status": "success"})
                 res.headers["HX-Redirect"] = f"/table/{table_name}"
@@ -767,9 +973,12 @@ async def process_api_action(request, table_name, pk_val):
             return response.json({"error": str(e)}, status=400)
 
 @app.route('/fixdb', methods=['GET'])
+@check_auth
 async def fixdb_route(request):
     """Temporary route to perfectly sync the database to UI Built Status.xlsx"""
-    
+    if getattr(request.ctx, 'role', 'STD') != 'ADM':
+        return response.json({"error": "Forbidden: Admin access required"}, status=403)
+
     EXCEL_MAPPINGS = {
         "phc_companies_t": "ERPAdmin",
         "phc_operating_orgs_t": "ERPAdmin",
@@ -780,7 +989,7 @@ async def fixdb_route(request):
         "phc_emp_t": "HR",
         "phc_apps_t": "HR",
         "phc_emp_apps_grant_t": "HR",
-        "phc_lookup_types": "ERPAdmin",
+        "phc_lookup_types_t": "ERPAdmin",
         "phc_lookup_values_t": "MasterData",
         "phc_users_t": "User Management",
         "phc_screens_t": "User Management",
@@ -886,44 +1095,71 @@ async def fixdb_route(request):
         "phc_cleaning_visual_inspection": "Qualtiy - Cleaning Validation",
         "phc_cleaning_qa_approval": "Qualtiy - Cleaning Validation",
         "phc_cleaning_release": "Qualtiy - Cleaning Validation",
+        "pcv_products_t": "Cleaning Validation",
+        "pcv_product_strengths_t": "Cleaning Validation",
+        "pcv_product_stages_t": "Cleaning Validation",
+        "pcv_product_pack_styles_t": "Cleaning Validation",
+        "pcv_pde_registrations_t": "Cleaning Validation",
+        "pcv_pde_api_details_t": "Cleaning Validation",
+        "pcv_solubility_details_t": "Cleaning Validation",
+        "pcv_mdd_registrations_t": "Cleaning Validation",
+        "pcv_mdd_api_details_t": "Cleaning Validation",
+        "pcv_test_methods_t": "Cleaning Validation",
+        "pcv_product_batch_sizes_t": "Cleaning Validation",
+        "pcv_equipments_t": "Cleaning Validation",
+        "pcv_equipment_surface_areas_t": "Cleaning Validation",
+        "pcv_equipment_sampling_locations_t": "Cleaning Validation",
+        "pcv_product_equipment_mapping_t": "Cleaning Validation",
+        "pcv_validation_executions_t": "Cleaning Validation",
+        "pcv_training_records_t": "Cleaning Validation",
+        "pcv_training_attendees_t": "Cleaning Validation",
+        "pcv_cleaning_process_records_t": "Cleaning Validation",
+        "pcv_cpr_execution_steps_t": "Cleaning Validation",
+        "pcv_equipment_clearance_checklists_t": "Cleaning Validation",
+        "pcv_equipment_clearance_items_t": "Cleaning Validation",
+        "pcv_test_request_forms_t": "Cleaning Validation",
+        "pcv_sampling_records_t": "Cleaning Validation",
+        "pcv_test_results_t": "Cleaning Validation",
+        "pcv_validation_reports_t": "Cleaning Validation",
         "phc_module_t": "ERPAdmin",
         "phc_screens_t": "ERPAdmin"
     }
 
     try:
         async with app.ctx.pool.acquire() as conn:
-            # 1. Nuke the ghost testing screens
-            await conn.execute("DELETE FROM phc_screens_t WHERE psn_screen_name = 'Updated Screen'")
-            
-            # 2. Get/Create all Modules from Excel
-            unique_modules = set(EXCEL_MAPPINGS.values())
-            for mod_name in unique_modules:
-                exists = await conn.fetchval("SELECT pmd_module_id FROM phc_module_t WHERE pmd_module_name = $1", mod_name)
-                if not exists:
-                    max_id = await conn.fetchval("SELECT MAX(pmd_module_id) FROM phc_module_t")
-                    await conn.execute("INSERT INTO phc_module_t (pmd_module_id, pmd_module_name, pmd_status, pmd_created_by, pmd_modified_by) VALUES ($1, $2, 'ACT', 'System', 'System')", (max_id or 0) + 1, mod_name)
-                    
-            # 3. Fetch module mapping dictionary
-            mod_rows = await conn.fetch("SELECT pmd_module_id, pmd_module_name FROM phc_module_t")
-            mod_dict = {row['pmd_module_name']: row['pmd_module_id'] for row in mod_rows}
+            async with conn.transaction():
+                # 1. Nuke the ghost testing screens
+                await conn.execute("DELETE FROM phc_screens_t WHERE psn_screen_name = 'Updated Screen'")
+                
+                # 2. Get/Create all Modules from Excel
+                unique_modules = set(EXCEL_MAPPINGS.values())
+                for mod_name in unique_modules:
+                    exists = await conn.fetchval("SELECT pmd_module_id FROM phc_module_t WHERE pmd_module_name = $1", mod_name)
+                    if not exists:
+                        max_id = await conn.fetchval("SELECT MAX(pmd_module_id) FROM phc_module_t")
+                        await conn.execute("INSERT INTO phc_module_t (pmd_module_id, pmd_module_name, pmd_status, pmd_created_by, pmd_modified_by) VALUES ($1, $2, 'ACT', 'System', 'System')", (max_id or 0) + 1, mod_name)
+                        
+                # 3. Fetch module mapping dictionary
+                mod_rows = await conn.fetch("SELECT pmd_module_id, pmd_module_name FROM phc_module_t")
+                mod_dict = {row['pmd_module_name']: row['pmd_module_id'] for row in mod_rows}
 
-            # 4. Map screens to exact modules
-            for screen_code, module_name in EXCEL_MAPPINGS.items():
-                target_mod_id = mod_dict.get(module_name)
-                if target_mod_id:
-                    # Update screen if it exists to strictly follow the Excel layout
-                    await conn.execute("UPDATE phc_screens_t SET psn_module_id = $1 WHERE psn_screen_code = $2", target_mod_id, screen_code)
+                # 4. Map screens to exact modules
+                for screen_code, module_name in EXCEL_MAPPINGS.items():
+                    target_mod_id = mod_dict.get(module_name)
+                    if target_mod_id:
+                        await conn.execute("UPDATE phc_screens_t SET psn_module_id = $1 WHERE psn_screen_code = $2", target_mod_id, screen_code)
 
-            # 5. Insert Manage Modules and Manage Screens if they don't exist yet
-            for screen_code, screen_name in [('phc_module_t', 'Manage Modules'), ('phc_screens_t', 'Manage Screens')]:
-                exists = await conn.fetchval("SELECT psn_screen_id FROM phc_screens_t WHERE psn_screen_code = $1", screen_code)
-                if not exists:
-                    max_scr = await conn.fetchval("SELECT MAX(psn_screen_id) FROM phc_screens_t")
-                    await conn.execute("""
-                        INSERT INTO phc_screens_t (psn_screen_id, psn_company_id, psn_module_id, psn_screen_code, psn_screen_name, psn_status, psn_created_by, psn_modified_by) 
-                        VALUES ($1, 1, $2, $3, $4, 'ACT', 'System', 'System')
-                    """, (max_scr or 0) + 1, mod_dict['ERPAdmin'], screen_code, screen_name)
+                # 5. Insert Manage Modules and Manage Screens if they don't exist yet
+                for screen_code, screen_name in [('phc_module_t', 'Manage Modules'), ('phc_screens_t', 'Manage Screens')]:
+                    exists = await conn.fetchval("SELECT psn_screen_id FROM phc_screens_t WHERE psn_screen_code = $1", screen_code)
+                    if not exists:
+                        max_scr = await conn.fetchval("SELECT MAX(psn_screen_id) FROM phc_screens_t")
+                        await conn.execute("""
+                            INSERT INTO phc_screens_t (psn_screen_id, psn_company_id, psn_module_id, psn_screen_code, psn_screen_name, psn_status, psn_created_by, psn_modified_by) 
+                            VALUES ($1, 1, $2, $3, $4, 'ACT', 'System', 'System')
+                        """, (max_scr or 0) + 1, mod_dict['ERPAdmin'], screen_code, screen_name)
 
+        clear_schema_cache()
         return response.html("<h1>Database Fix Applied!</h1><p>Every screen has been perfectly mapped to the Excel spreadsheet layout. Go back to the <a href='/'>dashboard</a> and hit refresh.</p>")
     except Exception as e:
         return response.html(f"<h1>Error</h1><p>{e}</p>")
