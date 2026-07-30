@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     
     <script>
@@ -237,24 +238,43 @@
                 <p>Please sign in to continue</p>
             </div>
 
-            <form class="login-form" id="loginForm" onsubmit="handleLogin(event)">
+            <form class="login-form space-y-5" id="loginForm" onsubmit="handleLogin(event)">
                 
-                <div class="form-field">
-                    <input type="text" id="username" required autocomplete="username">
-                    <label for="username">Username</label>
+                <!-- Username Field -->
+                <div class="flex flex-col space-y-1.5 text-left">
+                    <label for="username" class="text-xs font-semibold uppercase tracking-wider text-[#b8b3b0]">Username</label>
+                    <div class="relative">
+                        <input type="text" 
+                               id="username" 
+                               required 
+                               autocomplete="username" 
+                               placeholder="Enter your username"
+                               class="w-full px-3.5 py-3 border border-[#3d3a39] rounded-[3px] text-sm font-geist bg-[rgba(16,16,16,0.4)] text-[#eeeeee] placeholder-[#8a8380] focus:outline-none focus:border-[#b8b3b0] transition-all">
+                    </div>
                 </div>
 
-                <div class="form-field">
-                    <input type="password" id="password" required autocomplete="current-password">
-                    <label for="password">Password</label>
-                    <button type="button" class="toggle-password" onclick="togglePasswordVisibility()" aria-label="Toggle password visibility">
-                        <i data-lucide="eye" id="eyeIcon" style="width: 18px;"></i>
-                    </button>
+                <!-- Password Field -->
+                <div class="flex flex-col space-y-1.5 text-left">
+                    <label for="password" class="text-xs font-semibold uppercase tracking-wider text-[#b8b3b0]">Password</label>
+                    <div class="relative">
+                        <input type="password" 
+                               id="password" 
+                               required 
+                               autocomplete="current-password" 
+                               placeholder="Enter your password"
+                               class="w-full pl-3.5 pr-11 py-3 border border-[#3d3a39] rounded-[3px] text-sm font-geist bg-[rgba(16,16,16,0.4)] text-[#eeeeee] placeholder-[#8a8380] focus:outline-none focus:border-[#b8b3b0] transition-all">
+                        <button type="button" 
+                                class="absolute right-3 top-1/2 -translate-y-1/2 text-[#8a8380] hover:text-[#eeeeee] p-1 transition-colors flex items-center justify-center" 
+                                onclick="togglePasswordVisibility()" 
+                                aria-label="Toggle password visibility">
+                            <i data-lucide="eye" id="eyeIcon" style="width: 18px; height: 18px;"></i>
+                        </button>
+                    </div>
                 </div>
 
-                <div class="form-options">
-                    <label class="remember-me">
-                        <input type="checkbox" id="rememberMe">
+                <div class="form-options pt-1">
+                    <label class="remember-me flex items-center gap-2 cursor-pointer select-none text-xs text-[#8a8380]">
+                        <input type="checkbox" id="rememberMe" class="accent-[#ee6018] w-3.5 h-3.5">
                         Remember me
                     </label>
                 </div>
@@ -292,7 +312,11 @@
             input.addEventListener('focus', updateState);
             input.addEventListener('blur', updateState);
             input.addEventListener('input', updateState);
+            input.addEventListener('change', updateState);
+            updateState();
             setTimeout(updateState, 50);
+            setTimeout(updateState, 200);
+            setTimeout(updateState, 500);
         });
 
         // -----------------------------------------
