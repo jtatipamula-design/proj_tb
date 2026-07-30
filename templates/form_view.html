@@ -99,6 +99,8 @@
     <div class="form-card">
         <!-- Changed to multipart/form-data to securely stream File Uploads to Python -->
         <form id="recordForm" class="dynamic-form"
+              action="/api/{{ table_name }}{{ '/' ~ pk_val if is_update else '' }}"
+              method="POST"
               {% if is_update %}
               hx-put="/api/{{ table_name }}/{{ pk_val }}"
               {% else %}
@@ -110,7 +112,7 @@
             <div class="form-grid">
                 {% for col in columns %}
                     {% set is_who_col = col.column_name.lower().endswith('_created') or col.column_name.lower().endswith('_modified') or col.column_name.lower().endswith('_created_by') or col.column_name.lower().endswith('_modified_by') or col.column_name.lower() in ('creation_date', 'last_update_date', 'created_by', 'last_updated_by') %}
-                    {% set is_company_col = col.column_name.lower() == 'company_id' or col.column_name.lower().endswith('_company_id') %}
+                    {% set is_company_col = (col.column_name.lower() == 'company_id' or col.column_name.lower().endswith('_company_id')) and not (table_name == 'phc_screens_t' and user_role == 'ADM') %}
                     {% set is_large_text = col.data_type in ('text', 'json', 'jsonb') or 'desc' in col.column_name.lower() or 'note' in col.column_name.lower() or 'message' in col.column_name.lower() or 'address' in col.column_name.lower() %}
                     {% set is_file_col = 'image' in col.column_name.lower() or 'file' in col.column_name.lower() or 'document' in col.column_name.lower() or col.data_type == 'bytea' %}
 
@@ -125,7 +127,7 @@
 
                             {# PRIMARY KEY #}
                             {% if col.is_pk %}
-                                <input type="text" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" value="{{ col.value or '' }}" placeholder="Auto-Generated on Save..." readonly>
+                                <input type="text" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" value="{{ col.value if col.value is not none else '' }}" placeholder="Auto-Generated on Save..." readonly>
 
                             {# STATUS TOGGLE #}
                             {% elif 'status' in col.column_name.lower() %}
@@ -176,13 +178,13 @@
                             
                             {# LARGE TEXT #}
                             {% elif is_large_text %}
-                                <textarea id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" {% if col.required and not is_update %}required{% endif %}>{{ col.value or '' }}</textarea>
+                                <textarea id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" {% if col.required and not is_update %}required{% endif %}>{{ col.value if col.value is not none else '' }}</textarea>
 
                             {# STANDARD INPUT #}
                             {% else %}
                                 <input type="{% if col.data_type in ('integer', 'numeric', 'bigint', 'smallint') %}number{% elif col.column_name == 'pus_pwd' %}password{% else %}text{% endif %}" 
                                        id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" 
-                                       value="{{ col.value or '' }}" {% if col.required and not is_update and col.column_name != 'pus_pwd' %}required{% endif %}>
+                                       value="{{ col.value if col.value is not none else '' }}" {% if col.required and not is_update and col.column_name != 'pus_pwd' %}required{% endif %}>
                             {% endif %}
                         </div>
                     {% endif %}
@@ -284,8 +286,10 @@
                 msg: '{{ "Record updated" if is_update else "Record created" }} successfully!',
                 type: 'success'
             }));
-            // Hard redirect back to the table view
-            window.location.href = '/table/{{ table_name }}';
+            const hxRedirect = evt.detail.xhr ? evt.detail.xhr.getResponseHeader('HX-Redirect') : null;
+            if (!hxRedirect) {
+                window.location.href = '/table/{{ table_name }}';
+            }
         } else {
             // Try to parse error from server response
             let errorMsg = 'Something went wrong. Please try again.';
