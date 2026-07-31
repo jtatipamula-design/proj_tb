@@ -571,11 +571,10 @@ async def show_table(request, table_name):
         for c in columns_data:
             cname = c['column_name']
             if cname in (pk_column, 'psn_screen_id'): continue
-            if 'created' in cname.lower() or 'modified' in cname.lower(): continue
             
             is_company_col = 'company_id' in cname.lower()
             if is_company_col:
-                if table_name == 'phc_screens_t' and role == 'ADM':
+                if role == 'ADM' and table_modules.get(table_name, '').lower() == 'erpadmin':
                     clean_label = cname.split('_', 1)[-1].replace('_', ' ').title()
                     company_col_def = {"raw": cname, "column_name": cname, "label": clean_label}
                 continue
@@ -816,7 +815,7 @@ async def export_table_csv(request, table_name):
     table_name = table_name.lower()
 
     async with app.ctx.pool.acquire() as conn:
-        auth_tables, _ = await get_authorized_tables(conn, user_id, role)
+        auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
         if table_name not in auth_tables:
             raise NotFound("Table not found or unauthorized")
 
@@ -834,10 +833,10 @@ async def export_table_csv(request, table_name):
         for c in columns_data:
             cname = c['column_name']
             if cname == pk_column: continue
-            if 'created' in cname.lower() or 'modified' in cname.lower(): continue
+            
             is_company_col = 'company_id' in cname.lower()
             if is_company_col:
-                if table_name == 'phc_screens_t' and role == 'ADM':
+                if role == 'ADM' and table_modules.get(table_name, '').lower() == 'erpadmin':
                     company_csv_col = cname
                 continue
             export_cols.append(cname)
