@@ -80,7 +80,7 @@
     
     <!-- Restored Breadcrumbs Navigation -->
     <div class="breadcrumbs" style="display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 25px; color: var(--color-fog);">
-        <a href="/" style="color: var(--color-fog); text-decoration: none;">Brihas IQ ERP</a> 
+        <a href="/" style="color: var(--color-fog); text-decoration: none;">Nexus ERP</a> 
         <i data-lucide="chevron-right" style="width: 14px;"></i> 
         <a href="/table/{{ table_name }}" style="color: var(--color-fog); text-decoration: none;">{{ table_title }}</a> 
         <i data-lucide="chevron-right" style="width: 14px;"></i> 
@@ -121,13 +121,23 @@
                             <label for="{{ col.column_name }}">
                                 <span>{{ col.label }} {% if col.required and not col.is_pk %}<span class="required-star">*</span>{% endif %}</span>
                                 {% if col.is_pk %}
-                                    <span style="font-size: 11px; color: var(--color-fog);">(Auto-Generated ID)</span>
+                                    {% set is_auto = col.data_type in ('integer', 'bigint', 'smallint') %}
+                                    {% if is_auto %}
+                                        <span style="font-size: 11px; color: var(--color-fog);">(Auto-Generated ID)</span>
+                                    {% elif is_update %}
+                                        <span style="font-size: 11px; color: var(--color-fog);">(ID cannot be changed)</span>
+                                    {% endif %}
                                 {% endif %}
                             </label>
 
                             {# PRIMARY KEY #}
                             {% if col.is_pk %}
-                                <input type="text" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" value="{{ col.value if col.value is not none else '' }}" placeholder="Auto-Generated on Save..." readonly>
+                                {% set is_auto = col.data_type in ('integer', 'bigint', 'smallint') %}
+                                <input type="text" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" 
+                                    value="{{ col.value if col.value is not none else '' }}" 
+                                    {% if is_auto or is_update %}readonly{% endif %}
+                                    {% if is_auto and not is_update %}placeholder="Auto-Generated on Save..."{% endif %}
+                                    {% if not is_auto and not is_update %}required{% endif %}>
 
                             {# STATUS TOGGLE #}
                             {% elif 'status' in col.column_name.lower() %}
