@@ -420,6 +420,24 @@ async def get_fk_display_dict(conn, f_table, f_pk, specific_ids=None):
 async def get_dropdown_options(conn, table_name, column_name):
     if column_name.endswith('_org_id') or column_name == 'pos_org_id':
         return []
+        
+    # 1. Dynamic Lookup System Check
+    # If a user creates a Lookup Type that EXACTLY matches the column name (case-insensitive),
+    # this will instantly wire up those values as a dropdown for this field!
+    try:
+        query = """
+            SELECT plv_lookup_value_code as id, plv_lookup_value_name as name 
+            FROM phc_lookup_values_t 
+            WHERE upper(plv_lookup_type_code) = upper($1) AND plv_status = 'ACT'
+            ORDER BY plv_lookup_value_name
+        """
+        rows = await conn.fetch(query, column_name)
+        if rows:
+            return [{"id": str(r['id']), "name": str(r['name'])} for r in rows]
+    except Exception:
+        pass
+
+    # 2. Foreign Key Dropdown Fallback
     f_table, f_pk = await resolve_fk_details(conn, table_name, column_name)
     if f_table and f_pk:
         try:
@@ -616,10 +634,15 @@ async def show_table(request, table_name):
         raw_rows = await conn.fetch(base_query, *(params + [per_page, offset]))
 
         resolved_rows = [dict(r) for r in raw_rows]
+        
+        # We cache lookup values across the table to avoid N+1 queries
+        dynamic_lookups_cache = {}
+        
         for c in columns_data:
             cname = c['column_name']
             if cname == pk_column: continue
             
+            # 1. Check for Foreign Key Relations
             f_table, f_pk = await resolve_fk_details(conn, table_name, cname)
             if f_table and f_pk:
                 ids = set(r[cname] for r in resolved_rows if r[cname] is not None)
@@ -632,6 +655,27 @@ async def show_table(request, table_name):
                                 r[cname] = f"{lookup_dict[val]} (ID: {val})"
                     except Exception as e:
                         print(f"Error resolving table FK {cname}: {e}")
+                        
+            # 2. Check for Dynamic Lookups
+            else:
+                try:
+                    if cname not in dynamic_lookups_cache:
+                        l_query = "SELECT plv_lookup_value_code as id, plv_lookup_value_name as name FROM phc_lookup_values_t WHERE upper(plv_lookup_type_code) = upper($1)"
+                        l_rows = await conn.fetch(l_query, cname)
+                        if l_rows:
+                            dynamic_lookups_cache[cname] = {str(r['id']): str(r['name']) for r in l_rows}
+                        else:
+                            dynamic_lookups_cache[cname] = {}
+                            
+                    if dynamic_lookups_cache[cname]:
+                        lookup_dict = dynamic_lookups_cache[cname]
+                        for r in resolved_rows:
+                            val_str = str(r[cname]) if r[cname] is not None else None
+                            if val_str and val_str in lookup_dict:
+                                r[cname] = f"{lookup_dict[val_str]}"
+                except Exception:
+                    pass
+                    
         rows = resolved_rows
 
     total_pages = max(1, (total_count + per_page - 1) // per_page)
