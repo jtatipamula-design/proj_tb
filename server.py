@@ -455,7 +455,10 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
     clean_data = {}
     for k, v in data.items():
         if k == pk_column:
-            continue 
+            if is_update:
+                continue
+            if v == "" or v is None:
+                continue 
         if 'created' in k.lower() or 'modified' in k.lower() or 'edited' in k.lower():
             continue
 
