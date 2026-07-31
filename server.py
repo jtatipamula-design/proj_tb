@@ -438,7 +438,7 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
     for k, v in data.items():
         if k == pk_column:
             continue 
-        if k.endswith(('_created', '_modified', '_created_by', '_modified_by')):
+        if 'created' in k.lower() or 'modified' in k.lower() or 'edited' in k.lower():
             continue
 
         if is_update and (v == "" or v is None):
@@ -715,6 +715,9 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         company_form_def = None
         for c in columns_data:
             cname = c['column_name']
+            if 'created' in cname.lower() or 'modified' in cname.lower() or 'edited' in cname.lower():
+                continue
+                
             is_company_col = 'company_id' in cname.lower()
             if is_company_col:
                 if not (table_name == 'phc_screens_t' and role == 'ADM'):
@@ -911,13 +914,13 @@ async def process_api_action(request, table_name, pk_val):
                 if user_company:
                     clean_data[company_col] = user_company
 
-        who_cols = [c for c in schema_map if c.endswith(('_created', '_modified', '_created_by', '_modified_by'))]
+        who_cols = [c for c in schema_map if 'created' in c.lower() or 'modified' in c.lower() or 'edited' in c.lower()]
         for wc in who_cols:
-            if 'modified' in wc and 'by' not in wc: clean_data[wc] = datetime.now()
-            elif 'modified_by' in wc: clean_data[wc] = "System"
+            if ('modified' in wc or 'edited' in wc) and 'by' not in wc: clean_data[wc] = datetime.now()
+            elif ('modified' in wc or 'edited' in wc) and 'by' in wc: clean_data[wc] = "System"
             elif method == 'POST':
                 if 'created' in wc and 'by' not in wc: clean_data[wc] = datetime.now()
-                elif 'created_by' in wc: clean_data[wc] = "System"
+                elif 'created' in wc and 'by' in wc: clean_data[wc] = "System"
 
         try:
             async with conn.transaction():
