@@ -72,13 +72,38 @@ def clear_schema_cache():
         SCHEMA_CACHE["display_cols"].clear()
     USER_AUTH_CACHE.clear()
 
-def build_modules_tree(all_tables, table_modules):
+async def build_modules_tree(conn, all_tables, table_modules):
+    if not all_tables:
+        return {}
+        
+    table_codes = list(all_tables.keys())
+    try:
+        cols_query = """
+            SELECT table_name, column_name 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' AND table_name = ANY($1)
+        """
+        col_rows = await conn.fetch(cols_query, table_codes)
+        cols_map = {}
+        for r in col_rows:
+            t = r['table_name']
+            if t not in cols_map: cols_map[t] = []
+            cols_map[t].append(r['column_name'].lower().replace('_', ' '))
+    except Exception:
+        cols_map = {}
+
     modules_tree = {}
     for tbl_code, tbl_name in all_tables.items():
         mod_name = table_modules.get(tbl_code, 'Uncategorized')
         if mod_name not in modules_tree:
             modules_tree[mod_name] = []
-        modules_tree[mod_name].append({"code": tbl_code, "name": tbl_name})
+            
+        search_str = f"{tbl_name.lower()} {' '.join(cols_map.get(tbl_code, []))}"
+        modules_tree[mod_name].append({
+            "code": tbl_code, 
+            "name": tbl_name,
+            "search_terms": search_str
+        })
     return dict(sorted(modules_tree.items()))
 
 def render_template(template_name, request=None, **context):
@@ -230,7 +255,7 @@ def check_auth(f):
                     
                     role = user["pus_user_type"] or "STD"
                     auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
-                    modules_tree = build_modules_tree(auth_tables, table_modules)
+                    modules_tree = await build_modules_tree(conn, auth_tables, table_modules)
 
                     USER_AUTH_CACHE[user_id] = {
                         "session_id": session_id,

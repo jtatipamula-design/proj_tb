@@ -166,7 +166,7 @@
           isNavigating: false,
           theme: localStorage.getItem('theme') || 'dark',
           searchQuery: '',
-          activeModule: null,
+          activeModule: localStorage.getItem('activeModule') || null,
           toggleTheme() {
               document.documentElement.classList.add('theme-transitioning');
               
@@ -239,12 +239,12 @@
                 <div class="flex-1 overflow-y-auto py-2 px-3 space-y-1.5">
                     {% for module_name, screens in modules_tree.items() %}
                     <div x-data='{ open: activeModule === {{ module_name | tojson }} }' 
-                         x-init='$watch("activeModule", val => { if(val === {{ module_name | tojson }}) open = true; })'
-                         x-show='searchQuery === "" || {{ module_name | tojson }}.toLowerCase().includes(searchQuery.toLowerCase()) || [{% for s in screens %}{{ s.name | lower | tojson }}{% if not loop.last %},{% endif %}{% endfor %}].some(n => n.includes(searchQuery.toLowerCase()))'
+                         x-init='$watch("activeModule", val => { if(val === {{ module_name | tojson }}) { open = true; localStorage.setItem("activeModule", val); } })'
+                         x-show='searchQuery === "" || {{ module_name | tojson }}.toLowerCase().includes(searchQuery.toLowerCase()) || [{% for s in screens %}{{ s.search_terms | tojson }}{% if not loop.last %},{% endif %}{% endfor %}].some(n => n.includes(searchQuery.toLowerCase()))'
                          class="mb-1">
 
                         
-                        <button @click='open = !open; activeModule = open ? {{ module_name | tojson }} : null' 
+                        <button @click='open = !open; activeModule = open ? {{ module_name | tojson }} : null; localStorage.setItem("activeModule", activeModule || "");' 
                                 :class="{ 'ring-1 ring-brand-500/30': open }"
                                 class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-all"
                                 :style="open ? 'background: rgba(186, 215, 247, 0.12); color: var(--color-frost-link);' : 'color: var(--color-moonlight);'"
