@@ -3,101 +3,166 @@
 {% block content %}
 <style>
     .content-wrapper {
-        width: 100%; max-width: 900px; margin: 0 auto;
+        width: 100%; max-width: 920px; margin: 0 auto;
         display: flex; flex-direction: column;
     }
 
     .page-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; }
-    .page-header h1 { font-size: 28px; font-weight: 500; color: var(--color-glacier); margin-bottom: 6px; }
+    .page-header h1 { font-size: 26px; font-weight: 700; color: var(--color-glacier); letter-spacing: -0.02em; line-height: 1.2; margin: 0; }
     
     .form-card {
         background: var(--glass-surface); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-        border: 1px solid var(--glass-border); border-radius: 12px; padding: 32px;
-        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+        border: 1px solid var(--glass-border); border-radius: 14px; padding: 32px;
+        box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.5);
     }
 
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
     .full-width { grid-column: 1 / -1; }
 
     .form-group { display: flex; flex-direction: column; gap: 8px; }
-    .form-group label { font-size: 13px; font-weight: 500; color: var(--color-moonlight); display: flex; justify-content: space-between; }
-    .required-star { color: var(--color-ember); margin-left: 4px; }
+    .form-group label { font-size: 13px; font-weight: 500; color: var(--color-moonlight); display: flex; justify-content: space-between; align-items: center; }
+    .required-star { color: var(--color-ember); margin-left: 4px; font-weight: 700; }
 
     .form-control {
-        background: rgba(0, 0, 0, 0.3); border: 1px solid var(--glass-border);
-        color: var(--color-glacier); padding: 12px 14px; border-radius: 8px;
-        font-family: var(--font-ui); font-size: 14px; transition: all 0.2s;
+        background: rgba(0, 0, 0, 0.35); border: 1px solid var(--glass-border);
+        color: var(--color-glacier); padding: 11px 14px; border-radius: 8px;
+        font-family: var(--font-ui); font-size: 13.5px; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
         width: 100%;
     }
+    .form-control:hover:not(:read-only):not(:disabled) {
+        border-color: rgba(186, 215, 247, 0.4);
+        background: rgba(255, 255, 255, 0.04);
+        transform: translateY(-1px);
+    }
+    .form-control:focus {
+        outline: none;
+        border-color: var(--color-electric-iris);
+        box-shadow: 0 0 0 3px rgba(102, 58, 243, 0.25), 0 0 16px rgba(102, 58, 243, 0.2);
+        background: rgba(0, 0, 0, 0.45);
+        transform: translateY(-1px);
+    }
+    .form-control:read-only {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px dashed var(--glass-border);
+        color: var(--color-fog);
+        cursor: default;
+    }
     html.light-mode .form-control { background: rgba(255, 255, 255, 0.6); color: var(--color-midnight-ink); }
-    .form-control:focus { outline: none; border-color: var(--color-frost-link); box-shadow: 0 0 0 1px var(--color-frost-link); }
-    .form-control:read-only { background: rgba(0,0,0,0.1); color: var(--color-fog); cursor: not-allowed; }
+    html.light-mode .form-control:hover:not(:read-only):not(:disabled) { background: rgba(255, 255, 255, 0.9); }
+    html.light-mode .form-control:read-only { background: rgba(0, 0, 0, 0.03); }
     
-    textarea.form-control { resize: vertical; min-height: 100px; }
-    select.form-control { appearance: none; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2381899b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>'); background-repeat: no-repeat; background-position: right 12px center; }
+    textarea.form-control { resize: vertical; min-height: 100px; line-height: 1.5; }
+    select.form-control {
+        appearance: none; cursor: pointer; padding-right: 36px;
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2381899b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>');
+        background-repeat: no-repeat; background-position: right 14px center;
+    }
     select.form-control option { background: var(--color-midnight-ink); color: var(--color-glacier); }
     html.light-mode select.form-control option { background: #fff; color: var(--color-midnight-ink); }
 
     /* Custom Status Toggle */
-    .status-toggle { display: flex; background: rgba(0,0,0,0.3); border-radius: 8px; border: 1px solid var(--glass-border); overflow: hidden; height: 43px; }
+    .status-toggle {
+        display: flex; background: rgba(0,0,0,0.35); border-radius: 8px;
+        border: 1px solid var(--glass-border); overflow: hidden; height: 42px;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .status-toggle:hover { border-color: rgba(186, 215, 247, 0.3); }
     html.light-mode .status-toggle { background: rgba(255, 255, 255, 0.6); }
     .status-toggle input[type="radio"] { display: none; }
     .status-toggle label {
         flex: 1; display: flex; align-items: center; justify-content: center;
-        font-size: 13px; font-weight: 500; color: var(--color-fog); cursor: pointer; transition: all 0.2s;
+        font-size: 13px; font-weight: 500; color: var(--color-fog); cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    .status-toggle input[type="radio"]:checked + .status-act { background: rgba(38, 150, 132, 0.15); color: var(--color-cipher-mint); }
-    .status-toggle input[type="radio"]:checked + .status-ina { background: rgba(228, 109, 76, 0.15); color: var(--color-ember); }
+    .status-toggle label:hover { color: var(--color-glacier); background: rgba(255, 255, 255, 0.04); }
+    .status-toggle input[type="radio"]:checked + .status-act {
+        background: rgba(38, 150, 132, 0.2); color: var(--color-cipher-mint);
+        font-weight: 600; box-shadow: inset 0 0 12px rgba(38, 150, 132, 0.25);
+    }
+    .status-toggle input[type="radio"]:checked + .status-ina {
+        background: rgba(228, 109, 76, 0.2); color: var(--color-ember);
+        font-weight: 600; box-shadow: inset 0 0 12px rgba(228, 109, 76, 0.25);
+    }
 
-    .form-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--glass-border); }
+    /* Action Buttons */
+    .form-actions {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--glass-border);
+    }
     .action-group { display: flex; gap: 12px; }
     
     .btn-submit {
-        background: var(--color-electric-iris); color: white; border: none;
-        padding: 12px 24px; border-radius: 8px; font-weight: 500; font-size: 14px;
-        cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px;
+        background: linear-gradient(135deg, var(--color-electric-iris), #7c4dff);
+        color: white; border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 11px 26px; border-radius: 8px; font-weight: 600; font-size: 13.5px;
+        cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        display: inline-flex; align-items: center; gap: 8px;
+        box-shadow: 0 4px 14px rgba(102, 58, 243, 0.35);
     }
-    .btn-submit:hover { background: #552ee6; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(102, 58, 243, 0.3); }
+    .btn-submit:hover {
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 6px 20px rgba(102, 58, 243, 0.55);
+        border-color: rgba(255, 255, 255, 0.4);
+        color: #ffffff;
+    }
+    .btn-submit:hover i { transform: scale(1.15); transition: transform 0.2s ease; }
+    .btn-submit:active { transform: translateY(0) scale(0.98); }
     
     .btn-cancel, .btn-clear {
-        background: transparent; color: var(--color-fog); border: 1px solid var(--glass-border);
-        padding: 12px 20px; border-radius: 8px; font-weight: 500; font-size: 14px;
-        cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px; text-decoration: none;
+        background: rgba(255, 255, 255, 0.05); color: var(--color-fog);
+        border: 1px solid var(--glass-border); padding: 11px 20px;
+        border-radius: 8px; font-weight: 500; font-size: 13.5px;
+        cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
     }
-    .btn-cancel:hover { color: var(--color-moonlight); background: rgba(255,255,255,0.05); }
+    .btn-cancel:hover {
+        color: var(--color-glacier); background: rgba(186, 215, 247, 0.1);
+        border-color: var(--color-frost-link); transform: translateY(-1px);
+    }
+    .btn-cancel:active { transform: translateY(0) scale(0.98); }
+    
     .btn-clear { border-style: dashed; }
-    .btn-clear:hover { color: var(--color-ember); border-color: var(--color-ember); background: rgba(228, 109, 76, 0.1); }
+    .btn-clear:hover {
+        color: var(--color-ember); border-color: var(--color-ember);
+        background: rgba(228, 109, 76, 0.15); transform: translateY(-1px);
+    }
+    .btn-clear:active { transform: translateY(0) scale(0.98); }
+    
     html.light-mode .btn-cancel:hover { background: rgba(0,0,0,0.05); color: var(--color-midnight-ink); }
 
     /* Virtual Checkboxes for JSONB */
-    .checkbox-list { display: flex; flex-direction: column; gap: 10px; max-height: 200px; overflow-y: auto; padding: 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); border-radius: 8px; }
+    .checkbox-list {
+        display: flex; flex-direction: column; gap: 10px; max-height: 200px;
+        overflow-y: auto; padding: 12px; background: rgba(0,0,0,0.25);
+        border: 1px solid var(--glass-border); border-radius: 8px;
+    }
     html.light-mode .checkbox-list { background: rgba(255,255,255,0.5); }
     .checkbox-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--color-moonlight); cursor: pointer; }
+    .checkbox-item:hover { color: var(--color-glacier); }
     .checkbox-item input { accent-color: var(--color-electric-iris); width: 16px; height: 16px; cursor: pointer; }
 </style>
 
 <div class="content-wrapper">
-    
-    <!-- Restored Breadcrumbs Navigation -->
-    <div class="breadcrumbs" style="display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 25px; color: var(--color-fog);">
-        <a href="/" style="color: var(--color-fog); text-decoration: none;">Brihas ERP</a> 
-        <i data-lucide="chevron-right" style="width: 14px;"></i> 
-        <a href="/table/{{ table_name }}" style="color: var(--color-fog); text-decoration: none;">{{ table_title }}</a> 
-        <i data-lucide="chevron-right" style="width: 14px;"></i> 
-        <span style="color: var(--color-moonlight);">{{ 'Edit' if is_update else 'New' }} Record</span>
+    <!-- Breadcrumbs Navigation -->
+    <div class="breadcrumbs" style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 20px; color: var(--color-fog);">
+        <a href="/" preload="mouseover" style="color: var(--color-fog); text-decoration: none;" onmouseenter="this.style.color='var(--color-glacier)'" onmouseleave="this.style.color='var(--color-fog)'">Brihas ERP</a> 
+        <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i> 
+        <a href="/table/{{ table_name }}" preload="mouseover" style="color: var(--color-fog); text-decoration: none;" onmouseenter="this.style.color='var(--color-glacier)'" onmouseleave="this.style.color='var(--color-fog)'">{{ table_title }}</a> 
+        <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i> 
+        <span style="color: var(--color-moonlight); font-weight: 500;">{{ 'Edit' if is_update else 'New' }} Record</span>
     </div>
 
-    <!-- Header Swapped: Table Title is now the Main Header -->
+    <!-- Header -->
     <div class="page-header">
         <div>
-            <p class="eyebrow-text" style="font-family: var(--font-mono); color: var(--color-fog); font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;">DATABASE TABLE</p>
+            <p class="eyebrow-text" style="font-family: var(--font-mono); color: var(--color-fog); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px;">DATABASE TABLE</p>
             <h1>{{ table_title }}</h1>
-            <p style="color: var(--color-fog); margin-top: 6px;">{{ 'Edit Record' if is_update else 'New Record' }}</p>
+            <p style="color: var(--color-fog); font-size: 14px; margin-top: 4px;">{{ 'Update existing record values' if is_update else 'Create and insert a new record' }}</p>
         </div>
     </div>
 
     <div class="form-card">
-        <!-- Changed to multipart/form-data to securely stream File Uploads to Python -->
+        <!-- Form with Multipart encoding for uploads -->
         <form id="recordForm" class="dynamic-form"
               action="/api/{{ table_name }}{{ '/' ~ pk_val if is_update else '' }}"
               method="POST"
@@ -123,9 +188,9 @@
                                 {% if col.is_pk %}
                                     {% set is_auto = col.data_type in ('integer', 'bigint', 'smallint') %}
                                     {% if is_auto %}
-                                        <span style="font-size: 11px; color: var(--color-fog);">(Auto-Generated ID)</span>
+                                        <span style="font-size: 11px; color: var(--color-fog); font-weight: 400;">(Auto-Assigned ID)</span>
                                     {% elif is_update %}
-                                        <span style="font-size: 11px; color: var(--color-fog);">(ID cannot be changed)</span>
+                                        <span style="font-size: 11px; color: var(--color-fog); font-weight: 400;">(Primary Key Locked)</span>
                                     {% endif %}
                                 {% endif %}
                             </label>
@@ -151,8 +216,8 @@
 
                             {# FILE UPLOAD (Restricted Types) #}
                             {% elif is_file_col %}
-                                <input type="file" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" multiple accept=".docx,.ppt,.pptx,.jpg,.jpeg,.png,.txt" style="padding: 9px 14px; background: rgba(0,0,0,0.1);" {% if col.required and not is_update %}required{% endif %}>
-                                <span style="font-size: 11px; color: var(--color-fog); margin-top: 4px;"><i data-lucide="shield-check" style="width: 12px; display: inline-block; vertical-align: -2px;"></i> Files will be validated and automatically compressed into a secure .ZIP archive.</span>
+                                <input type="file" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" multiple accept=".docx,.ppt,.pptx,.jpg,.jpeg,.png,.txt" style="padding: 9px 14px; background: rgba(0,0,0,0.2);" {% if col.required and not is_update %}required{% endif %}>
+                                <span style="font-size: 11px; color: var(--color-fog); margin-top: 4px;"><i data-lucide="shield-check" style="width: 12px; height: 12px; display: inline-block; vertical-align: -2px;"></i> Files will be validated and automatically compressed into a secure .ZIP archive.</span>
 
                             {# DROPDOWNS #}
                             {% elif col.options %}
@@ -197,7 +262,14 @@
                             {% else %}
                                 <input type="{% if col.data_type in ('integer', 'numeric', 'bigint', 'smallint') %}number{% elif col.column_name == 'pus_pwd' %}password{% else %}text{% endif %}" 
                                        id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" 
-                                       value="{{ col.value if col.value is not none else '' }}" {% if col.required and not is_update and col.column_name != 'pus_pwd' %}required{% endif %}>
+                                       value="{{ col.value if col.value is not none else '' }}" 
+                                       {% if col.column_name == 'pus_pwd' and not is_update %}placeholder="At least 6 chars with 1+ uppercase letter (A-Z)"{% endif %}
+                                       {% if col.required and not is_update and col.column_name != 'pus_pwd' %}required{% endif %}>
+                                {% if col.column_name == 'pus_pwd' %}
+                                    <span style="font-size: 11px; color: var(--color-fog); margin-top: 4px;"><i data-lucide="shield-alert" style="width: 12px; height: 12px; display: inline-block; vertical-align: -2px;"></i> Must contain at least one uppercase letter (A-Z) and 6+ characters.</span>
+                                {% elif col.column_name == 'pus_usr_name' %}
+                                    <span style="font-size: 11px; color: var(--color-fog); margin-top: 4px;"><i data-lucide="user-check" style="width: 12px; height: 12px; display: inline-block; vertical-align: -2px;"></i> Username must be unique across all system accounts.</span>
+                                {% endif %}
                             {% endif %}
                         </div>
                     {% endif %}
@@ -206,19 +278,22 @@
 
             <div class="form-actions">
                 <div class="action-group">
-                    <a href="/table/{{ table_name }}" class="btn-cancel">
-                        <i data-lucide="x"></i> Cancel
+                    <a href="/table/{{ table_name }}" preload="mouseover" class="btn-cancel">
+                        <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+                        <span>Cancel</span>
                     </a>
                     
                     {% if not is_update %}
                     <button type="button" class="btn-clear" onclick="clearFormDraft()">
-                        <i data-lucide="eraser"></i> Clear Form
+                        <i data-lucide="eraser" style="width: 16px; height: 16px;"></i>
+                        <span>Clear Form</span>
                     </button>
                     {% endif %}
                 </div>
                 
                 <button type="submit" class="btn-submit">
-                    <i data-lucide="save"></i> Save Record
+                    <i data-lucide="save" style="width: 16px; height: 16px;"></i>
+                    <span>Save Record</span>
                 </button>
             </div>
         </form>
@@ -226,115 +301,114 @@
 </div>
 
 <script>
-    lucide.createIcons();
+    (function initFormScript() {
+        lucide.createIcons();
 
-    // ----------------------------------------------------
-    // DRAFT AUTO-SAVE LOGIC (Only for New Records)
-    // ----------------------------------------------------
-    const form = document.getElementById('recordForm');
-    
-    {% if not is_update %}
-    const draftKey = `draft_{{ table_name }}`;
-    const draftInputs = form.querySelectorAll('input:not([type="hidden"]):not([readonly]):not([type="file"]), select, textarea');
-    
-    // 1. Restore from Draft
-    const savedDraft = sessionStorage.getItem(draftKey);
-    if (savedDraft) {
-        try {
-            const data = JSON.parse(savedDraft);
-            draftInputs.forEach(input => {
-                if (data[input.name] !== undefined) {
-                    if (input.type === 'radio' || input.type === 'checkbox') {
-                        input.checked = data[input.name] === input.value;
-                    } else {
-                        input.value = data[input.name];
+        const form = document.getElementById('recordForm');
+        if (!form) return;
+
+        {% if not is_update %}
+        const draftKey = `draft_{{ table_name }}`;
+        const draftInputs = form.querySelectorAll('input:not([type="hidden"]):not([readonly]):not([type="file"]), select, textarea');
+        
+        // 1. Restore from Draft
+        const savedDraft = sessionStorage.getItem(draftKey);
+        if (savedDraft) {
+            try {
+                const data = JSON.parse(savedDraft);
+                draftInputs.forEach(input => {
+                    if (data[input.name] !== undefined) {
+                        if (input.type === 'radio' || input.type === 'checkbox') {
+                            input.checked = data[input.name] === input.value;
+                        } else {
+                            input.value = data[input.name];
+                        }
                     }
+                });
+            } catch(e) { console.error("Draft restore failed", e); }
+        }
+
+        // 2. Save Draft on Input
+        const saveDraft = () => {
+            const data = {};
+            draftInputs.forEach(input => {
+                if (input.type === 'radio' || input.type === 'checkbox') {
+                    if(input.checked) data[input.name] = input.value;
+                } else {
+                    data[input.name] = input.value;
                 }
             });
-        } catch(e) { console.error("Draft restore failed", e); }
-    }
+            sessionStorage.setItem(draftKey, JSON.stringify(data));
+        };
 
-    // 2. Save Draft on Input
-    const saveDraft = () => {
-        const data = {};
-        draftInputs.forEach(input => {
-            if (input.type === 'radio' || input.type === 'checkbox') {
-                if(input.checked) data[input.name] = input.value;
-            } else {
-                data[input.name] = input.value;
-            }
-        });
-        sessionStorage.setItem(draftKey, JSON.stringify(data));
-    };
+        form.addEventListener('input', saveDraft);
+        form.addEventListener('change', saveDraft);
 
-    form.addEventListener('input', saveDraft);
-    form.addEventListener('change', saveDraft);
-
-    // 3. Clear Draft Function
-    window.clearFormDraft = function() {
-        sessionStorage.removeItem(draftKey);
-        form.reset();
-        // Reset custom radio states to default (Active usually)
-        const actRadios = form.querySelectorAll('input[type="radio"][value="ACT"]');
-        actRadios.forEach(r => r.checked = true);
-        window.showToast("Form draft cleared.", "success");
-    };
-
-    // 4. Wipe Draft on Successful Form Submission
-    form.addEventListener('htmx:afterRequest', function(evt) {
-        if(evt.detail.successful) {
+        // 3. Clear Draft Function
+        window.clearFormDraft = function() {
             sessionStorage.removeItem(draftKey);
-        }
-    });
-    {% endif %}
-
-    // ----------------------------------------------------
-    // SUCCESS / ERROR HANDLING — Toast + Redirect
-    // ----------------------------------------------------
-    form.addEventListener('htmx:afterRequest', function(evt) {
-        if (evt.detail.successful) {
-            // Store toast so it shows AFTER the redirect page loads
-            sessionStorage.setItem('pendingToast', JSON.stringify({
-                msg: '{{ "Record updated" if is_update else "Record created" }} successfully!',
-                type: 'success'
-            }));
-            const hxRedirect = evt.detail.xhr ? evt.detail.xhr.getResponseHeader('HX-Redirect') : null;
-            if (!hxRedirect) {
-                window.location.href = '/table/{{ table_name }}';
-            }
-        } else {
-            // Try to parse error from server response
-            let errorMsg = 'Something went wrong. Please try again.';
-            try {
-                const body = JSON.parse(evt.detail.xhr.responseText);
-                if (body.error) errorMsg = body.error;
-            } catch(e) {}
+            form.reset();
+            const actRadios = form.querySelectorAll('input[type="radio"][value="ACT"]');
+            actRadios.forEach(r => r.checked = true);
             if (typeof showToast === 'function') {
-                showToast(errorMsg, 'error');
-            } else {
-                alert(errorMsg);
+                showToast("Form draft cleared.", "success");
             }
-        }
-    });
+        };
 
-    // ----------------------------------------------------
-    // Virtual Checkbox Array Handling (For JSONB columns)
-    // ----------------------------------------------------
-    form.addEventListener('submit', function(e) {
-        const hiddenInputs = form.querySelectorAll('input[type="hidden"]');
-        hiddenInputs.forEach(hidden => {
-            const groupName = hidden.name;
-            const checkboxes = form.querySelectorAll(`input[type="checkbox"][data-group="${groupName}"]`);
-            if (checkboxes.length > 0) {
-                const selected = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
-                hidden.value = JSON.stringify(selected);
+        // 4. Wipe Draft on Successful Form Submission
+        form.addEventListener('htmx:afterRequest', function(evt) {
+            if(evt.detail.successful) {
+                sessionStorage.removeItem(draftKey);
             }
         });
-    });
+        {% endif %}
 
-    window.toggleCheckboxes = function(group, state) {
-        const checkboxes = document.querySelectorAll(`input[type="checkbox"][data-group="${group}"]`);
-        checkboxes.forEach(cb => cb.checked = state);
-    };
+        // ----------------------------------------------------
+        // SUCCESS / ERROR HANDLING — Toast + Redirect
+        // ----------------------------------------------------
+        form.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.successful) {
+                sessionStorage.setItem('pendingToast', JSON.stringify({
+                    msg: '{{ "Record updated" if is_update else "Record created" }} successfully!',
+                    type: 'success'
+                }));
+                const hxRedirect = evt.detail.xhr ? evt.detail.xhr.getResponseHeader('HX-Redirect') : null;
+                if (!hxRedirect) {
+                    window.location.href = '/table/{{ table_name }}';
+                }
+            } else {
+                let errorMsg = 'Something went wrong. Please try again.';
+                try {
+                    const body = JSON.parse(evt.detail.xhr.responseText);
+                    if (body.error) errorMsg = body.error;
+                } catch(e) {}
+                if (typeof showToast === 'function') {
+                    showToast(errorMsg, 'error');
+                } else {
+                    alert(errorMsg);
+                }
+            }
+        });
+
+        // ----------------------------------------------------
+        // Virtual Checkbox Array Handling (For JSONB columns)
+        // ----------------------------------------------------
+        form.addEventListener('submit', function(e) {
+            const hiddenInputs = form.querySelectorAll('input[type="hidden"]');
+            hiddenInputs.forEach(hidden => {
+                const groupName = hidden.name;
+                const checkboxes = form.querySelectorAll(`input[type="checkbox"][data-group="${groupName}"]`);
+                if (checkboxes.length > 0) {
+                    const selected = Array.from(checkboxes).filter(cb => cb.checked).map(cb => cb.value);
+                    hidden.value = JSON.stringify(selected);
+                }
+            });
+        });
+
+        window.toggleCheckboxes = function(group, state) {
+            const checkboxes = document.querySelectorAll(`input[type="checkbox"][data-group="${group}"]`);
+            checkboxes.forEach(cb => cb.checked = state);
+        };
+    })();
 </script>
 {% endblock %}

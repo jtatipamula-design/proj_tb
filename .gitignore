@@ -1,0 +1,11 @@
+.env
+.env.*
+__pycache__/
+*.py[cod]
+*$py.class
+*.xlsx
+.git-temp/
+.agents/
+uploads/
+.DS_Store
+Thumbs.db

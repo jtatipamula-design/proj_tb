@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/preload.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -204,12 +205,13 @@
 
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
-
     <div id="app-body" 
+         hx-ext="preload"
          hx-boost="true" 
          hx-target="#main-dynamic-content" 
          hx-select="#main-dynamic-content" 
          hx-swap="outerHTML show:window:top"
+         hx-push-url="true"
          hx-indicator="#global-spinner"
          class="flex h-screen overflow-hidden relative z-10">
         
@@ -222,7 +224,7 @@
                 <div class="p-6 flex items-center justify-between" style="border-bottom: 1px solid var(--glass-border);">
                     <div>
                         <h1 class="text-2xl font-bold tracking-tight" style="color: var(--color-glacier);">
-                            <a href="/" class="flex items-center gap-3">
+                            <a href="/" preload="mouseover" class="flex items-center gap-3">
                                 <i data-lucide="layers" class="w-6 h-6"></i>
                                 <span>Brihas ERP</span>
                             </a>
@@ -236,8 +238,8 @@
                     <div class="relative">
                         <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style="color: var(--color-fog);"></i>
                         <input type="text" x-model="searchQuery" placeholder="Search modules..." 
-                               class="w-full rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
-                               style="background: var(--color-midnight-ink); border: 1px solid var(--glass-border); color: var(--color-moonlight);">
+                                class="w-full rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                                style="background: var(--color-midnight-ink); border: 1px solid var(--glass-border); color: var(--color-moonlight);">
                     </div>
                 </div>
 
@@ -266,6 +268,7 @@
                         <div x-show="open" x-collapse x-cloak class="mt-1 space-y-1 px-2 ml-6 py-1" style="border-left: 2px solid var(--glass-border);">
                             {% for screen in screens %}
                             <a href="/table/{{ screen.code }}" 
+                               preload="mouseover"
                                class="block px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-2"
                                style="color: var(--color-pebble);"
                                onmouseenter="this.style.background='rgba(186, 215, 247, 0.08)'; this.style.color='var(--color-glacier)';"
