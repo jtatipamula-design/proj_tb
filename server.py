@@ -1,5 +1,6 @@
 import os
 import uuid
+import urllib.parse
 import time
 from datetime import datetime
 from functools import wraps
@@ -777,6 +778,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
 
         row_data = {}
         if is_update:
+            pk_val = urllib.parse.unquote(pk_val) if pk_val else pk_val
             cast_pk = safe_cast_pk(pk_val, pk_type)
             if cast_pk is None:
                 raise NotFound(f"Invalid primary key format. pk_val='{pk_val}', pk_type='{pk_type}'")
