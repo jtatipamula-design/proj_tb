@@ -453,7 +453,9 @@ async def get_dropdown_options(conn, table_name, column_name):
         query = """
             SELECT plv_lookup_value_code as id, plv_lookup_value_name as name 
             FROM phc_lookup_values_t 
-            WHERE upper(plv_lookup_type_code) = upper($1) AND plv_status = 'ACT'
+            WHERE upper(plv_lookup_type_code) = upper($1) 
+              AND plv_status = 'ACT'
+              AND CURRENT_DATE BETWEEN plv_start_date AND COALESCE(plv_end_date, CURRENT_DATE + interval '1 day')
             ORDER BY plv_lookup_value_name
         """
         rows = await conn.fetch(query, column_name)
