@@ -779,10 +779,10 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         if is_update:
             cast_pk = safe_cast_pk(pk_val, pk_type)
             if cast_pk is None:
-                raise NotFound("Invalid primary key format")
+                raise NotFound(f"Invalid primary key format. pk_val='{pk_val}', pk_type='{pk_type}'")
             row_data = await conn.fetchrow(f"SELECT * FROM {q_table} WHERE {q_pk} = $1", cast_pk)
             if not row_data:
-                raise NotFound("Record not found")
+                raise NotFound(f"Record not found. Table: {q_table}, PK: {q_pk}, Value: '{cast_pk}', Type: {type(cast_pk).__name__}")
 
         columns = []
         company_form_def = None
