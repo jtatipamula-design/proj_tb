@@ -9,7 +9,7 @@
     .icon-btns {
       display: grid;
       grid-gap: 2em 2em;
-      grid-template-columns: repeat(6, 3fr);
+      grid-template-columns: repeat(2, 1fr);
       margin: auto;
       padding: 2em 0;
       overflow: visible;
@@ -99,7 +99,7 @@
     }
     @media (min-width: 1024px) {
       .icon-btns {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(3, 1fr);
       }
     }
 </style>
@@ -107,10 +107,10 @@
 <div class="mb-10 w-full flex flex-col items-center">
     <p class="text-sm uppercase tracking-widest font-mono mb-8 w-full text-center" style="color: var(--color-fog);">Active Modules</p>
     
-    {% set icons = ['file-text', 'box', 'users', 'database', 'shopping-cart', 'truck', 'user-cog', 'git-merge', 'bar-chart-2'] %}
+    {% set icons = ['file-text', 'box', 'users', 'database', 'shopping-cart', 'truck'] %}
 
     <div class="icon-btns">
-        {% for module_name, screens in modules_tree.items() %}
+        {% for module_name, screens in modules_tree.items()[:6] %}
         {% set i = icons[loop.index0 % icons|length] %}
         
         <button class="icon-btn" aria-label="{{ module_name }}" type="button" @click='activeModule = {{ module_name | tojson }}; sidebarOpen = true;'>
