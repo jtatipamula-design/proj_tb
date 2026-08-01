@@ -40,17 +40,17 @@ def quote_ident(name: str) -> str:
 
 def safe_cast_pk(val, data_type='integer'):
     """Safely converts primary key values based on column target type."""
-    if val is None:
-        return None
-    val_str = str(val).strip()
-    if not val_str:
+    if val is None or str(val) == "":
         return None
     if data_type in ('integer', 'bigint', 'smallint', 'numeric'):
+        val_str = str(val).strip()
+        if not val_str:
+            return None
         try:
             return int(val_str)
         except (ValueError, TypeError):
             return None
-    return val_str
+    return str(val)
 
 def prune_user_auth_cache():
     """Prunes expired entries and caps USER_AUTH_CACHE size."""
