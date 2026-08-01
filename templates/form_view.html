@@ -206,10 +206,9 @@
 
             <div class="form-actions">
                 <div class="action-group">
-                    <!-- Native JS redirect guarantees Cancel always works -->
-                    <button type="button" class="btn-cancel" onclick="window.location.href='/table/{{ table_name }}'">
+                    <a href="/table/{{ table_name }}" class="btn-cancel">
                         <i data-lucide="x"></i> Cancel
-                    </button>
+                    </a>
                     
                     {% if not is_update %}
                     <button type="button" class="btn-clear" onclick="clearFormDraft()">

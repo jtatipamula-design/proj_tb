@@ -116,7 +116,7 @@
 
 <div class="content-wrapper">
     <div class="breadcrumbs" style="display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 25px; color: var(--color-fog);">
-        <a href="/" style="color: var(--color-fog); text-decoration: none;">Brihas IQ ERP</a> 
+        <a href="/" style="color: var(--color-fog); text-decoration: none;">Nexus ERP</a> 
         <i data-lucide="chevron-right" style="width: 14px;"></i> 
         <span style="color: var(--color-moonlight);">{{ table_title }}</span>
     </div>
@@ -138,8 +138,8 @@
                     hx-swap="outerHTML"
                     hx-include="#searchInput">
                 <option value="">-- All Lookup Categories --</option>
-                {% for cat in lookup_categories %}
-                <option value="{{ cat.code }}" {% if type_filter == cat.code %}selected{% endif %}>{{ cat.name }} ({{ cat.code }})</option>
+                {% for cat in lookup_categories | default([]) %}
+                <option value="{{ cat.code }}" {% if type_filter | default('') == cat.code %}selected{% endif %}>{{ cat.name }} ({{ cat.code }})</option>
                 {% endfor %}
             </select>
             {% endif %}
@@ -224,13 +224,13 @@
 </div>
 
 <div class="floating-dock">
-    <a href="/export/{{ table_name }}" class="dock-item" tooltip="Export CSV">
+    <a href="/export/{{ table_name }}" hx-boost="false" class="dock-item" tooltip="Export CSV">
         <i data-lucide="download" style="width:20px;"></i>
     </a>
     <a href="/new/{{ table_name }}" id="addRecordBtn" class="dock-item" tooltip="Add Record">
         <i data-lucide="plus" style="width:20px;"></i>
     </a>
-    <button class="dock-item" tooltip="Refresh Table" onclick="window.location.reload();">
+    <button class="dock-item" tooltip="Refresh Table" hx-get="/table/{{ table_name }}" hx-target="#main-dynamic-content" hx-select="#main-dynamic-content" hx-swap="outerHTML">
         <i data-lucide="refresh-cw" style="width:20px;"></i>
     </button>
 </div>
@@ -281,11 +281,20 @@
         rows.sort((a, b) => {
             let valA = a.cells[n].innerText.trim();
             let valB = b.cells[n].innerText.trim();
-            let isNum = !isNaN(parseFloat(valA)) && isFinite(valA) && valA !== '';
-            if (isNum) return (parseFloat(valA) - parseFloat(valB)) * dir;
+            let matchA = valA.match(/\(ID:\s*(\d+)\)/i);
+            let matchB = valB.match(/\(ID:\s*(\d+)\)/i);
+            let numA = matchA ? parseFloat(matchA[1]) : parseFloat(valA);
+            let numB = matchB ? parseFloat(matchB[1]) : parseFloat(valB);
+            let isNum = !isNaN(numA) && isFinite(numA) && !isNaN(numB) && isFinite(numB);
+            if (isNum) return (numA - numB) * dir;
             return valA.localeCompare(valB) * dir;
         });
         rows.forEach(row => tbody.appendChild(row));
     }
+
+    // Re-initialize Lucide icons after HTMX swaps in new content
+    document.body.addEventListener('htmx:afterSwap', function() {
+        lucide.createIcons();
+    });
 </script>
 {% endblock %}

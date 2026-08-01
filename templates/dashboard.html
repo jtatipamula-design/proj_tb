@@ -5,16 +5,18 @@
 
 {% block content %}
 <style>
-    /* GlassIcons CSS */
+    /* GlassIcons CSS - 6-Across Grid */
     .icon-btns {
       display: grid;
-      grid-gap: 6em 4em;
+      grid-gap: 3.25rem 1.5rem;
       grid-template-columns: repeat(2, 1fr);
-      margin: auto;
-      padding: 3em 0;
+      margin: 0 auto;
+      padding: 2rem 0 3rem 0;
       overflow: visible;
-      font-size: 24px; /* Scales the entire icon system */
+      font-size: 20px;
       justify-items: center;
+      max-width: 1200px;
+      width: 100%;
     }
     
     .icon-btn {
@@ -32,14 +34,14 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
     }
     
     .icon-btn:hover,
     .icon-btn:focus-visible {
-      transform: translateY(-6px) scale(1.05);
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25), 0 0 15px rgba(20, 184, 166, 0.2);
+      transform: translateY(-4px) scale(1.04);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.22), 0 0 12px rgba(20, 184, 166, 0.2);
     }
     
     .icon-btn__front {
@@ -58,26 +60,28 @@
       align-items: center;
       justify-content: center;
       color: var(--color-glacier, #fff);
-      transition: color 0.3s ease;
+      transition: color 0.25s ease;
     }
     
     html:not(.dark) .icon-btn__icon { color: var(--color-glacier, #1f2937); }
     
     .icon-btn__label {
-      font-size: 0.6em; /* Relative to 24px */
+      font-size: 0.65em;
       font-weight: 600;
       font-family: var(--font-ui);
       color: var(--color-moonlight, #c7d3ea);
       white-space: nowrap;
       text-align: center;
-      line-height: 2;
-      opacity: 0.85;
+      line-height: 1.4;
+      opacity: 0.9;
       position: absolute;
       top: 100%;
-      right: -50%;
-      left: -50%;
-      transform: translateY(15%);
-      transition: opacity 0.3s ease, color 0.3s ease;
+      left: 50%;
+      transform: translate(-50%, 8px);
+      transition: opacity 0.25s ease, color 0.25s ease;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     
     html:not(.dark) .icon-btn__label { color: #475569; }
@@ -90,14 +94,19 @@
     
     html:not(.dark) .icon-btn:hover .icon-btn__label { color: #000; }
     
-    @media (min-width: 768px) {
+    @media (min-width: 580px) {
       .icon-btns {
         grid-template-columns: repeat(3, 1fr);
       }
     }
-    @media (min-width: 1024px) {
+    @media (min-width: 820px) {
       .icon-btns {
         grid-template-columns: repeat(4, 1fr);
+      }
+    }
+    @media (min-width: 1080px) {
+      .icon-btns {
+        grid-template-columns: repeat(6, 1fr);
       }
     }
 </style>

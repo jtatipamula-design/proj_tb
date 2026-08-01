@@ -28,10 +28,17 @@ env = Environment(
     autoescape=select_autoescape(['html', 'xml'])
 )
 
-# --- ENTERPRISE PERFORMANCE CACHE ---
+# Enterprise Performance In-Memory Caches
 USER_AUTH_CACHE = {}
-CACHE_TTL = 30  # Live checking every 30 seconds
-SCHEMA_CACHE = {"pks": {}, "fks": {}, "display_cols": {}}
+CACHE_TTL = 60  # Check authorization freshness every 60 seconds
+SCHEMA_CACHE = {
+    "columns": {},
+    "schema_maps": {},
+    "pks": {},
+    "fks": {},
+    "display_cols": {},
+    "cols_map": None
+}
 
 def quote_ident(name: str) -> str:
     """Safely quotes SQL identifiers (table names, column names)."""
@@ -66,32 +73,55 @@ def prune_user_auth_cache():
 
 def clear_schema_cache():
     """Flushes schema and auth caches when schema mutations occur."""
+    SCHEMA_CACHE["columns"].clear()
+    SCHEMA_CACHE["schema_maps"].clear()
     SCHEMA_CACHE["pks"].clear()
-    if "fks" in SCHEMA_CACHE:
-        SCHEMA_CACHE["fks"].clear()
-    if "display_cols" in SCHEMA_CACHE:
-        SCHEMA_CACHE["display_cols"].clear()
+    SCHEMA_CACHE["fks"].clear()
+    SCHEMA_CACHE["display_cols"].clear()
+    SCHEMA_CACHE["cols_map"] = None
     USER_AUTH_CACHE.clear()
 
+async def get_table_columns(conn, table_name: str):
+    """Fetches and caches table column metadata to avoid repeated information_schema queries."""
+    if table_name in SCHEMA_CACHE["columns"]:
+        return SCHEMA_CACHE["columns"][table_name]
+    query = """
+        SELECT column_name, data_type, is_nullable, character_maximum_length 
+        FROM information_schema.columns 
+        WHERE table_name = $1 AND table_schema = 'public'
+        ORDER BY ordinal_position
+    """
+    rows = await conn.fetch(query, table_name)
+    cols = [dict(r) for r in rows]
+    SCHEMA_CACHE["columns"][table_name] = cols
+    SCHEMA_CACHE["schema_maps"][table_name] = {c['column_name']: c for c in cols}
+    return cols
+
 async def build_modules_tree(conn, all_tables, table_modules):
+    """Constructs the hierarchical module and screen navigation tree with cached search indexing."""
     if not all_tables:
         return {}
         
     table_codes = list(all_tables.keys())
-    try:
-        cols_query = """
-            SELECT table_name, column_name 
-            FROM information_schema.columns 
-            WHERE table_schema = 'public' AND table_name = ANY($1)
-        """
-        col_rows = await conn.fetch(cols_query, table_codes)
-        cols_map = {}
-        for r in col_rows:
-            t = r['table_name']
-            if t not in cols_map: cols_map[t] = []
-            cols_map[t].append(r['column_name'].lower().replace('_', ' '))
-    except Exception:
-        cols_map = {}
+    if SCHEMA_CACHE["cols_map"] is None:
+        try:
+            cols_query = """
+                SELECT table_name, column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' AND table_name = ANY($1)
+            """
+            col_rows = await conn.fetch(cols_query, table_codes)
+            cols_map = {}
+            for r in col_rows:
+                t = r['table_name']
+                if t not in cols_map:
+                    cols_map[t] = []
+                cols_map[t].append(r['column_name'].lower().replace('_', ' '))
+            SCHEMA_CACHE["cols_map"] = cols_map
+        except Exception:
+            cols_map = {}
+    else:
+        cols_map = SCHEMA_CACHE["cols_map"]
 
     modules_tree = {}
     for tbl_code, tbl_name in all_tables.items():
@@ -179,14 +209,21 @@ async def get_authorized_tables(conn, user_id, role):
 
 @app.before_server_start
 async def setup_db(app, loop):
+    """Initializes the optimized asyncpg connection pool with statement caching and connection pooling."""
     if DATABASE_URL:
-        app.ctx.pool = await asyncpg.create_pool(dsn=DATABASE_URL, min_size=2, max_size=20)
+        app.ctx.pool = await asyncpg.create_pool(
+            dsn=DATABASE_URL,
+            min_size=5,
+            max_size=25,
+            max_inactive_connection_lifetime=300.0,
+            statement_cache_size=1024
+        )
     else:
-        print("WARNING: DATABASE_URL not set. Running without db pool.")
         app.ctx.pool = None
 
 @app.after_server_stop
 async def close_db(app, loop):
+    """Gracefully closes all pooled connections on server shutdown."""
     if hasattr(app.ctx, 'pool') and app.ctx.pool:
         await app.ctx.pool.close()
 
@@ -586,12 +623,7 @@ async def show_table(request, table_name):
         if not pk_column:
             raise NotFound("Table configuration error: No Primary Key")
 
-        columns_data = await conn.fetch("""
-            SELECT column_name, data_type 
-            FROM information_schema.columns 
-            WHERE table_name = $1 AND table_schema = 'public'
-            ORDER BY ordinal_position
-        """, table_name)
+        columns_data = await get_table_columns(conn, table_name)
 
         if not columns_data:
             raise NotFound("Table does not exist")
@@ -762,15 +794,8 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         
         table_title = auth_tables[table_name]
         pk_column = await get_pk_column(conn, table_name)
-
-        columns_data = await conn.fetch("""
-            SELECT column_name, data_type, is_nullable, character_maximum_length 
-            FROM information_schema.columns 
-            WHERE table_name = $1 AND table_schema = 'public'
-            ORDER BY ordinal_position
-        """, table_name)
-
-        schema_map = {c['column_name']: dict(c) for c in columns_data}
+        columns_data = await get_table_columns(conn, table_name)
+        schema_map = SCHEMA_CACHE["schema_maps"].get(table_name, {c['column_name']: c for c in columns_data})
         pk_type = schema_map.get(pk_column, {}).get('data_type', 'integer')
 
         q_table = quote_ident(table_name)
@@ -852,13 +877,7 @@ async def export_table_csv(request, table_name):
             raise NotFound("Table not found or unauthorized")
 
         pk_column = await get_pk_column(conn, table_name)
-
-        columns_data = await conn.fetch("""
-            SELECT column_name, data_type
-            FROM information_schema.columns
-            WHERE table_name = $1 AND table_schema = 'public'
-            ORDER BY ordinal_position
-        """, table_name)
+        columns_data = await get_table_columns(conn, table_name)
 
         export_cols = []
         company_csv_col = None
@@ -936,11 +955,8 @@ async def process_api_action(request, table_name, pk_val):
             return response.json({"error": "Unauthorized"}, status=403)
         
         pk_column = await get_pk_column(conn, table_name)
-        columns_info = await conn.fetch("""
-            SELECT column_name, data_type, character_maximum_length 
-            FROM information_schema.columns WHERE table_name = $1 AND table_schema = 'public'
-        """, table_name)
-        schema_map = {c['column_name']: dict(c) for c in columns_info}
+        columns_info = await get_table_columns(conn, table_name)
+        schema_map = SCHEMA_CACHE["schema_maps"].get(table_name, {c['column_name']: c for c in columns_info})
         pk_type = schema_map.get(pk_column, {}).get('data_type', 'integer')
 
         cast_pk = safe_cast_pk(pk_val, pk_type)
@@ -1000,6 +1016,11 @@ async def process_api_action(request, table_name, pk_val):
         try:
             async with conn.transaction():
                 if method == 'POST':
+                    # Auto-generate integer/serial primary key if not supplied by form
+                    if pk_column and (pk_column not in clean_data or clean_data[pk_column] is None or clean_data[pk_column] == ""):
+                        if pk_type in ('integer', 'bigint', 'smallint'):
+                            max_val = await conn.fetchval(f"SELECT MAX({q_pk}) FROM {q_table}")
+                            clean_data[pk_column] = (max_val or 0) + 1
                     if table_name == 'phc_role_screen_assignment_t' and 'prs_screen_id' in data_dict:
                         raw_scr = data_dict['prs_screen_id']
                         scr_list = []
