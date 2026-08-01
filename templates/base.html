@@ -205,7 +205,13 @@
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
 
-    <div class="flex h-screen overflow-hidden relative z-10">
+    <div id="app-body" 
+         hx-boost="true" 
+         hx-target="#main-dynamic-content" 
+         hx-select="#main-dynamic-content" 
+         hx-swap="outerHTML show:window:top"
+         hx-indicator="#global-spinner"
+         class="flex h-screen overflow-hidden relative z-10">
         
         <!-- Sidebar -->
         <aside class="glass-panel flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out overflow-hidden z-20 border-r"
@@ -243,7 +249,6 @@
                          x-show='searchQuery === "" || {{ module_name | tojson }}.toLowerCase().includes(searchQuery.toLowerCase()) || [{% for s in screens %}{{ s.search_terms | tojson }}{% if not loop.last %},{% endif %}{% endfor %}].some(n => n.includes(searchQuery.toLowerCase()))'
                          class="mb-1">
 
-                        
                         <button @click='open = !open; activeModule = open ? {{ module_name | tojson }} : null; localStorage.setItem("activeModule", activeModule || "");' 
                                 :class="{ 'ring-1 ring-brand-500/30': open }"
                                 class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-all"
@@ -261,7 +266,6 @@
                         <div x-show="open" x-collapse x-cloak class="mt-1 space-y-1 px-2 ml-6 py-1" style="border-left: 2px solid var(--glass-border);">
                             {% for screen in screens %}
                             <a href="/table/{{ screen.code }}" 
-                               @click="isNavigating = true"
                                class="block px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-2"
                                style="color: var(--color-pebble);"
                                onmouseenter="this.style.background='rgba(186, 215, 247, 0.08)'; this.style.color='var(--color-glacier)';"
@@ -301,7 +305,7 @@
                                 <p class="text-xs font-medium font-mono" style="color: var(--color-cipher-mint);">{{ user_role }}</p>
                             </div>
                         </a>
-                        <a href="/logout" class="p-2 rounded-lg transition-colors" 
+                        <a href="/logout" hx-boost="false" class="p-2 rounded-lg transition-colors" 
                            style="color: var(--color-ember);"
                            onmouseenter="this.style.background='rgba(228, 109, 76, 0.1)'"
                            onmouseleave="this.style.background='transparent'"
@@ -316,13 +320,12 @@
         <!-- Main Content Area -->
         <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
             
-            <!-- Global Loading Spinner -->
-            <div x-show="isNavigating" x-cloak 
-                 class="absolute inset-0 z-50 flex items-center justify-center transition-opacity"
-                 style="background: rgba(5, 6, 15, 0.4); backdrop-filter: blur(4px);">
+            <!-- Global Loading Spinner Indicator for HTMX -->
+            <div id="global-spinner" class="htmx-indicator absolute inset-0 z-50 flex items-center justify-center transition-opacity"
+                 style="background: rgba(5, 6, 15, 0.35); backdrop-filter: blur(3px);">
                 <div class="glass-panel p-5 rounded-2xl shadow-2xl flex items-center gap-4 border" style="border-color: var(--glass-border);">
                     <div class="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span class="font-semibold" style="color: var(--color-moonlight);">Loading Module...</span>
+                    <span class="font-semibold text-sm" style="color: var(--color-moonlight);">Loading...</span>
                 </div>
             </div>
 
@@ -337,12 +340,12 @@
                             onmouseleave="this.style.color='var(--color-fog)'">
                         <i data-lucide="panel-left" class="w-5 h-5"></i>
                     </button>
-                    <h2 class="text-xl font-bold tracking-wide" style="color: var(--color-glacier);">{% block header_title %}Command Center{% endblock %}</h2>
+                    <h2 id="header-title" class="text-xl font-bold tracking-wide" style="color: var(--color-glacier);">{% block header_title %}Command Center{% endblock %}</h2>
                 </div>
             </header>
 
             <!-- Dynamic Content Block -->
-            <div class="flex-1 overflow-y-auto p-6 md:p-8 scroll-smooth relative z-0">
+            <div id="main-dynamic-content" class="flex-1 overflow-y-auto p-6 md:p-8 scroll-smooth relative z-0">
                 {% block content %}{% endblock %}
             </div>
         </main>
@@ -361,7 +364,6 @@
             let currentX = 0, currentY = 0;
 
             document.addEventListener('mousemove', (e) => {
-                // Map mouse position to a small offset range (max ±20px)
                 const hw = window.innerWidth / 2;
                 const hh = window.innerHeight / 2;
                 targetX = ((e.clientX - hw) / hw) * 20;
@@ -383,8 +385,21 @@
             lerp();
         })();
 
+        // Re-initialize Lucide icons and synchronize header title on HTMX transitions
+        document.addEventListener('htmx:afterSwap', function(evt) {
+            lucide.createIcons();
+            const titleEl = document.querySelector('title');
+            if (titleEl) {
+                const cleanTitle = titleEl.innerText.replace('Nexus ERP - ', '').trim();
+                const headerTitle = document.getElementById('header-title');
+                if (headerTitle && cleanTitle) {
+                    headerTitle.innerText = cleanTitle;
+                }
+            }
+        });
+
         document.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons(); // Re-initialize after Alpine renders
+            lucide.createIcons();
 
             // Handle pending toast messages
             const pendingToast = sessionStorage.getItem('pendingToast');
@@ -398,6 +413,7 @@
         // ======== TOAST NOTIFICATIONS ========
         function showToast(message, type = 'success') {
             const container = document.getElementById('toast-container');
+            if (!container) return;
             const toast = document.createElement('div');
             toast.className = `toast toast-${type}`;
             const icon = type === 'success' ? 'check-circle-2' : 'alert-circle';
