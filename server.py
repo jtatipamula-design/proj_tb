@@ -170,110 +170,47 @@ def render_template(template_name, request=None, **context):
     html = template.render(**default_context)
     return add_security_headers(response.html(html))
 
-def resolve_module_name(screen_code, raw_module_name=None):
-    code = (screen_code or '').lower()
-    raw = (raw_module_name or '').strip()
-    if raw and raw.lower() not in ('system config', 'uncategorized', 'general', 'none', ''):
-        return raw
-    
-    if code.startswith('pcv_'):
-        return 'Clinical Formulations'
-    if any(k in code for k in ('user', 'role', 'pus_', 'prs_', 'pua_')):
-        return 'User Management'
-    if any(k in code for k in ('screen', 'app', 'service', 'error_log', 'log', 'lookup')):
-        return 'System Administration'
-    if any(k in code for k in ('prod', 'material', 'uom', 'item')):
-        return 'Master Data'
-    if any(k in code for k in ('plant', 'equipment', 'compliance', 'certification', 'storage', 'location')):
-        return 'Plant Operations'
-    if any(k in code for k in ('emp', 'dept', 'cost_center', 'compan', 'org', 'partner')):
-        return 'Enterprise & HR'
-    
-    return raw or 'General Management'
-
 async def get_authorized_tables(conn, user_id, role):
-    def derive_module(screen_code: str) -> str:
-        code = screen_code.lower()
-        if code.startswith('pcv_'):
-            return 'Clinical Formulations'
-        elif any(k in code for k in ('user', 'role', 'pus_', 'prs_', 'pua_')):
-            return 'User Management'
-        elif any(k in code for k in ('prod', 'material', 'uom', 'item', 'pmd_')):
-            return 'Master Data'
-        elif any(k in code for k in ('plant', 'equipment', 'compliance', 'certification', 'storage', 'location')):
-            return 'Plant Operations'
-        elif any(k in code for k in ('emp', 'dept', 'cost_center', 'compan', 'org', 'partner')):
-            return 'Enterprise & HR'
-        elif code.startswith('po_') or code.startswith('poe_'):
-            return 'Procurement & Orders'
-        elif code.startswith('ap_') or code.startswith('pra_'):
-            return 'Accounts & Receivables'
-        elif code.startswith('pgl_') or code.startswith('par_'):
-            return 'General Ledger'
-        elif code.startswith('pa_'):
-            return 'Project Accounting'
-        elif code.startswith('mtl_'):
-            return 'Inventory Management'
-        elif code.startswith('phc_'):
-            return 'System Administration'
-        return 'General'
-
     auth_tables = {}
     table_modules = {}
 
     if role == 'ADM':
-        # 1. Load explicitly configured screens
-        try:
-            screen_rows = await conn.fetch("""
-                SELECT s.psn_screen_code, s.psn_screen_name
-                FROM phc_screens_t s
-                WHERE s.psn_status = 'ACT' OR s.psn_status IS NULL
-                ORDER BY s.psn_screen_name
-            """)
-            for r in screen_rows:
-                code = r['psn_screen_code'].lower()
-                auth_tables[code] = r['psn_screen_name']
-                table_modules[code] = derive_module(code)
-        except Exception:
-            pass
-
-        # 2. Discover all public base tables for complete system administration
-        try:
-            db_tables = await conn.fetch("""
-                SELECT table_name 
-                FROM information_schema.tables 
-                WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-                ORDER BY table_name
-            """)
-            for t in db_tables:
-                tname = t['table_name'].lower()
-                if tname not in auth_tables:
-                    clean_title = ' '.join(word.capitalize() for word in tname.replace('_t', '').replace('_', ' ').split())
-                    auth_tables[tname] = clean_title
-                    table_modules[tname] = derive_module(tname)
-        except Exception:
-            pass
+        query = """
+            SELECT 
+                s.psn_screen_code, 
+                s.psn_screen_name, 
+                COALESCE(m.pmd_module_name, 'General') AS module_name
+            FROM phc_screens_t s
+            LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
+            WHERE s.psn_status = 'ACT' OR s.psn_status IS NULL
+            ORDER BY m.pmd_module_name, s.psn_screen_name
+        """
+        rows = await conn.fetch(query)
+        for r in rows:
+            code = r['psn_screen_code'].lower()
+            auth_tables[code] = r['psn_screen_name']
+            table_modules[code] = r['module_name']
     else:
-        try:
-            query = """
-                SELECT DISTINCT s.psn_screen_code, s.psn_screen_name
-                FROM phc_screens_t s
-                JOIN phc_role_screen_assignment_t rsa ON s.psn_screen_id = rsa.prs_screen_id
-                JOIN phc_user_roles_assignment_t ura ON rsa.prs_role_id = ura.pua_role_id
-                WHERE ura.pua_user_id = $1 
-                  AND (s.psn_status = 'ACT' OR s.psn_status IS NULL)
-                ORDER BY s.psn_screen_name
-            """
-            rows = await conn.fetch(query, user_id)
-            for r in rows:
-                code = r['psn_screen_code'].lower()
-                module_name = derive_module(code)
-                if module_name == 'System Administration':
-                    continue
-                auth_tables[code] = r['psn_screen_name']
-                table_modules[code] = module_name
-        except Exception:
-            pass
+        query = """
+            SELECT DISTINCT 
+                s.psn_screen_code, 
+                s.psn_screen_name, 
+                COALESCE(m.pmd_module_name, 'General') AS module_name
+            FROM phc_screens_t s
+            JOIN phc_role_screen_assignment_t rsa ON s.psn_screen_id = rsa.prs_screen_id
+            JOIN phc_user_roles_assignment_t ura ON rsa.prs_role_id = ura.pua_role_id
+            LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
+            WHERE ura.pua_user_id = $1 
+              AND (s.psn_status = 'ACT' OR s.psn_status IS NULL)
+            ORDER BY m.pmd_module_name, s.psn_screen_name
+        """
+        rows = await conn.fetch(query, user_id)
+        for r in rows:
+            code = r['psn_screen_code'].lower()
+            if r['module_name'].lower() == 'erpadmin':
+                continue
+            auth_tables[code] = r['psn_screen_name']
+            table_modules[code] = r['module_name']
 
     return auth_tables, table_modules
 

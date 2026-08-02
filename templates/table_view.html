@@ -26,81 +26,51 @@
     select.search-box option { background: var(--color-midnight-ink); color: var(--color-glacier); }
     html.light-mode select.search-box option { background: #fff; color: var(--color-midnight-ink); }
 
-    /* Action Buttons */
-    .btn-primary {
-        background: linear-gradient(135deg, var(--color-electric-iris), #7c4dff);
-        color: white;
-        padding: 9px 18px;
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 13.5px;
+    /* Floating Round Glass Action Dock Pill */
+    .action-dock {
         display: inline-flex;
         align-items: center;
-        gap: 8px;
-        text-decoration: none;
-        box-shadow: 0 4px 14px rgba(102, 58, 243, 0.35);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        cursor: pointer;
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    .btn-primary:hover {
-        transform: translateY(-2px) scale(1.02);
-        box-shadow: 0 6px 20px rgba(102, 58, 243, 0.55);
-        border-color: rgba(255, 255, 255, 0.4);
-        color: #ffffff;
-    }
-    .btn-primary:hover i {
-        transform: rotate(90deg);
-        transition: transform 0.25s ease;
-    }
-    .btn-primary:active { transform: translateY(0) scale(0.98); }
-
-    .btn-secondary {
-        background: rgba(255, 255, 255, 0.05);
+        background: var(--glass-surface);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         border: 1px solid var(--glass-border);
-        color: var(--color-moonlight);
-        padding: 9px 14px;
-        border-radius: 8px;
-        font-weight: 500;
-        font-size: 13.5px;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        text-decoration: none;
-        cursor: pointer;
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        border-radius: 9999px;
+        padding: 4px 6px;
+        gap: 3px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
     }
-    .btn-secondary:hover {
-        background: rgba(186, 215, 247, 0.12);
-        color: var(--color-glacier);
-        border-color: var(--color-frost-link);
-        transform: translateY(-1px);
-    }
-    .btn-secondary:active { transform: translateY(0) scale(0.98); }
-
-    .btn-icon-only {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid var(--glass-border);
-        color: var(--color-moonlight);
-        padding: 9px 12px;
-        border-radius: 8px;
-        cursor: pointer;
+    .dock-btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: transparent;
+        border: none;
+        color: var(--color-moonlight);
+        cursor: pointer;
         transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        text-decoration: none;
     }
-    .btn-icon-only:hover {
-        background: rgba(186, 215, 247, 0.12);
+    .dock-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
         color: var(--color-glacier);
-        border-color: var(--color-frost-link);
-        transform: translateY(-1px);
+        transform: scale(1.08);
     }
-    .btn-icon-only:hover i[data-lucide="refresh-cw"] {
+    .dock-btn:active {
+        transform: scale(0.95);
+    }
+    .dock-btn:hover i[data-lucide="refresh-cw"] {
         transform: rotate(180deg);
         transition: transform 0.4s ease;
     }
-    .btn-icon-only:active { transform: translateY(0) scale(0.98); }
+    .dock-divider {
+        width: 1px;
+        height: 16px;
+        background: var(--glass-border);
+        margin: 0 2px;
+    }
 
     /* Table Container & Rows */
     .table-container {
@@ -202,27 +172,32 @@
                    value="{{ search_query | default('') }}"
                    autocomplete="off">
 
-            <!-- Refresh Button -->
-            <button class="btn-icon-only" title="Refresh Table" 
-                    hx-get="/table/{{ table_name }}" 
-                    hx-target="#tableContent" 
-                    hx-select="#tableContent" 
-                    hx-swap="outerHTML"
-                    hx-include="#searchInput{% if table_name == 'phc_lookup_values_t' %}, #typeFilter{% endif %}">
-                <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
-            </button>
+            <!-- Unified Glass Action Pill Dock -->
+            <div class="action-dock">
+                <!-- Refresh Button -->
+                <button class="dock-btn" title="Refresh Table" 
+                        hx-get="/table/{{ table_name }}" 
+                        hx-target="#tableContent" 
+                        hx-select="#tableContent" 
+                        hx-swap="outerHTML"
+                        hx-include="#searchInput{% if table_name == 'phc_lookup_values_t' %}, #typeFilter{% endif %}">
+                    <i data-lucide="refresh-cw" style="width: 15px; height: 15px;"></i>
+                </button>
 
-            <!-- Export CSV -->
-            <a href="/export/{{ table_name }}" hx-boost="false" class="btn-secondary" title="Export Table as CSV">
-                <i data-lucide="download" style="width: 15px; height: 15px;"></i>
-                <span>Export</span>
-            </a>
+                <div class="dock-divider"></div>
 
-            <!-- Prominent Primary + Add Record Button -->
-            <a href="/new/{{ table_name }}" id="topAddRecordBtn" preload="mouseover" class="btn-primary" title="Create New Record">
-                <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
-                <span>Add Record</span>
-            </a>
+                <!-- Export CSV -->
+                <a href="/export/{{ table_name }}" hx-boost="false" class="dock-btn" title="Export CSV">
+                    <i data-lucide="download" style="width: 15px; height: 15px;"></i>
+                </a>
+
+                <div class="dock-divider"></div>
+
+                <!-- Add Record -->
+                <a href="/new/{{ table_name }}" id="topAddRecordBtn" preload="mouseover" class="dock-btn" title="Add Record">
+                    <i data-lucide="plus" style="width: 16px; height: 16px;"></i>
+                </a>
+            </div>
         </div>
     </div>
 
