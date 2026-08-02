@@ -9,10 +9,6 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.12/dist/ext/preload.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     
     <script>
@@ -34,8 +30,6 @@
     </script>
     
     <style>
-        [x-cloak] { display: none !important; }
-        
         :root {
             /* Glassmorphism Design Tokens */
             --color-midnight-ink: #05060f;
@@ -75,7 +69,7 @@
         ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.3); border-radius: 4px; }
         .dark ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.4); }
 
-        /* Abyssal Background System — Grid + Bioluminescent Orbs */
+        /* Abyssal Background System */
         .abyssal-bg {
             position: fixed; inset: 0; z-index: 0;
             background-color: var(--color-midnight-ink);
@@ -101,7 +95,7 @@
         }
 
         .flux-canvas {
-            position: absolute; inset: -15%; /* Oversized so parallax doesn't reveal edges */
+            position: absolute; inset: -15%;
             width: 130%; height: 130%;
             pointer-events: none;
             opacity: 0.40;
@@ -134,10 +128,34 @@
             transition: all 0.3s ease;
         }
 
-        /* Light/Dark mode body transition */
+        /* Body Typography */
         body {
             font-family: var(--font-ui);
             transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        /* Sidebar Styles */
+        #main-sidebar {
+            width: 18rem;
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease;
+        }
+        #main-sidebar.sidebar-closed {
+            width: 0px !important;
+            opacity: 0 !important;
+            border-right: none !important;
+            pointer-events: none !important;
+        }
+        .mod-screens {
+            transition: opacity 0.2s ease, max-height 0.3s ease;
+        }
+        .mod-screens.hidden {
+            display: none !important;
+        }
+        .mod-chevron {
+            transition: transform 0.2s ease;
+        }
+        .mod-chevron.rotate-180 {
+            transform: rotate(180deg);
         }
 
         /* Toast Notifications */
@@ -161,42 +179,7 @@
     </style>
 </head>
 
-<body class="bg-slate-50 text-slate-900 dark:bg-[#05060f] dark:text-[#c7d3ea] relative overflow-hidden antialiased font-ui"
-      x-data="{ 
-          sidebarOpen: localStorage.getItem('sidebarOpen') !== 'false',
-          isNavigating: false,
-          theme: localStorage.getItem('theme') || 'dark',
-          searchQuery: '',
-          openModules: JSON.parse(localStorage.getItem('openModules') || '{}'),
-          toggleModule(mod) {
-              this.openModules[mod] = !this.openModules[mod];
-              localStorage.setItem('openModules', JSON.stringify(this.openModules));
-          },
-          openAndFocusModule(mod) {
-              this.sidebarOpen = true;
-              this.openModules[mod] = true;
-              localStorage.setItem('sidebarOpen', 'true');
-              localStorage.setItem('openModules', JSON.stringify(this.openModules));
-              this.$nextTick(() => {
-                  const el = document.getElementById('sidebar-mod-' + encodeURIComponent(mod));
-                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-              });
-          },
-          toggleTheme() {
-              document.documentElement.classList.add('theme-transitioning');
-              
-              this.theme = this.theme === 'dark' ? 'light' : 'dark';
-              localStorage.setItem('theme', this.theme);
-              if (this.theme === 'dark') { document.documentElement.classList.add('dark'); document.documentElement.classList.remove('light-mode'); } 
-              else { document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light-mode'); }
-
-              setTimeout(() => {
-                  document.documentElement.classList.remove('theme-transitioning');
-              }, 300);
-          }
-      }"
-      x-init="if (theme === 'dark') { document.documentElement.classList.add('dark'); document.documentElement.classList.remove('light-mode'); } else { document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light-mode'); }"
-      x-effect="localStorage.setItem('sidebarOpen', sidebarOpen)">
+<body class="bg-slate-50 text-slate-900 dark:bg-[#05060f] dark:text-[#c7d3ea] relative overflow-hidden antialiased font-ui">
 
     <!-- Animated Flux Background + Subtle Grid -->
     <div class="abyssal-bg">
@@ -219,18 +202,18 @@
 
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
+    
     <div id="app-body" class="flex h-screen overflow-hidden relative z-10">
         
         <!-- Sidebar -->
-        <aside class="glass-panel flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out overflow-hidden z-20 border-r"
-               style="border-color: var(--glass-border);"
-               :class="sidebarOpen ? 'w-72 opacity-100' : 'w-0 opacity-0 border-r-0'">
+        <aside id="main-sidebar" class="glass-panel flex-shrink-0 flex flex-col overflow-hidden z-20 border-r"
+               style="border-color: var(--glass-border);">
             <div class="w-72 flex flex-col h-full flex-shrink-0">
                 <!-- Branding -->
                 <div class="p-6 flex items-center justify-between" style="border-bottom: 1px solid var(--glass-border);">
                     <div>
                         <h1 class="text-2xl font-bold tracking-tight" style="color: var(--color-glacier);">
-                            <a href="/" preload="mouseover" class="flex items-center gap-3">
+                            <a href="/" class="flex items-center gap-3">
                                 <i data-lucide="layers" class="w-6 h-6"></i>
                                 <span>Brihas ERP</span>
                             </a>
@@ -243,48 +226,43 @@
                 <div class="px-4 pt-4 pb-2">
                     <div class="relative">
                         <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style="color: var(--color-fog);"></i>
-                        <input type="text" x-model="searchQuery" placeholder="Search modules..." 
-                                class="w-full rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
-                                style="background: var(--color-midnight-ink); border: 1px solid var(--glass-border); color: var(--color-moonlight);">
+                        <input type="text" id="sidebar-search-input" oninput="filterSidebarModules(this.value)" placeholder="Search modules..." 
+                               class="w-full rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                               style="background: var(--color-midnight-ink); border: 1px solid var(--glass-border); color: var(--color-moonlight);">
                     </div>
                 </div>
 
-                <!-- Module Tree Navigation -->
-                <div class="flex-1 overflow-y-auto py-2 px-3 space-y-1.5">
+                <!-- Module Tree Navigation (Pure Vanilla JS Accordions) -->
+                <div class="flex-1 overflow-y-auto py-2 px-3 space-y-1.5" id="sidebar-module-list">
                     {% for module_name, screens in modules_tree.items() %}
-                    <div id="sidebar-mod-{{ module_name | urlencode }}" 
-                         x-show='searchQuery === "" || {{ module_name | tojson }}.toLowerCase().includes(searchQuery.toLowerCase()) || [{% for s in screens %}{{ s.search_terms | tojson }}{% if not loop.last %},{% endif %}{% endfor %}].some(n => n.includes(searchQuery.toLowerCase()))'
-                         class="mb-1">
-
-                        <button @click="toggleModule({{ module_name | tojson }})" 
-                                :class="{ 'ring-1 ring-brand-500/30': openModules[{{ module_name | tojson }}] }"
-                                class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-all"
-                                :style="openModules[{{ module_name | tojson }}] ? 'background: rgba(186, 215, 247, 0.12); color: var(--color-frost-link);' : 'color: var(--color-moonlight);'"
-                                @mouseenter="$el.style.background = openModules[{{ module_name | tojson }}] ? 'rgba(186, 215, 247, 0.12)' : 'rgba(186, 215, 247, 0.08)'"
-                                @mouseleave="$el.style.background = openModules[{{ module_name | tojson }}] ? 'rgba(186, 215, 247, 0.12)' : 'transparent'">
+                    <div class="sidebar-module mb-1" id="mod-container-{{ module_name | urlencode }}">
+                        <button type="button" 
+                                onclick="toggleSidebarModule('{{ module_name | urlencode }}')"
+                                class="sidebar-mod-btn w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-all"
+                                style="color: var(--color-moonlight);"
+                                onmouseenter="this.style.background='rgba(186, 215, 247, 0.08)'"
+                                onmouseleave="this.style.background='transparent'">
                             <span class="flex items-center gap-3">
                                 <i data-lucide="folder" class="w-4 h-4"></i>
-                                {{ module_name }}
+                                <span class="mod-title">{{ module_name }}</span>
                             </span>
-                            <i data-lucide="chevron-down" class="w-4 h-4 transition-transform opacity-60" 
-                               :class="{'rotate-180': openModules[{{ module_name | tojson }}]}"></i>
+                            <i data-lucide="chevron-down" class="mod-chevron w-4 h-4 transition-transform opacity-60"></i>
                         </button>
                         
                         <!-- Nested Screens -->
-                        <div x-show="openModules[{{ module_name | tojson }}]" 
-                             x-collapse 
-                             x-cloak 
-                             class="mt-1 space-y-1 px-2 ml-6 py-1" 
+                        <div id="mod-screens-{{ module_name | urlencode }}" 
+                             class="mod-screens hidden mt-1 space-y-1 px-2 ml-6 py-1" 
                              style="border-left: 2px solid var(--glass-border);">
                             {% for screen in screens %}
                             <a href="/table/{{ screen.code }}" 
-                               preload="mouseover"
-                               class="block px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-2"
+                               class="screen-link block px-3 py-1.5 text-sm rounded-lg transition-colors flex items-center gap-2"
+                               data-screen-name="{{ screen.name | lower }}"
+                               data-search-terms="{{ screen.search_terms | lower }}"
                                style="color: var(--color-pebble);"
                                onmouseenter="this.style.background='rgba(186, 215, 247, 0.08)'; this.style.color='var(--color-glacier)';"
                                onmouseleave="this.style.background='transparent'; this.style.color='var(--color-pebble)';">
                                 <i data-lucide="database" class="w-3.5 h-3.5"></i>
-                                {{ screen.name }}
+                                <span>{{ screen.name }}</span>
                             </a>
                             {% endfor %}
                         </div>
@@ -296,12 +274,13 @@
                 <div class="p-4" style="border-top: 1px solid var(--glass-border); background: var(--glass-surface);">
                     <!-- Theme Toggle -->
                     <div class="flex justify-end mb-3">
-                        <button @click="toggleTheme()" 
+                        <button onclick="toggleTheme()" 
+                                type="button"
                                 class="p-2 rounded-lg transition-all"
                                 style="background: var(--color-midnight-ink); border: 1px solid var(--glass-border); color: var(--color-fog);"
                                 title="Toggle Theme">
-                            <i data-lucide="sun" x-show="theme === 'dark'" x-cloak class="w-4 h-4"></i>
-                            <i data-lucide="moon" x-show="theme === 'light'" class="w-4 h-4"></i>
+                            <i data-lucide="sun" id="theme-sun-icon" class="w-4 h-4"></i>
+                            <i data-lucide="moon" id="theme-moon-icon" class="w-4 h-4 hidden"></i>
                         </button>
                     </div>
                     <!-- User Info -->
@@ -311,14 +290,14 @@
                            title="View User Profile">
                             <div class="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold transition-all group-hover:border-brand-500"
                                  style="background: rgba(186, 215, 247, 0.08); border: 1px solid var(--glass-border); color: var(--color-glacier);">
-                                {{ username[:2] | upper }}
+                                {{ username[:2] | upper if username else 'U' }}
                             </div>
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm font-bold truncate group-hover:text-brand-400" style="color: var(--color-glacier);">{{ username }}</p>
                                 <p class="text-xs font-medium font-mono" style="color: var(--color-cipher-mint);">{{ user_role }}</p>
                             </div>
                         </a>
-                        <a href="/logout" hx-boost="false" class="p-2 rounded-lg transition-colors" 
+                        <a href="/logout" class="p-2 rounded-lg transition-colors" 
                            style="color: var(--color-ember);"
                            onmouseenter="this.style.background='rgba(228, 109, 76, 0.1)'"
                            onmouseleave="this.style.background='transparent'"
@@ -337,11 +316,13 @@
             <header class="glass-panel border-b px-6 py-4 flex items-center justify-between sticky top-0 z-10 transition-all duration-300 ease-in-out"
                     style="border-color: var(--glass-border);">
                 <div class="flex items-center gap-4">
-                    <button @click="sidebarOpen = !sidebarOpen" 
-                            class="p-2 rounded-lg transition-all"
+                    <button onclick="toggleSidebar()" 
+                            type="button"
+                            class="p-2 rounded-lg transition-all cursor-pointer"
                             style="color: var(--color-fog); background: var(--color-midnight-ink); border: 1px solid var(--glass-border);"
                             onmouseenter="this.style.color='var(--color-glacier)'"
-                            onmouseleave="this.style.color='var(--color-fog)'">
+                            onmouseleave="this.style.color='var(--color-fog)'"
+                            title="Toggle Sidebar">
                         <i data-lucide="panel-left" class="w-5 h-5"></i>
                     </button>
                     <h2 id="header-title" class="text-xl font-bold tracking-wide" style="color: var(--color-glacier);">{% block header_title %}Command Center{% endblock %}</h2>
@@ -355,11 +336,151 @@
         </main>
     </div>
 
+    <!-- PURE VANILLA JAVASCRIPT NAVIGATION & UI ENGINE -->
     <script>
-        // Initialize Lucide Icons
-        lucide.createIcons();
+        // ======== THEME TOGGLE & INITIALIZATION ========
+        function applyTheme(theme) {
+            const sunIcon = document.getElementById('theme-sun-icon');
+            const moonIcon = document.getElementById('theme-moon-icon');
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+                document.documentElement.classList.remove('light-mode');
+                if (sunIcon) sunIcon.classList.remove('hidden');
+                if (moonIcon) moonIcon.classList.add('hidden');
+            } else {
+                document.documentElement.classList.remove('dark');
+                document.documentElement.classList.add('light-mode');
+                if (sunIcon) sunIcon.classList.add('hidden');
+                if (moonIcon) moonIcon.classList.remove('hidden');
+            }
+        }
 
-        // ======== SUBTLE KINETIC PARALLAX ON GRADIENT ========
+        function toggleTheme() {
+            document.documentElement.classList.add('theme-transitioning');
+            const currentTheme = localStorage.getItem('theme') || 'dark';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            localStorage.setItem('theme', newTheme);
+            applyTheme(newTheme);
+            setTimeout(() => {
+                document.documentElement.classList.remove('theme-transitioning');
+            }, 300);
+        }
+
+        // ======== SIDEBAR TOGGLE & PERSISTENCE ========
+        function setSidebarOpen(open) {
+            const aside = document.getElementById('main-sidebar');
+            if (!aside) return;
+            if (open) {
+                aside.classList.remove('sidebar-closed');
+                localStorage.setItem('sidebarOpen', 'true');
+            } else {
+                aside.classList.add('sidebar-closed');
+                localStorage.setItem('sidebarOpen', 'false');
+            }
+        }
+
+        function toggleSidebar() {
+            const aside = document.getElementById('main-sidebar');
+            if (!aside) return;
+            const isClosed = aside.classList.contains('sidebar-closed');
+            setSidebarOpen(isClosed);
+        }
+
+        // ======== MODULE ACCORDION TOGGLE ========
+        function toggleSidebarModule(modId) {
+            const screens = document.getElementById('mod-screens-' + modId);
+            const container = document.getElementById('mod-container-' + modId);
+            if (!screens) return;
+            
+            const chevron = container ? container.querySelector('.mod-chevron') : null;
+            const isHidden = screens.classList.contains('hidden');
+            
+            if (isHidden) {
+                screens.classList.remove('hidden');
+                if (chevron) chevron.classList.add('rotate-180');
+                localStorage.setItem('mod_' + modId, 'open');
+            } else {
+                screens.classList.add('hidden');
+                if (chevron) chevron.classList.remove('rotate-180');
+                localStorage.removeItem('mod_' + modId);
+            }
+        }
+
+        // ======== OPEN SPECIFIC MODULE FROM DASHBOARD TILE ========
+        window.openModuleFromDashboard = function(modId) {
+            // 1. Ensure sidebar is open
+            setSidebarOpen(true);
+            
+            // 2. Open the requested module accordion
+            const screens = document.getElementById('mod-screens-' + modId);
+            const container = document.getElementById('mod-container-' + modId);
+            if (screens) {
+                screens.classList.remove('hidden');
+                const chevron = container ? container.querySelector('.mod-chevron') : null;
+                if (chevron) chevron.classList.add('rotate-180');
+                localStorage.setItem('mod_' + modId, 'open');
+                
+                // 3. Smoothly scroll directly into view
+                setTimeout(() => {
+                    if (container) container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 100);
+            }
+        };
+
+        // ======== SIDEBAR LIVE SEARCH FILTER ========
+        function filterSidebarModules(query) {
+            const q = (query || '').trim().toLowerCase();
+            const modules = document.querySelectorAll('.sidebar-module');
+            
+            modules.forEach(mod => {
+                if (!q) {
+                    mod.style.display = '';
+                    const links = mod.querySelectorAll('.screen-link');
+                    links.forEach(l => l.style.display = '');
+                    return;
+                }
+                const btnText = mod.querySelector('.mod-title')?.textContent.toLowerCase() || '';
+                const links = mod.querySelectorAll('.screen-link');
+                let anyLinkMatched = false;
+                
+                links.forEach(link => {
+                    const terms = link.getAttribute('data-search-terms') || '';
+                    const name = link.getAttribute('data-screen-name') || '';
+                    if (terms.includes(q) || name.includes(q)) {
+                        anyLinkMatched = true;
+                        link.style.display = '';
+                    } else if (!btnText.includes(q)) {
+                        link.style.display = 'none';
+                    } else {
+                        link.style.display = '';
+                    }
+                });
+                
+                if (btnText.includes(q) || anyLinkMatched) {
+                    mod.style.display = '';
+                    const screens = mod.querySelector('.mod-screens');
+                    if (screens) screens.classList.remove('hidden');
+                } else {
+                    mod.style.display = 'none';
+                }
+            });
+        }
+
+        // ======== TOAST NOTIFICATIONS ========
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            const icon = type === 'success' ? 'check-circle-2' : 'alert-circle';
+            const iconColor = type === 'success' ? 'var(--color-cipher-mint)' : 'var(--color-ember)';
+            toast.innerHTML = `<i data-lucide="${icon}" style="color: ${iconColor}; min-width: 20px;"></i> ${message}`;
+            container.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        // ======== KINETIC FLUX PARALLAX ========
         (function initFluxParallax() {
             const fluxEl = document.querySelector('.flux-canvas');
             if (!fluxEl) return;
@@ -389,23 +510,30 @@
             lerp();
         })();
 
-        // Re-initialize Lucide icons and synchronize header title on HTMX transitions
-        document.addEventListener('htmx:afterSwap', function(evt) {
-            lucide.createIcons();
-            const titleEl = document.querySelector('title');
-            if (titleEl) {
-                const cleanTitle = titleEl.innerText.replace('Nexus ERP - ', '').trim();
-                const headerTitle = document.getElementById('header-title');
-                if (headerTitle && cleanTitle) {
-                    headerTitle.innerText = cleanTitle;
-                }
-            }
-        });
-
+        // ======== PAGE INITIALIZATION ========
         document.addEventListener('DOMContentLoaded', () => {
-            lucide.createIcons();
+            // 1. Apply theme
+            const savedTheme = localStorage.getItem('theme') || 'dark';
+            applyTheme(savedTheme);
 
-            // Handle pending toast messages
+            // 2. Restore sidebar state
+            if (localStorage.getItem('sidebarOpen') === 'false') {
+                document.getElementById('main-sidebar')?.classList.add('sidebar-closed');
+            }
+
+            // 3. Restore open accordions
+            document.querySelectorAll('.sidebar-module').forEach(mod => {
+                const modId = mod.id.replace('mod-container-', '');
+                if (localStorage.getItem('mod_' + modId) === 'open') {
+                    mod.querySelector('.mod-screens')?.classList.remove('hidden');
+                    mod.querySelector('.mod-chevron')?.classList.add('rotate-180');
+                }
+            });
+
+            // 4. Lucide icons
+            if (window.lucide) lucide.createIcons();
+
+            // 5. Check pending toast
             const pendingToast = sessionStorage.getItem('pendingToast');
             if (pendingToast) {
                 const toastData = JSON.parse(pendingToast);
@@ -413,11 +541,6 @@
                 sessionStorage.removeItem('pendingToast');
             }
         });
-
-        // ======== HELPER TO OPEN MODULE ACCORDION IN SIDEBAR ========
-        window.openSidebarModule = function(moduleName) {
-            window.dispatchEvent(new CustomEvent('open-module', { detail: { module: moduleName } }));
-        };
     </script>
 </body>
 </html>
