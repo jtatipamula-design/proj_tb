@@ -30,8 +30,8 @@
     
     .icon-btn {
       background: var(--glass-bg, var(--glass-surface));
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       border: 1px solid var(--glass-border);
       border-radius: 12px;
       outline: none;
@@ -72,6 +72,11 @@
 
     .icon-btn:hover .icon-btn__name {
       color: var(--color-aurora, #14b8a6);
+    }
+    @media (min-width: 1024px) {
+      .icon-btns {
+        grid-template-columns: repeat(6, 1fr);
+      }
     }
 </style>
 

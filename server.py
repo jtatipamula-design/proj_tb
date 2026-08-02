@@ -28,10 +28,17 @@ env = Environment(
     autoescape=select_autoescape(['html', 'xml'])
 )
 
-# --- ENTERPRISE PERFORMANCE CACHE ---
+# Enterprise Performance In-Memory Caches
 USER_AUTH_CACHE = {}
-CACHE_TTL = 30  # Live checking every 30 seconds
-SCHEMA_CACHE = {"pks": {}, "fks": {}, "display_cols": {}}
+CACHE_TTL = 60  # Check authorization freshness every 60 seconds
+SCHEMA_CACHE = {
+    "columns": {},
+    "schema_maps": {},
+    "pks": {},
+    "fks": {},
+    "display_cols": {},
+    "cols_map": None
+}
 
 def quote_ident(name: str) -> str:
     """Safely quotes SQL identifiers (table names, column names)."""
@@ -66,32 +73,55 @@ def prune_user_auth_cache():
 
 def clear_schema_cache():
     """Flushes schema and auth caches when schema mutations occur."""
+    SCHEMA_CACHE["columns"].clear()
+    SCHEMA_CACHE["schema_maps"].clear()
     SCHEMA_CACHE["pks"].clear()
-    if "fks" in SCHEMA_CACHE:
-        SCHEMA_CACHE["fks"].clear()
-    if "display_cols" in SCHEMA_CACHE:
-        SCHEMA_CACHE["display_cols"].clear()
+    SCHEMA_CACHE["fks"].clear()
+    SCHEMA_CACHE["display_cols"].clear()
+    SCHEMA_CACHE["cols_map"] = None
     USER_AUTH_CACHE.clear()
 
+async def get_table_columns(conn, table_name: str):
+    """Fetches and caches table column metadata to avoid repeated information_schema queries."""
+    if table_name in SCHEMA_CACHE["columns"]:
+        return SCHEMA_CACHE["columns"][table_name]
+    query = """
+        SELECT column_name, data_type, is_nullable, character_maximum_length 
+        FROM information_schema.columns 
+        WHERE table_name = $1 AND table_schema = 'public'
+        ORDER BY ordinal_position
+    """
+    rows = await conn.fetch(query, table_name)
+    cols = [dict(r) for r in rows]
+    SCHEMA_CACHE["columns"][table_name] = cols
+    SCHEMA_CACHE["schema_maps"][table_name] = {c['column_name']: c for c in cols}
+    return cols
+
 async def build_modules_tree(conn, all_tables, table_modules):
+    """Constructs the hierarchical module and screen navigation tree with cached search indexing."""
     if not all_tables:
         return {}
         
     table_codes = list(all_tables.keys())
-    try:
-        cols_query = """
-            SELECT table_name, column_name 
-            FROM information_schema.columns 
-            WHERE table_schema = 'public' AND table_name = ANY($1)
-        """
-        col_rows = await conn.fetch(cols_query, table_codes)
-        cols_map = {}
-        for r in col_rows:
-            t = r['table_name']
-            if t not in cols_map: cols_map[t] = []
-            cols_map[t].append(r['column_name'].lower().replace('_', ' '))
-    except Exception:
-        cols_map = {}
+    if SCHEMA_CACHE["cols_map"] is None:
+        try:
+            cols_query = """
+                SELECT table_name, column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'public' AND table_name = ANY($1)
+            """
+            col_rows = await conn.fetch(cols_query, table_codes)
+            cols_map = {}
+            for r in col_rows:
+                t = r['table_name']
+                if t not in cols_map:
+                    cols_map[t] = []
+                cols_map[t].append(r['column_name'].lower().replace('_', ' '))
+            SCHEMA_CACHE["cols_map"] = cols_map
+        except Exception:
+            cols_map = {}
+    else:
+        cols_map = SCHEMA_CACHE["cols_map"]
 
     modules_tree = {}
     for tbl_code, tbl_name in all_tables.items():
@@ -141,58 +171,103 @@ def render_template(template_name, request=None, **context):
     return add_security_headers(response.html(html))
 
 async def get_authorized_tables(conn, user_id, role):
+    def derive_module(screen_code: str) -> str:
+        code = screen_code.lower()
+        if code.startswith('phc_'):
+            return 'System Administration'
+        elif code.startswith('pmd_'):
+            return 'Master Data'
+        elif code.startswith('po_') or code.startswith('poe_'):
+            return 'Procurement & Orders'
+        elif code.startswith('ap_') or code.startswith('pra_'):
+            return 'Accounts & Receivables'
+        elif code.startswith('pgl_') or code.startswith('par_'):
+            return 'General Ledger'
+        elif code.startswith('pa_'):
+            return 'Project Accounting'
+        elif code.startswith('mtl_'):
+            return 'Inventory Management'
+        elif code.startswith('pcv_'):
+            return 'Clinical Formulations'
+        return 'General'
+
+    auth_tables = {}
+    table_modules = {}
+
     if role == 'ADM':
-        query = """
-            SELECT s.psn_screen_code, s.psn_screen_name, COALESCE(m.pmd_module_name, 'System Config') as module_name
+        # 1. Load explicitly configured screens
+        screen_rows = await conn.fetch("""
+            SELECT s.psn_screen_code, s.psn_screen_name
             FROM phc_screens_t s
-            LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
-            WHERE s.psn_screen_code ILIKE 'phc_%' OR s.psn_screen_code ILIKE 'pcv_%'
-        """
-        rows = await conn.fetch(query)
+            WHERE s.psn_status = 'ACT' OR s.psn_status IS NULL
+            ORDER BY s.psn_screen_name
+        """)
+        for r in screen_rows:
+            code = r['psn_screen_code'].lower()
+            auth_tables[code] = r['psn_screen_name']
+            table_modules[code] = derive_module(code)
+
+        # 2. Discover all public base tables for complete system administration
+        db_tables = await conn.fetch("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+            ORDER BY table_name
+        """)
+        for t in db_tables:
+            tname = t['table_name'].lower()
+            if tname not in auth_tables:
+                clean_title = ' '.join(word.capitalize() for word in tname.replace('_t', '').replace('_', ' ').split())
+                auth_tables[tname] = clean_title
+                table_modules[tname] = derive_module(tname)
     else:
         query = """
-            SELECT DISTINCT s.psn_screen_code, s.psn_screen_name, COALESCE(m.pmd_module_name, 'Uncategorized') as module_name 
+            SELECT DISTINCT s.psn_screen_code, s.psn_screen_name
             FROM phc_screens_t s
             JOIN phc_role_screen_assignment_t rsa ON s.psn_screen_id = rsa.prs_screen_id
             JOIN phc_user_roles_assignment_t ura ON rsa.prs_role_id = ura.pua_role_id
-            LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
             WHERE ura.pua_user_id = $1 
-              AND (s.psn_screen_code ILIKE 'phc_%' OR s.psn_screen_code ILIKE 'pcv_%')
+              AND (s.psn_status = 'ACT' OR s.psn_status IS NULL)
+            ORDER BY s.psn_screen_name
         """
         rows = await conn.fetch(query, user_id)
-        
-        valid_rows = []
         for r in rows:
-            if r['module_name'].lower() == 'erpadmin':
+            code = r['psn_screen_code'].lower()
+            module_name = derive_module(code)
+            if module_name == 'System Administration':
                 continue
-            valid_rows.append(r)
-        rows = valid_rows
-        
-    auth_tables = {}
-    table_modules = {}
-    for r in rows:
-        code = r['psn_screen_code'].lower()
-        auth_tables[code] = r['psn_screen_name']
-        table_modules[code] = r['module_name']
+            auth_tables[code] = r['psn_screen_name']
+            table_modules[code] = module_name
         
     return auth_tables, table_modules
 
 @app.before_server_start
 async def setup_db(app, loop):
+    """Initializes the optimized asyncpg connection pool with statement caching and connection pooling."""
     if DATABASE_URL:
-        app.ctx.pool = await asyncpg.create_pool(dsn=DATABASE_URL, min_size=2, max_size=20)
+        app.ctx.pool = await asyncpg.create_pool(
+            dsn=DATABASE_URL,
+            min_size=5,
+            max_size=25,
+            max_inactive_connection_lifetime=300.0,
+            statement_cache_size=1024
+        )
     else:
-        print("WARNING: DATABASE_URL not set. Running without db pool.")
         app.ctx.pool = None
 
 @app.after_server_stop
 async def close_db(app, loop):
+    """Gracefully closes all pooled connections on server shutdown."""
     if hasattr(app.ctx, 'pool') and app.ctx.pool:
         await app.ctx.pool.close()
 
 def add_security_headers(res):
     res.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     res.headers["Pragma"] = "no-cache"
+    res.headers["X-Content-Type-Options"] = "nosniff"
+    res.headers["X-Frame-Options"] = "SAMEORIGIN"
+    res.headers["X-XSS-Protection"] = "1; mode=block"
+    res.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return res
 
 @app.middleware('request')
@@ -217,7 +292,7 @@ def check_auth(f):
 
         def unauth_response(req):
             if req.path.startswith('/api/'):
-                return response.json({"error": "Unauthorized"}, status=401)
+                return add_security_headers(response.json({"error": "Unauthorized"}, status=401))
             res = response.redirect("/login")
             res.delete_cookie("auth_token")
             return add_security_headers(res)
@@ -250,8 +325,10 @@ def check_auth(f):
         else:
             try:
                 async with app.ctx.pool.acquire() as conn:
-                    user = await conn.fetchrow("SELECT pus_session_id, pus_user_type FROM phc_users_t WHERE pus_user_id = $1", user_id)
+                    user = await conn.fetchrow("SELECT pus_session_id, pus_user_type, pus_status FROM phc_users_t WHERE pus_user_id = $1", user_id)
                     if not user or user["pus_session_id"] != session_id:
+                        return unauth_response(request)
+                    if user.get("pus_status") and user["pus_status"] == 'INA':
                         return unauth_response(request)
                     
                     role = user["pus_user_type"] or "STD"
@@ -274,7 +351,7 @@ def check_auth(f):
                     request.ctx.modules_tree = modules_tree
             except Exception as db_err:
                 print(f"Database Auth Check Error: {db_err}")
-                return response.text(f"Database connection error: {db_err}", status=500)
+                return add_security_headers(response.text(f"Database connection error: {db_err}", status=500))
 
         return await f(request, *args, **kwargs)
     return decorated_function
@@ -285,16 +362,19 @@ async def login(request):
         return render_template('login.html', request=request)
     
     data = request.json or {}
-    username = data.get("username", "")
-    password = data.get("password", "")
+    username = str(data.get("username", "")).strip()
+    password = str(data.get("password", ""))
     
     if not username or not password:
-        return response.json({"status": "error", "message": "Invalid credentials"}, status=401)
+        return add_security_headers(response.json({"status": "error", "message": "Invalid credentials"}, status=401))
 
     async with app.ctx.pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT * FROM phc_users_t WHERE pus_user_name = $1", username)
+        user = await conn.fetchrow("SELECT * FROM phc_users_t WHERE LOWER(pus_usr_name) = LOWER($1)", username)
         
         if user:
+            if user.get('pus_status') and user['pus_status'] == 'INA':
+                return add_security_headers(response.json({"status": "error", "message": "Account is inactive. Please contact your administrator."}, status=403))
+
             stored_pwd = user['pus_pwd'] or ""
             is_valid = False
             if stored_pwd:
@@ -322,7 +402,7 @@ async def login(request):
                 res.add_cookie("auth_token", token, httponly=True, samesite="Lax")
                 return add_security_headers(res)
         
-        return response.json({"status": "error", "message": "Invalid credentials"}, status=401)
+        return add_security_headers(response.json({"status": "error", "message": "Invalid credentials"}, status=401))
 
 @app.route('/logout', methods=['GET'])
 @check_auth
@@ -456,7 +536,7 @@ async def get_dropdown_options(conn, table_name, column_name):
             FROM phc_lookup_values_t 
             WHERE upper(plv_lookup_type_code) = upper($1) 
               AND plv_status = 'ACT'
-              AND CURRENT_DATE BETWEEN plv_start_date AND COALESCE(plv_end_date, CURRENT_DATE + interval '1 day')
+              AND CURRENT_DATE BETWEEN COALESCE(plv_start_date, CURRENT_DATE) AND COALESCE(plv_end_date, CURRENT_DATE + interval '1 day')
             ORDER BY plv_lookup_value_name
         """
         rows = await conn.fetch(query, column_name)
@@ -586,12 +666,7 @@ async def show_table(request, table_name):
         if not pk_column:
             raise NotFound("Table configuration error: No Primary Key")
 
-        columns_data = await conn.fetch("""
-            SELECT column_name, data_type 
-            FROM information_schema.columns 
-            WHERE table_name = $1 AND table_schema = 'public'
-            ORDER BY ordinal_position
-        """, table_name)
+        columns_data = await get_table_columns(conn, table_name)
 
         if not columns_data:
             raise NotFound("Table does not exist")
@@ -690,7 +765,14 @@ async def show_table(request, table_name):
             else:
                 try:
                     if cname not in dynamic_lookups_cache:
-                        l_query = "SELECT plv_lookup_value_code as id, plv_lookup_value_name as name FROM phc_lookup_values_t WHERE upper(plv_lookup_type_code) = upper($1)"
+                        l_query = """
+                            SELECT plv_lookup_value_code as id, plv_lookup_value_name as name 
+                            FROM phc_lookup_values_t 
+                            WHERE upper(plv_lookup_type_code) = upper($1) 
+                              AND plv_status = 'ACT'
+                              AND CURRENT_DATE BETWEEN COALESCE(plv_start_date, CURRENT_DATE) AND COALESCE(plv_end_date, CURRENT_DATE + interval '1 day')
+                            ORDER BY plv_lookup_value_name
+                        """
                         l_rows = await conn.fetch(l_query, cname)
                         if l_rows:
                             dynamic_lookups_cache[cname] = {str(r['id']): str(r['name']) for r in l_rows}
@@ -762,15 +844,8 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         
         table_title = auth_tables[table_name]
         pk_column = await get_pk_column(conn, table_name)
-
-        columns_data = await conn.fetch("""
-            SELECT column_name, data_type, is_nullable, character_maximum_length 
-            FROM information_schema.columns 
-            WHERE table_name = $1 AND table_schema = 'public'
-            ORDER BY ordinal_position
-        """, table_name)
-
-        schema_map = {c['column_name']: dict(c) for c in columns_data}
+        columns_data = await get_table_columns(conn, table_name)
+        schema_map = SCHEMA_CACHE["schema_maps"].get(table_name, {c['column_name']: c for c in columns_data})
         pk_type = schema_map.get(pk_column, {}).get('data_type', 'integer')
 
         q_table = quote_ident(table_name)
@@ -852,13 +927,7 @@ async def export_table_csv(request, table_name):
             raise NotFound("Table not found or unauthorized")
 
         pk_column = await get_pk_column(conn, table_name)
-
-        columns_data = await conn.fetch("""
-            SELECT column_name, data_type
-            FROM information_schema.columns
-            WHERE table_name = $1 AND table_schema = 'public'
-            ORDER BY ordinal_position
-        """, table_name)
+        columns_data = await get_table_columns(conn, table_name)
 
         export_cols = []
         company_csv_col = None
@@ -936,16 +1005,13 @@ async def process_api_action(request, table_name, pk_val):
             return response.json({"error": "Unauthorized"}, status=403)
         
         pk_column = await get_pk_column(conn, table_name)
-        columns_info = await conn.fetch("""
-            SELECT column_name, data_type, character_maximum_length 
-            FROM information_schema.columns WHERE table_name = $1 AND table_schema = 'public'
-        """, table_name)
-        schema_map = {c['column_name']: dict(c) for c in columns_info}
+        columns_info = await get_table_columns(conn, table_name)
+        schema_map = SCHEMA_CACHE["schema_maps"].get(table_name, {c['column_name']: c for c in columns_info})
         pk_type = schema_map.get(pk_column, {}).get('data_type', 'integer')
 
         cast_pk = safe_cast_pk(pk_val, pk_type)
         if method in ('PUT', 'DELETE') and cast_pk is None:
-            return response.json({"error": "Invalid primary key format"}, status=400)
+            return add_security_headers(response.json({"error": "Invalid primary key format"}, status=400))
 
         q_table = quote_ident(table_name)
         q_pk = quote_ident(pk_column)
@@ -955,18 +1021,18 @@ async def process_api_action(request, table_name, pk_val):
                 async with conn.transaction():
                     res = await conn.execute(f"DELETE FROM {q_table} WHERE {q_pk} = $1", cast_pk)
                 if res.endswith(" 0"):
-                    return response.json({"error": "Record not found"}, status=404)
-                return response.json({"status": "success"})
+                    return add_security_headers(response.json({"error": "Record not found"}, status=404))
+                return add_security_headers(response.json({"status": "success"}))
             except Exception as e:
-                return response.json({"error": str(e)}, status=400)
+                return add_security_headers(response.json({"error": str(e)}, status=400))
 
         try:
             data = request.form if request.form else request.json
             if not data:
-                return response.json({"error": "No data provided"}, status=400)
+                return add_security_headers(response.json({"error": "No data provided"}, status=400))
             data_dict = {k: v[0] if isinstance(v, list) else v for k, v in data.items() if k != '_method'}
         except Exception:
-            return response.json({"error": "Invalid or malformed payload"}, status=400)
+            return add_security_headers(response.json({"error": "Invalid or malformed payload"}, status=400))
 
         if request.files:
             upload_dir = os.path.join(os.getcwd(), 'uploads')
@@ -980,16 +1046,68 @@ async def process_api_action(request, table_name, pk_val):
                         f.write(file_obj.body)
                     data_dict[file_key] = f"uploads/{fname}"
 
+        # 1. Enforce strict User Creation and Password Rules
+        if table_name == 'phc_users_t':
+            user_col = 'pus_user_name' if 'pus_user_name' in schema_map else ('pus_usr_name' if 'pus_usr_name' in schema_map else 'username')
+            q_ucol = quote_ident(user_col)
+            
+            if method == 'POST':
+                username_val = str(data_dict.get(user_col) or data_dict.get('pus_user_name') or data_dict.get('pus_usr_name') or '').strip()
+                if not username_val:
+                    return add_security_headers(response.json({"error": "Username is required."}, status=400))
+                
+                # Check uniqueness (case-insensitive)
+                existing = await conn.fetchval(f"SELECT 1 FROM phc_users_t WHERE LOWER({q_ucol}) = LOWER($1)", username_val)
+                if existing:
+                    return add_security_headers(response.json({"error": f"Username '{username_val}' is already taken. Please choose a unique username."}, status=400))
+                
+                pwd_val = str(data_dict.get('pus_pwd') or data_dict.get('password') or '').strip()
+                if not pwd_val:
+                    return add_security_headers(response.json({"error": "Password is required for new users."}, status=400))
+                if not any(c.isupper() for c in pwd_val):
+                    return add_security_headers(response.json({"error": "Password must contain at least one uppercase letter (A-Z)."}, status=400))
+                if len(pwd_val) < 6:
+                    return add_security_headers(response.json({"error": "Password must be at least 6 characters long."}, status=400))
+                
+                data_dict['pus_pwd'] = bcrypt.hashpw(pwd_val.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                data_dict[user_col] = username_val
+            
+            elif method == 'PUT':
+                username_val = str(data_dict.get(user_col) or data_dict.get('pus_user_name') or data_dict.get('pus_usr_name') or '').strip()
+                if username_val:
+                    existing = await conn.fetchval(
+                        f"SELECT 1 FROM phc_users_t WHERE LOWER({q_ucol}) = LOWER($1) AND {q_pk} != $2",
+                        username_val, cast_pk
+                    )
+                    if existing:
+                        return add_security_headers(response.json({"error": f"Username '{username_val}' is already taken. Please choose a unique username."}, status=400))
+                    data_dict[user_col] = username_val
+                
+                pwd_val = str(data_dict.get('pus_pwd') or data_dict.get('password') or '').strip()
+                if pwd_val:
+                    if not any(c.isupper() for c in pwd_val):
+                        return add_security_headers(response.json({"error": "Password must contain at least one uppercase letter (A-Z)."}, status=400))
+                    if len(pwd_val) < 6:
+                        return add_security_headers(response.json({"error": "Password must be at least 6 characters long."}, status=400))
+                    data_dict['pus_pwd'] = bcrypt.hashpw(pwd_val.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+                else:
+                    data_dict.pop('pus_pwd', None)
+
         clean_data = _sanitize_payload(data_dict, pk_column, schema_map, is_update=(method == 'PUT'))
 
-        company_col = next((c for c in schema_map if c.endswith('_company_id') or c == 'company_id'), None)
-        if company_col:
-            if not (table_name == 'phc_screens_t' and role == 'ADM') or company_col not in clean_data or not clean_data[company_col]:
-                user_company = await conn.fetchval("SELECT pus_company_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
-                if user_company:
-                    clean_data[company_col] = user_company
+        # 2. Enforce Multi-tenant Company Segregation
+        if table_name != 'phc_companies_t':
+            company_col = next((c for c in schema_map if (c.endswith('_company_id') or c == 'company_id') and c != pk_column), None)
+            if company_col:
+                if not (table_name == 'phc_screens_t' and role == 'ADM') or company_col not in clean_data or not clean_data[company_col]:
+                    user_company = await conn.fetchval("SELECT pus_company_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
+                    if user_company:
+                        clean_data[company_col] = user_company
 
-        who_cols = [c for c in schema_map if 'created' in c.lower() or 'modified' in c.lower() or 'edited' in c.lower()]
+        # 3. Mandatory Session Username and Audit Trail Binding
+        session_username = getattr(request.ctx, 'username', None) or 'System'
+        session_user_id = getattr(request.ctx, 'user_id', 1)
+        who_cols = [c for c in schema_map if 'created' in c.lower() or 'modified' in c.lower() or 'edited' in c.lower() or 'updated' in c.lower()]
         for wc in who_cols:
             if ('modified' in wc or 'edited' in wc) and 'by' not in wc: clean_data[wc] = datetime.now()
             elif ('modified' in wc or 'edited' in wc) and 'by' in wc: clean_data[wc] = str(user_id or "System")
@@ -1000,6 +1118,11 @@ async def process_api_action(request, table_name, pk_val):
         try:
             async with conn.transaction():
                 if method == 'POST':
+                    # Auto-generate integer/serial primary key if not supplied by form
+                    if pk_column and (pk_column not in clean_data or clean_data[pk_column] is None or clean_data[pk_column] == ""):
+                        if pk_type in ('integer', 'bigint', 'smallint'):
+                            max_val = await conn.fetchval(f"SELECT MAX({q_pk}) FROM {q_table}")
+                            clean_data[pk_column] = (max_val or 0) + 1
                     if table_name == 'phc_role_screen_assignment_t' and 'prs_screen_id' in data_dict:
                         raw_scr = data_dict['prs_screen_id']
                         scr_list = []
@@ -1031,24 +1154,24 @@ async def process_api_action(request, table_name, pk_val):
 
                 elif method == 'PUT':
                     if not clean_data:
-                        return response.json({"error": "No update fields provided"}, status=400)
+                        return add_security_headers(response.json({"error": "No update fields provided"}, status=400))
                     cols = list(clean_data.keys())
                     vals = list(clean_data.values())
                     set_clause = ", ".join([f"{quote_ident(c)} = ${i+1}" for i, c in enumerate(cols)])
                     q = f"UPDATE {q_table} SET {set_clause} WHERE {q_pk} = ${len(vals)+1}"
                     res = await conn.execute(q, *(vals + [cast_pk]))
                     if res.endswith(" 0"):
-                        return response.json({"error": "Record not found"}, status=404)
+                        return add_security_headers(response.json({"error": "Record not found"}, status=404))
 
             if request.headers.get("HX-Request"):
                 res = response.json({"status": "success"})
                 res.headers["HX-Redirect"] = f"/table/{table_name}"
                 return add_security_headers(res)
             else:
-                return response.redirect(f"/table/{table_name}")
+                return add_security_headers(response.redirect(f"/table/{table_name}"))
             
         except Exception as e:
-            return response.json({"error": str(e)}, status=400)
+            return add_security_headers(response.json({"error": str(e)}, status=400))
 
 @app.route('/fixdb', methods=['GET'])
 @check_auth
