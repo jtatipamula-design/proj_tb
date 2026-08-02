@@ -84,7 +84,7 @@
         <button class="icon-btn" 
                 aria-label="{{ module_name }}" 
                 type="button" 
-                @click="openAndFocusModule({{ module_name | tojson }})">
+                onclick="openModuleFromDashboard('{{ module_name | urlencode }}')">
             <span class="icon-btn__name">{{ module_name }}</span>
         </button>
         {% endfor %}

@@ -249,9 +249,7 @@
                             {% elif 'date' in col.data_type or 'timestamp' in col.data_type or 'date' in col.column_name.lower() %}
                                 <input type="date" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" 
                                     value="{{ (col.value|string)[:10] if col.value else '' }}"
-                                    {% if not is_update and 'start' in col.column_name.lower() %}
-                                    x-data x-init="$el.value = new Date().toISOString().split('T')[0]"
-                                    {% endif %}
+                                    {% if not is_update and 'start' in col.column_name.lower() %}data-auto-today="true"{% endif %}
                                     {% if col.required %}required{% endif %}>
                             
                             {# LARGE TEXT #}
@@ -405,10 +403,10 @@
             });
         });
 
-        window.toggleCheckboxes = function(group, state) {
-            const checkboxes = document.querySelectorAll(`input[type="checkbox"][data-group="${group}"]`);
-            checkboxes.forEach(cb => cb.checked = state);
-        };
+        // Initialize auto-today dates
+        document.querySelectorAll('input[data-auto-today="true"]').forEach(el => {
+            if (!el.value) el.value = new Date().toISOString().split('T')[0];
+        });
     })();
 </script>
 {% endblock %}
