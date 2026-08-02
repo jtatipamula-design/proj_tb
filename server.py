@@ -348,13 +348,16 @@ async def login(request):
         return add_security_headers(response.json({"status": "error", "message": "Invalid credentials"}, status=401))
 
     async with app.ctx.pool.acquire() as conn:
-        user = await conn.fetchrow("SELECT * FROM phc_users_t WHERE LOWER(pus_usr_name) = LOWER($1)", username)
+        try:
+            user = await conn.fetchrow("SELECT * FROM phc_users_t WHERE LOWER(pus_user_name) = LOWER($1)", username)
+        except Exception:
+            user = await conn.fetchrow("SELECT * FROM phc_users_t WHERE LOWER(pus_usr_name) = LOWER($1)", username)
         
         if user:
             if user.get('pus_status') and user['pus_status'] == 'INA':
                 return add_security_headers(response.json({"status": "error", "message": "Account is inactive. Please contact your administrator."}, status=403))
 
-            stored_pwd = user['pus_pwd'] or ""
+            stored_pwd = user.get('pus_pwd') or ""
             is_valid = False
             if stored_pwd:
                 try:
@@ -365,17 +368,20 @@ async def login(request):
                     
             if is_valid:
                 session_id = str(uuid.uuid4())
+                user_id_val = user.get('pus_user_id') or user.get('id')
+                user_name_val = user.get('pus_user_name') or user.get('pus_usr_name') or username
+
                 async with conn.transaction():
-                    await conn.execute("UPDATE phc_users_t SET pus_session_id = $1 WHERE pus_user_id = $2", session_id, user['pus_user_id'])
+                    await conn.execute("UPDATE phc_users_t SET pus_session_id = $1 WHERE pus_user_id = $2", session_id, user_id_val)
                 
                 token_payload = {
-                    "user_id": user['pus_user_id'],
-                    "username": user['pus_user_name'],
+                    "user_id": user_id_val,
+                    "username": user_name_val,
                     "session_id": session_id,
                     "exp": time.time() + 86400
                 }
                 token = jwt.encode(token_payload, JWT_SECRET, algorithm="HS256")
-                USER_AUTH_CACHE.pop(user['pus_user_id'], None)
+                USER_AUTH_CACHE.pop(user_id_val, None)
                 
                 res = response.json({"status": "success", "message": "Login successful"})
                 res.add_cookie("auth_token", token, httponly=True, samesite="Lax")

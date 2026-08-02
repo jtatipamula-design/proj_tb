@@ -267,7 +267,7 @@
                                        {% if col.required and not is_update and col.column_name != 'pus_pwd' %}required{% endif %}>
                                 {% if col.column_name == 'pus_pwd' %}
                                     <span style="font-size: 11px; color: var(--color-fog); margin-top: 4px;"><i data-lucide="shield-alert" style="width: 12px; height: 12px; display: inline-block; vertical-align: -2px;"></i> Must contain at least one uppercase letter (A-Z) and 6+ characters.</span>
-                                {% elif col.column_name == 'pus_usr_name' %}
+                                {% elif col.column_name in ('pus_user_name', 'pus_usr_name') %}
                                     <span style="font-size: 11px; color: var(--color-fog); margin-top: 4px;"><i data-lucide="user-check" style="width: 12px; height: 12px; display: inline-block; vertical-align: -2px;"></i> Username must be unique across all system accounts.</span>
                                 {% endif %}
                             {% endif %}
