@@ -11,7 +11,7 @@
       grid-gap: 12px;
       grid-template-columns: repeat(2, 1fr);
       margin: 0 auto;
-      padding: 1rem 0;
+      padding: 1.5rem 0 3rem;
       width: 100%;
       max-width: 1280px;        
     }
@@ -55,11 +55,8 @@
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
     }
 
-    .icon-btn.is-active {
-      background: rgba(186, 215, 247, 0.12) !important;
-      border-color: var(--color-frost-link, #60a5fa) !important;
-      box-shadow: 0 0 16px rgba(96, 165, 250, 0.25) !important;
-      transform: translateY(-2px);
+    .icon-btn:active {
+      transform: scale(0.97);
     }
     
     .icon-btn__name {
@@ -73,136 +70,23 @@
       transition: color 0.2s ease;
     }
     
-    .icon-btn.is-active .icon-btn__name {
-      color: var(--color-frost-link, #60a5fa);
-    }
-    
     html:not(.dark) .icon-btn__name {
       color: #1e293b;
     }
-
-    /* In-Place Module Drawer Tray */
-    .module-drawer {
-      background: var(--glass-surface, rgba(15, 23, 42, 0.65));
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border: 1px solid var(--glass-border);
-      border-radius: 16px;
-      padding: 20px 24px;
-      margin-top: 16px;
-      width: 100%;
-      max-width: 1280px;
-      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.3);
-      animation: drawerSlide 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    @keyframes drawerSlide {
-      from { opacity: 0; transform: translateY(-8px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .screen-pills-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 10px;
-      margin-top: 16px;
-    }
-
-    .screen-pill-card {
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--glass-border);
-      border-radius: 10px;
-      padding: 12px 14px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      text-decoration: none;
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-      color: var(--color-moonlight, #c7d3ea);
-    }
-
-    .screen-pill-card:hover {
-      background: rgba(186, 215, 247, 0.1);
-      border-color: rgba(255, 255, 255, 0.25);
-      color: #ffffff;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
 </style>
 
-<div class="mb-8 w-full flex flex-col items-center" x-data="{ selectedModule: null, drawerSearch: '' }">
-    <p class="text-xs uppercase tracking-widest font-mono mb-3 w-full text-center" style="color: var(--color-fog);">ERP Modules</p>
+<div class="mb-8 w-full flex flex-col items-center">
+    <p class="text-xs uppercase tracking-widest font-mono mb-4 w-full text-center" style="color: var(--color-fog);">ERP Modules</p>
     
     <!-- 6-across Grid (wraps naturally into rows of 6) -->
     <div class="icon-btns">
         {% for module_name, screens in modules_tree.items() %}
         <button class="icon-btn" 
-                :class="{ 'is-active': selectedModule === {{ module_name | tojson }} }"
                 aria-label="{{ module_name }}" 
                 type="button" 
-                @click="selectedModule = (selectedModule === {{ module_name | tojson }} ? null : {{ module_name | tojson }}); drawerSearch = '';">
+                onclick="openSidebarModule({{ module_name | tojson }})">
             <span class="icon-btn__name">{{ module_name }}</span>
         </button>
-        {% endfor %}
-    </div>
-
-    <!-- Option B: In-Place Clean Module Drawer -->
-    <div class="w-full max-w-7xl flex flex-col items-center">
-        {% for module_name, screens in modules_tree.items() %}
-        <div x-show="selectedModule === {{ module_name | tojson }}" 
-             x-cloak 
-             class="module-drawer">
-            
-            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 border-b" style="border-color: var(--glass-border);">
-                <div class="flex items-center gap-3">
-                    <h2 class="text-base font-bold flex items-center gap-2" style="color: var(--color-glacier);">
-                        <span>{{ module_name }}</span>
-                        <span class="text-xs px-2.5 py-0.5 rounded-full font-mono font-normal" style="background: rgba(186, 215, 247, 0.12); color: var(--color-frost-link);">{{ screens|length }} Screens</span>
-                    </h2>
-                </div>
-
-                <div class="mt-3 sm:mt-0 flex items-center gap-3 w-full sm:w-auto">
-                    <!-- Drawer Screen Search -->
-                    <div class="relative flex-1 sm:w-60">
-                        <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 opacity-50"></i>
-                        <input type="text" 
-                               x-model="drawerSearch" 
-                               placeholder="Filter {{ module_name }} screens..." 
-                               class="w-full text-xs rounded-lg pl-8 pr-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                               style="background: var(--color-midnight-ink, #0f172a); border: 1px solid var(--glass-border); color: var(--color-moonlight, #f8fafc);">
-                    </div>
-
-                    <!-- Close Drawer Button -->
-                    <button type="button" 
-                            @click="selectedModule = null" 
-                            class="p-1.5 rounded-lg transition-colors opacity-70 hover:opacity-100"
-                            style="background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border);"
-                            title="Close">
-                        <i data-lucide="x" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Screens Pills Grid -->
-            <div class="screen-pills-grid">
-                {% for screen in screens %}
-                <a href="/table/{{ screen.code }}" 
-                   x-show="drawerSearch === '' || {{ screen.name | tojson }}.toLowerCase().includes(drawerSearch.toLowerCase()) || {{ screen.code | tojson }}.toLowerCase().includes(drawerSearch.toLowerCase())"
-                   class="screen-pill-card group">
-                    <div class="flex flex-col min-w-0 pr-2">
-                        <span class="text-xs font-semibold truncate group-hover:text-blue-400 transition-colors" style="color: var(--color-glacier);">
-                            {{ screen.name }}
-                        </span>
-                        <span class="text-[11px] font-mono opacity-50 truncate">
-                            {{ screen.code }}
-                        </span>
-                    </div>
-                    <i data-lucide="arrow-right" class="w-3.5 h-3.5 opacity-40 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all flex-shrink-0"></i>
-                </a>
-                {% endfor %}
-            </div>
-
-        </div>
         {% endfor %}
     </div>
 </div>
