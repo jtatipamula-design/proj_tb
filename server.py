@@ -713,54 +713,53 @@ async def show_table(request, table_name):
 
         resolved_rows = [dict(r) for r in raw_rows]
         
-        # We cache lookup values across the table to avoid N+1 queries
-        dynamic_lookups_cache = {}
+        # Batch fetch all active lookup types in a SINGLE fast query to eliminate N+1 latency
+        lookup_map = {}
+        try:
+            l_rows = await conn.fetch("""
+                SELECT upper(plv_lookup_type_code) as type_code, plv_lookup_value_code as id, plv_lookup_value_name as name 
+                FROM phc_lookup_values_t 
+                WHERE plv_status = 'ACT'
+                  AND CURRENT_DATE BETWEEN COALESCE(plv_start_date, CURRENT_DATE) AND COALESCE(plv_end_date, CURRENT_DATE + interval '1 day')
+            """)
+            for lr in l_rows:
+                tc = lr['type_code']
+                if tc not in lookup_map:
+                    lookup_map[tc] = {}
+                lookup_map[tc][str(lr['id'])] = str(lr['name'])
+        except Exception:
+            lookup_map = {}
+
+        # Resolve FKs and lookups
+        fk_map = await get_fk_map(conn, table_name)
         
         for c in columns_data:
             cname = c['column_name']
             if cname == pk_column: continue
             
-            # 1. Check for Foreign Key Relations
+            # 1. Foreign Key Resolution
             f_table, f_pk = await resolve_fk_details(conn, table_name, cname)
             if f_table and f_pk:
                 ids = set(r[cname] for r in resolved_rows if r[cname] is not None)
                 if ids:
                     try:
-                        lookup_dict = await get_fk_display_dict(conn, f_table, f_pk, specific_ids=ids)
+                        fk_dict = await get_fk_display_dict(conn, f_table, f_pk, specific_ids=ids)
                         for r in resolved_rows:
                             val = r[cname]
-                            if val in lookup_dict:
-                                r[cname] = f"{lookup_dict[val]} (ID: {val})"
+                            if val in fk_dict:
+                                r[cname] = f"{fk_dict[val]} (ID: {val})"
                     except Exception as e:
-                        print(f"Error resolving table FK {cname}: {e}")
+                        pass
+            
+            # 2. Dynamic Lookups (In-Memory Resolution)
+            upper_cname = cname.upper()
+            if upper_cname in lookup_map:
+                col_lookup = lookup_map[upper_cname]
+                for r in resolved_rows:
+                    val_str = str(r[cname]) if r[cname] is not None else None
+                    if val_str and val_str in col_lookup:
+                        r[cname] = col_lookup[val_str]
                         
-            # 2. Check for Dynamic Lookups
-            else:
-                try:
-                    if cname not in dynamic_lookups_cache:
-                        l_query = """
-                            SELECT plv_lookup_value_code as id, plv_lookup_value_name as name 
-                            FROM phc_lookup_values_t 
-                            WHERE upper(plv_lookup_type_code) = upper($1) 
-                              AND plv_status = 'ACT'
-                              AND CURRENT_DATE BETWEEN COALESCE(plv_start_date, CURRENT_DATE) AND COALESCE(plv_end_date, CURRENT_DATE + interval '1 day')
-                            ORDER BY plv_lookup_value_name
-                        """
-                        l_rows = await conn.fetch(l_query, cname)
-                        if l_rows:
-                            dynamic_lookups_cache[cname] = {str(r['id']): str(r['name']) for r in l_rows}
-                        else:
-                            dynamic_lookups_cache[cname] = {}
-                            
-                    if dynamic_lookups_cache[cname]:
-                        lookup_dict = dynamic_lookups_cache[cname]
-                        for r in resolved_rows:
-                            val_str = str(r[cname]) if r[cname] is not None else None
-                            if val_str and val_str in lookup_dict:
-                                r[cname] = f"{lookup_dict[val_str]}"
-                except Exception:
-                    pass
-                    
         rows = resolved_rows
 
     total_pages = max(1, (total_count + per_page - 1) // per_page)
