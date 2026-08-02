@@ -186,31 +186,37 @@ async def get_authorized_tables(conn, user_id, role):
             ORDER BY m.pmd_module_name, s.psn_screen_name
         """
         rows = await conn.fetch(query)
-        for r in rows:
-            code = r['psn_screen_code'].lower()
-            auth_tables[code] = r['psn_screen_name']
-            table_modules[code] = r['module_name']
     else:
-        query = """
-            SELECT DISTINCT 
-                s.psn_screen_code, 
-                s.psn_screen_name, 
-                COALESCE(m.pmd_module_name, 'General') AS module_name
-            FROM phc_screens_t s
-            JOIN phc_role_screen_assignment_t rsa ON s.psn_screen_id = rsa.prs_screen_id
-            JOIN phc_user_roles_assignment_t ura ON rsa.prs_role_id = ura.pua_role_id
-            LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
-            WHERE ura.pua_user_id = $1 
-              AND (s.psn_status = 'ACT' OR s.psn_status IS NULL)
-            ORDER BY m.pmd_module_name, s.psn_screen_name
-        """
-        rows = await conn.fetch(query, user_id)
-        for r in rows:
-            code = r['psn_screen_code'].lower()
-            if r['module_name'].lower() == 'erpadmin':
-                continue
-            auth_tables[code] = r['psn_screen_name']
-            table_modules[code] = r['module_name']
+        # Try fast compiled Database View first; gracefully fallback to base tables if view is not yet created
+        try:
+            rows = await conn.fetch("""
+                SELECT psn_screen_code, psn_screen_name, module_name
+                FROM v_user_authorized_screens
+                WHERE pua_user_id = $1
+                ORDER BY module_name, psn_screen_name
+            """, user_id)
+        except Exception:
+            query = """
+                SELECT DISTINCT 
+                    s.psn_screen_code, 
+                    s.psn_screen_name, 
+                    COALESCE(m.pmd_module_name, 'General') AS module_name
+                FROM phc_screens_t s
+                JOIN phc_role_screen_assignment_t rsa ON s.psn_screen_id = rsa.prs_screen_id
+                JOIN phc_user_roles_assignment_t ura ON rsa.prs_role_id = ura.pua_role_id
+                LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
+                WHERE ura.pua_user_id = $1 
+                  AND (s.psn_status = 'ACT' OR s.psn_status IS NULL)
+                ORDER BY m.pmd_module_name, s.psn_screen_name
+            """
+            rows = await conn.fetch(query, user_id)
+
+    for r in rows:
+        code = r['psn_screen_code'].lower()
+        if role != 'ADM' and r['module_name'].lower() == 'erpadmin':
+            continue
+        auth_tables[code] = r['psn_screen_name']
+        table_modules[code] = r['module_name']
 
     return auth_tables, table_modules
 

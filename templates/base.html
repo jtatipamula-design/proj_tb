@@ -167,7 +167,21 @@
           isNavigating: false,
           theme: localStorage.getItem('theme') || 'dark',
           searchQuery: '',
-          activeModule: localStorage.getItem('activeModule') || null,
+          openModules: JSON.parse(localStorage.getItem('openModules') || '{}'),
+          toggleModule(mod) {
+              this.openModules[mod] = !this.openModules[mod];
+              localStorage.setItem('openModules', JSON.stringify(this.openModules));
+          },
+          openAndFocusModule(mod) {
+              this.sidebarOpen = true;
+              this.openModules[mod] = true;
+              localStorage.setItem('sidebarOpen', 'true');
+              localStorage.setItem('openModules', JSON.stringify(this.openModules));
+              this.$nextTick(() => {
+                  const el = document.getElementById('sidebar-mod-' + encodeURIComponent(mod));
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+              });
+          },
           toggleTheme() {
               document.documentElement.classList.add('theme-transitioning');
               
@@ -182,7 +196,6 @@
           }
       }"
       x-init="if (theme === 'dark') { document.documentElement.classList.add('dark'); document.documentElement.classList.remove('light-mode'); } else { document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light-mode'); }"
-      @open-module.window="sidebarOpen = true; activeModule = $event.detail.module; localStorage.setItem('sidebarOpen', 'true'); localStorage.setItem('activeModule', $event.detail.module);"
       x-effect="localStorage.setItem('sidebarOpen', sidebarOpen)">
 
     <!-- Animated Flux Background + Subtle Grid -->
@@ -239,27 +252,30 @@
                 <!-- Module Tree Navigation -->
                 <div class="flex-1 overflow-y-auto py-2 px-3 space-y-1.5">
                     {% for module_name, screens in modules_tree.items() %}
-                    <div x-data='{ open: activeModule === {{ module_name | tojson }} }' 
-                         @open-module.window="if ($event.detail.module === {{ module_name | tojson }}) { open = true; }"
-                         x-init='$watch("activeModule", val => { if(val === {{ module_name | tojson }}) { open = true; localStorage.setItem("activeModule", val); } })'
+                    <div id="sidebar-mod-{{ module_name | urlencode }}" 
                          x-show='searchQuery === "" || {{ module_name | tojson }}.toLowerCase().includes(searchQuery.toLowerCase()) || [{% for s in screens %}{{ s.search_terms | tojson }}{% if not loop.last %},{% endif %}{% endfor %}].some(n => n.includes(searchQuery.toLowerCase()))'
                          class="mb-1">
 
-                        <button @click='open = !open; activeModule = open ? {{ module_name | tojson }} : null; localStorage.setItem("activeModule", activeModule || "");' 
-                                :class="{ 'ring-1 ring-brand-500/30': open }"
+                        <button @click="toggleModule({{ module_name | tojson }})" 
+                                :class="{ 'ring-1 ring-brand-500/30': openModules[{{ module_name | tojson }}] }"
                                 class="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium rounded-lg transition-all"
-                                :style="open ? 'background: rgba(186, 215, 247, 0.12); color: var(--color-frost-link);' : 'color: var(--color-moonlight);'"
-                                @mouseenter="$el.style.background = open ? 'rgba(186, 215, 247, 0.12)' : 'rgba(186, 215, 247, 0.08)'"
-                                @mouseleave="$el.style.background = open ? 'rgba(186, 215, 247, 0.12)' : 'transparent'">
+                                :style="openModules[{{ module_name | tojson }}] ? 'background: rgba(186, 215, 247, 0.12); color: var(--color-frost-link);' : 'color: var(--color-moonlight);'"
+                                @mouseenter="$el.style.background = openModules[{{ module_name | tojson }}] ? 'rgba(186, 215, 247, 0.12)' : 'rgba(186, 215, 247, 0.08)'"
+                                @mouseleave="$el.style.background = openModules[{{ module_name | tojson }}] ? 'rgba(186, 215, 247, 0.12)' : 'transparent'">
                             <span class="flex items-center gap-3">
                                 <i data-lucide="folder" class="w-4 h-4"></i>
                                 {{ module_name }}
                             </span>
-                            <i data-lucide="chevron-down" class="w-4 h-4 transition-transform opacity-60" :class="{'rotate-180': open}"></i>
+                            <i data-lucide="chevron-down" class="w-4 h-4 transition-transform opacity-60" 
+                               :class="{'rotate-180': openModules[{{ module_name | tojson }}]}"></i>
                         </button>
                         
                         <!-- Nested Screens -->
-                        <div x-show="open" x-collapse x-cloak class="mt-1 space-y-1 px-2 ml-6 py-1" style="border-left: 2px solid var(--glass-border);">
+                        <div x-show="openModules[{{ module_name | tojson }}]" 
+                             x-collapse 
+                             x-cloak 
+                             class="mt-1 space-y-1 px-2 ml-6 py-1" 
+                             style="border-left: 2px solid var(--glass-border);">
                             {% for screen in screens %}
                             <a href="/table/{{ screen.code }}" 
                                preload="mouseover"
