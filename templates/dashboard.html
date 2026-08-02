@@ -84,7 +84,7 @@
         <button class="icon-btn" 
                 aria-label="{{ module_name }}" 
                 type="button" 
-                onclick="openSidebarModule({{ module_name | tojson }})">
+                @click="openAndFocusModule({{ module_name | tojson }})">
             <span class="icon-btn__name">{{ module_name }}</span>
         </button>
         {% endfor %}
