@@ -1109,24 +1109,11 @@ async def process_api_action(request, table_name, pk_val):
         session_user_id = getattr(request.ctx, 'user_id', 1)
         who_cols = [c for c in schema_map if 'created' in c.lower() or 'modified' in c.lower() or 'edited' in c.lower() or 'updated' in c.lower()]
         for wc in who_cols:
-            wc_lower = wc.lower()
-            target_type = schema_map.get(wc, {}).get('data_type', '').lower()
-            is_by = 'by' in wc_lower or wc_lower.endswith('_user')
-            user_val = session_user_id if ('int' in target_type or 'numeric' in target_type) else session_username
-            if 'modified' in wc_lower or 'edited' in wc_lower or 'updated' in wc_lower:
-                if is_by:
-                    clean_data[wc] = user_val
-                else:
-                    clean_data[wc] = datetime.now()
+            if ('modified' in wc or 'edited' in wc) and 'by' not in wc: clean_data[wc] = datetime.now()
+            elif ('modified' in wc or 'edited' in wc) and 'by' in wc: clean_data[wc] = str(user_id or "System")
             elif method == 'POST':
-                if is_by:
-                    clean_data[wc] = user_val
-                else:
-                    clean_data[wc] = datetime.now()
-            elif method == 'PUT':
-                # Preserve created_by / created_on permanently on update
-                if 'created' in wc_lower or 'creation' in wc_lower:
-                    clean_data.pop(wc, None)
+                if 'created' in wc and 'by' not in wc: clean_data[wc] = datetime.now()
+                elif 'created' in wc and 'by' in wc: clean_data[wc] = str(user_id or "System")
 
         try:
             async with conn.transaction():
