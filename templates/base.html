@@ -182,6 +182,7 @@
           }
       }"
       x-init="if (theme === 'dark') { document.documentElement.classList.add('dark'); document.documentElement.classList.remove('light-mode'); } else { document.documentElement.classList.remove('dark'); document.documentElement.classList.add('light-mode'); }"
+      @open-module.window="sidebarOpen = true; activeModule = $event.detail.module; localStorage.setItem('sidebarOpen', 'true'); localStorage.setItem('activeModule', $event.detail.module);"
       x-effect="localStorage.setItem('sidebarOpen', sidebarOpen)">
 
     <!-- Animated Flux Background + Subtle Grid -->
@@ -205,15 +206,7 @@
 
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container"></div>
-    <div id="app-body" 
-         hx-ext="preload"
-         hx-boost="true" 
-         hx-target="#main-dynamic-content" 
-         hx-select="#main-dynamic-content" 
-         hx-swap="outerHTML show:window:top"
-         hx-push-url="true"
-         hx-indicator="#global-spinner"
-         class="flex h-screen overflow-hidden relative z-10">
+    <div id="app-body" class="flex h-screen overflow-hidden relative z-10">
         
         <!-- Sidebar -->
         <aside class="glass-panel flex-shrink-0 flex flex-col transition-all duration-300 ease-in-out overflow-hidden z-20 border-r"
@@ -247,6 +240,7 @@
                 <div class="flex-1 overflow-y-auto py-2 px-3 space-y-1.5">
                     {% for module_name, screens in modules_tree.items() %}
                     <div x-data='{ open: activeModule === {{ module_name | tojson }} }' 
+                         @open-module.window="if ($event.detail.module === {{ module_name | tojson }}) { open = true; }"
                          x-init='$watch("activeModule", val => { if(val === {{ module_name | tojson }}) { open = true; localStorage.setItem("activeModule", val); } })'
                          x-show='searchQuery === "" || {{ module_name | tojson }}.toLowerCase().includes(searchQuery.toLowerCase()) || [{% for s in screens %}{{ s.search_terms | tojson }}{% if not loop.last %},{% endif %}{% endfor %}].some(n => n.includes(searchQuery.toLowerCase()))'
                          class="mb-1">
@@ -322,15 +316,6 @@
 
         <!-- Main Content Area -->
         <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
-            
-            <!-- Global Loading Spinner Indicator for HTMX -->
-            <div id="global-spinner" class="htmx-indicator absolute inset-0 z-50 flex items-center justify-center transition-opacity"
-                 style="background: rgba(5, 6, 15, 0.35); backdrop-filter: blur(3px);">
-                <div class="glass-panel p-5 rounded-2xl shadow-2xl flex items-center gap-4 border" style="border-color: var(--glass-border);">
-                    <div class="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span class="font-semibold text-sm" style="color: var(--color-moonlight);">Loading...</span>
-                </div>
-            </div>
 
             <!-- Top Header -->
             <header class="glass-panel border-b px-6 py-4 flex items-center justify-between sticky top-0 z-10 transition-all duration-300 ease-in-out"
@@ -413,19 +398,10 @@
             }
         });
 
-        // ======== TOAST NOTIFICATIONS ========
-        function showToast(message, type = 'success') {
-            const container = document.getElementById('toast-container');
-            if (!container) return;
-            const toast = document.createElement('div');
-            toast.className = `toast toast-${type}`;
-            const icon = type === 'success' ? 'check-circle-2' : 'alert-circle';
-            const iconColor = type === 'success' ? 'var(--color-cipher-mint)' : 'var(--color-ember)';
-            toast.innerHTML = `<i data-lucide="${icon}" style="color: ${iconColor}; min-width: 20px;"></i> ${message}`;
-            container.appendChild(toast);
-            lucide.createIcons();
-            setTimeout(() => toast.remove(), 4000);
-        }
+        // ======== HELPER TO OPEN MODULE ACCORDION IN SIDEBAR ========
+        window.openSidebarModule = function(moduleName) {
+            window.dispatchEvent(new CustomEvent('open-module', { detail: { module: moduleName } }));
+        };
     </script>
 </body>
 </html>

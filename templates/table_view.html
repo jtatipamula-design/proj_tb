@@ -250,28 +250,23 @@
     </div>
 
     <!-- Floating Round Glass Action Dock Pill (Bottom Center) -->
-    <div class="floating-action-dock">
+    <div class="floating-action-dock" style="position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 999; pointer-events: auto;">
         <!-- Refresh Button -->
-        <button class="dock-btn" title="Refresh Table" 
-                hx-get="/table/{{ table_name }}" 
-                hx-target="#tableContent" 
-                hx-select="#tableContent" 
-                hx-swap="outerHTML"
-                hx-include="#searchInput{% if table_name == 'phc_lookup_values_t' %}, #typeFilter{% endif %}">
+        <button class="dock-btn" onclick="window.location.reload()" title="Refresh Table" type="button">
             <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
         </button>
 
         <div class="dock-divider"></div>
 
         <!-- Export CSV -->
-        <a href="/export/{{ table_name }}" hx-boost="false" class="dock-btn" title="Export CSV">
+        <a href="/export/{{ table_name }}" class="dock-btn" title="Export CSV">
             <i data-lucide="download" style="width: 16px; height: 16px;"></i>
         </a>
 
         <div class="dock-divider"></div>
 
         <!-- Add Record -->
-        <a href="/new/{{ table_name }}" id="topAddRecordBtn" preload="mouseover" class="dock-btn" title="Add Record">
+        <a href="/new/{{ table_name }}" id="topAddRecordBtn" class="dock-btn" title="Add Record">
             <i data-lucide="plus" style="width: 18px; height: 18px;"></i>
         </a>
     </div>
