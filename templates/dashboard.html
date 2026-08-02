@@ -5,18 +5,27 @@
 
 {% block content %}
 <style>
-    /* GlassIcons CSS */
+    /* 6-Column Glass Module Grid */
     .icon-btns {
       display: grid;
-      grid-gap: 2em 2em;
-      grid-template-columns: repeat(6, 3fr);
-      margin: auto;
-      padding: 2em 0;
-      overflow: visible;
-      font-size: 26px; /* Scales the entire icon system */
-      justify-items: center;
+      grid-gap: 12px;
+      grid-template-columns: repeat(2, 1fr);
+      margin: 0 auto;
+      padding: 1rem 0 2rem;
       width: 100%;
-      max-width: 1000px;        
+      max-width: 1200px;        
+    }
+    
+    @media (min-width: 640px) {
+      .icon-btns {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    @media (min-width: 1024px) {
+      .icon-btns {
+        grid-template-columns: repeat(6, 1fr);
+      }
     }
     
     .icon-btn {
@@ -24,102 +33,55 @@
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
       border: 1px solid var(--glass-border);
-      border-radius: 1.25em;
+      border-radius: 12px;
       outline: none;
       position: relative;
-      width: 4.5em;
-      height: 4.5em;
+      min-height: 72px;
+      padding: 12px 10px;
       -webkit-tap-highlight-color: transparent;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      text-align: center;
+      transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease, border-color 0.2s ease;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
     }
     
     .icon-btn:hover,
     .icon-btn:focus-visible {
-      transform: translateY(-6px) scale(1.05);
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25), 0 0 15px rgba(20, 184, 166, 0.2);
+      transform: translateY(-3px);
+      border-color: rgba(20, 184, 166, 0.5);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2), 0 0 12px rgba(20, 184, 166, 0.2);
     }
     
-    .icon-btn__front {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    .icon-btn__icon {
-      margin: auto;
-      width: 1.8em;
-      height: 1.8em;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--color-glacier, #fff);
-      transition: color 0.3s ease;
-    }
-    
-    html:not(.dark) .icon-btn__icon { color: var(--color-glacier, #1f2937); }
-    
-    .icon-btn__label {
-      font-size: 0.6em; /* Relative to 24px */
+    .icon-btn__name {
+      font-size: 13px;
       font-weight: 600;
+      letter-spacing: 0.02em;
+      line-height: 1.35;
       font-family: var(--font-ui);
-      color: var(--color-moonlight, #c7d3ea);
-      white-space: nowrap;
-      text-align: center;
-      line-height: 2;
-      opacity: 0.85;
-      position: absolute;
-      top: 100%;
-      right: -50%;
-      left: -50%;
-      transform: translateY(15%);
-      transition: opacity 0.3s ease, color 0.3s ease;
-    }
-    
-    html:not(.dark) .icon-btn__label { color: #475569; }
-    
-    .icon-btn:focus-visible .icon-btn__label,
-    .icon-btn:hover .icon-btn__label {
-      opacity: 1;
       color: var(--color-glacier, #fff);
+      word-break: break-word;
+      transition: color 0.2s ease;
     }
     
-    html:not(.dark) .icon-btn:hover .icon-btn__label { color: #000; }
-    
-    @media (min-width: 768px) {
-      .icon-btns {
-        grid-template-columns: repeat(3, 1fr);
-      }
+    html:not(.dark) .icon-btn__name {
+      color: #1e293b;
     }
-    @media (min-width: 1024px) {
-      .icon-btns {
-        grid-template-columns: repeat(4, 1fr);
-      }
+
+    .icon-btn:hover .icon-btn__name {
+      color: var(--color-aurora, #14b8a6);
     }
 </style>
 
-<div class="mb-10 w-full flex flex-col items-center">
-    <p class="text-sm uppercase tracking-widest font-mono mb-8 w-full text-center" style="color: var(--color-fog);">Active Modules</p>
+<div class="mb-8 w-full flex flex-col items-center">
+    <p class="text-xs uppercase tracking-widest font-mono mb-4 w-full text-center" style="color: var(--color-fog);">Active Modules</p>
     
-    {% set icons = ['file-text', 'box', 'users', 'database', 'shopping-cart', 'truck', 'user-cog', 'git-merge', 'bar-chart-2'] %}
-
     <div class="icon-btns">
         {% for module_name, screens in modules_tree.items() %}
-        {% set i = icons[loop.index0 % icons|length] %}
-        
         <button class="icon-btn" aria-label="{{ module_name }}" type="button" @click='activeModule = {{ module_name | tojson }}; sidebarOpen = true;'>
-          <span class="icon-btn__front">
-            <span class="icon-btn__icon" aria-hidden="true">
-              <i data-lucide="{{ i }}" style="width: 100%; height: 100%;"></i>
-            </span>
-          </span>
-          <span class="icon-btn__label">{{ module_name }}</span>
+            <span class="icon-btn__name">{{ module_name }}</span>
         </button>
         {% endfor %}
     </div>
@@ -133,9 +95,10 @@
 {% endif %}
 
 <script>
-    // Ensure icons in the new cards are rendered
     document.addEventListener('DOMContentLoaded', () => {
-        lucide.createIcons();
+        if (window.lucide) {
+            lucide.createIcons();
+        }
     });
 </script>
 {% endblock %}

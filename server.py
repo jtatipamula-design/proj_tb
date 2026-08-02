@@ -992,10 +992,10 @@ async def process_api_action(request, table_name, pk_val):
         who_cols = [c for c in schema_map if 'created' in c.lower() or 'modified' in c.lower() or 'edited' in c.lower()]
         for wc in who_cols:
             if ('modified' in wc or 'edited' in wc) and 'by' not in wc: clean_data[wc] = datetime.now()
-            elif ('modified' in wc or 'edited' in wc) and 'by' in wc: clean_data[wc] = "System"
+            elif ('modified' in wc or 'edited' in wc) and 'by' in wc: clean_data[wc] = str(user_id or "System")
             elif method == 'POST':
                 if 'created' in wc and 'by' not in wc: clean_data[wc] = datetime.now()
-                elif 'created' in wc and 'by' in wc: clean_data[wc] = "System"
+                elif 'created' in wc and 'by' in wc: clean_data[wc] = str(user_id or "System")
 
         try:
             async with conn.transaction():
