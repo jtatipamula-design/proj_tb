@@ -210,7 +210,8 @@
                                     {% set val = row[col.raw] %}
                                     {% if val == 'ACT' %} <span class="pill pill-act">Active</span>
                                     {% elif val == 'INA' %} <span class="pill pill-ina">Inactive</span>
-                                    {% elif val == 'None' or val == None %} <span class="pill pill-def">Empty</span>
+                                    {% elif val == 'None' or val == None or val == '' %} <span class="pill pill-def">Empty</span>
+                                    {% elif val.strftime is defined %} {{ val.strftime('%Y-%m-%d %H:%M') }}
                                     {% else %} {{ val }} {% endif %}
                                 </td>
                             {% endfor %}
