@@ -406,21 +406,23 @@
             }
         }
 
-        // ======== OPEN SPECIFIC MODULE FROM DASHBOARD TILE ========
+        // ======== OPEN / MINIMIZE SPECIFIC MODULE FROM DASHBOARD TILE ========
         window.openModuleFromDashboard = function(modId) {
-            // 1. Ensure sidebar is open
-            setSidebarOpen(true);
+            const aside = document.getElementById('main-sidebar');
+            const isClosed = aside ? aside.classList.contains('sidebar-closed') : false;
             
-            // 2. Open the requested module accordion
+            // 1. Ensure sidebar is open
+            if (isClosed) {
+                setSidebarOpen(true);
+            }
+            
+            // 2. Toggle the requested module accordion (opens if closed, minimizes if open)
+            toggleSidebarModule(modId);
+            
+            // 3. If it is now open, smoothly scroll directly into view
             const screens = document.getElementById('mod-screens-' + modId);
             const container = document.getElementById('mod-container-' + modId);
-            if (screens) {
-                screens.classList.remove('hidden');
-                const chevron = container ? container.querySelector('.mod-chevron') : null;
-                if (chevron) chevron.classList.add('rotate-180');
-                localStorage.setItem('mod_' + modId, 'open');
-                
-                // 3. Smoothly scroll directly into view
+            if (screens && !screens.classList.contains('hidden')) {
                 setTimeout(() => {
                     if (container) container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }, 100);
@@ -525,7 +527,7 @@
             document.querySelectorAll('.sidebar-module').forEach(mod => {
                 const modId = mod.id.replace('mod-container-', '');
                 if (localStorage.getItem('mod_' + modId) === 'open') {
-                    mod.querySelector('.mod-screens')?.classList.remove('hidden');
+                    mod.querySelector('.mod-screen-list')?.classList.remove('hidden');
                     mod.querySelector('.mod-chevron')?.classList.add('rotate-180');
                 }
             });

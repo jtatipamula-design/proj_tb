@@ -274,6 +274,29 @@
                 {% endfor %}
             </div>
 
+            {% if is_update and audit_info and (audit_info.created_by or audit_info.modified_by) %}
+            <div style="margin-top: 24px; padding: 14px 18px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--color-glass-border); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; font-size: 12px; color: var(--color-fog);">
+                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 24px;">
+                    {% if audit_info.created_by %}
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <i data-lucide="user-plus" style="width: 15px; height: 15px; color: var(--color-cyan);"></i>
+                        <span>Created by: <strong style="color: var(--color-white);">{{ audit_info.created_by }}</strong>{% if audit_info.created_at %} <span style="opacity: 0.7;">({{ audit_info.created_at.strftime('%Y-%m-%d %H:%M') if audit_info.created_at.strftime is defined else audit_info.created_at }})</span>{% endif %}</span>
+                    </div>
+                    {% endif %}
+                    {% if audit_info.modified_by %}
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <i data-lucide="user-check" style="width: 15px; height: 15px; color: var(--color-amber);"></i>
+                        <span>Last edited by: <strong style="color: var(--color-white);">{{ audit_info.modified_by }}</strong>{% if audit_info.modified_at %} <span style="opacity: 0.7;">({{ audit_info.modified_at.strftime('%Y-%m-%d %H:%M') if audit_info.modified_at.strftime is defined else audit_info.modified_at }})</span>{% endif %}</span>
+                    </div>
+                    {% endif %}
+                </div>
+                <div style="font-family: var(--font-mono); font-size: 11px; opacity: 0.6; display: flex; align-items: center; gap: 4px;">
+                    <i data-lucide="shield-check" style="width: 13px; height: 13px; color: var(--color-emerald);"></i>
+                    <span>Audit Trail Logged</span>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="form-actions">
                 <div class="action-group">
                     <a href="/table/{{ table_name }}" preload="mouseover" class="btn-cancel">

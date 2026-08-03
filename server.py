@@ -658,27 +658,50 @@ async def show_table(request, table_name):
 
         columns = []
         date_columns = []
+        audit_by_columns = []
+        audit_date_columns = []
         company_col_def = None
+
         for c in columns_data:
             cname = c['column_name']
+            cname_low = cname.lower()
             if cname in (pk_column, 'psn_screen_id'): continue
             
-            is_company_col = 'company_id' in cname.lower()
+            is_company_col = 'company_id' in cname_low
             if is_company_col:
                 if role == 'ADM' and table_modules.get(table_name, '').lower() == 'erpadmin':
                     clean_label = cname.split('_', 1)[-1].replace('_', ' ').title()
                     company_col_def = {"raw": cname, "column_name": cname, "label": clean_label}
                 continue
             
-            clean_label = cname.split('_', 1)[-1].replace('_', ' ').title()
+            # 1. Audit "By" columns (Created By / Modified By)
+            if 'created' in cname_low and 'by' in cname_low:
+                audit_by_columns.append({"raw": cname, "column_name": cname, "label": "Created By"})
+                continue
+            elif ('modified' in cname_low or 'edited' in cname_low or 'updated' in cname_low) and 'by' in cname_low:
+                audit_by_columns.append({"raw": cname, "column_name": cname, "label": "Modified By"})
+                continue
             
+            # 2. Audit "Date" columns (Created Date / Modified Date)
+            elif 'created' in cname_low and ('date' in c['data_type'] or 'timestamp' in c['data_type'] or 'date' in cname_low):
+                audit_date_columns.append({"raw": cname, "column_name": cname, "label": "Created Date"})
+                continue
+            elif ('modified' in cname_low or 'edited' in cname_low or 'updated' in cname_low) and ('date' in c['data_type'] or 'timestamp' in c['data_type'] or 'date' in cname_low):
+                audit_date_columns.append({"raw": cname, "column_name": cname, "label": "Modified Date"})
+                continue
+
+            clean_label = cname.split('_', 1)[-1].replace('_', ' ').title()
             col_def = {"raw": cname, "column_name": cname, "label": clean_label}
+            
+            # 3. Regular Date columns vs standard business columns
             if 'date' in c['data_type'] or 'timestamp' in c['data_type']:
                 date_columns.append(col_def)
             else:
                 columns.append(col_def)
                 
         columns.extend(date_columns)
+        columns.extend(audit_by_columns)
+        columns.extend(audit_date_columns)
         if company_col_def:
             columns.append(company_col_def)
 
@@ -885,6 +908,20 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         if company_form_def:
             columns.append(company_form_def)
 
+        audit_info = {}
+        if is_update and row_data:
+            created_by_col = next((c for c in row_data.keys() if 'created' in c.lower() and 'by' in c.lower()), None)
+            created_at_col = next((c for c in row_data.keys() if 'created' in c.lower() and 'by' not in c.lower()), None)
+            modified_by_col = next((c for c in row_data.keys() if ('modified' in c.lower() or 'edited' in c.lower() or 'updated' in c.lower()) and 'by' in c.lower()), None)
+            modified_at_col = next((c for c in row_data.keys() if ('modified' in c.lower() or 'edited' in c.lower() or 'updated' in c.lower()) and 'by' not in c.lower()), None)
+            
+            audit_info = {
+                "created_by": row_data.get(created_by_col) if created_by_col else None,
+                "created_at": row_data.get(created_at_col) if created_at_col else None,
+                "modified_by": row_data.get(modified_by_col) if modified_by_col else None,
+                "modified_at": row_data.get(modified_at_col) if modified_at_col else None,
+            }
+
     return render_template(
         'form_view.html',
         request=request,
@@ -892,7 +929,8 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         table_title=table_title,
         columns=columns,
         is_update=is_update,
-        pk_val=pk_val
+        pk_val=pk_val,
+        audit_info=audit_info
     )
 
 @app.route('/export/<table_name>')
@@ -1090,14 +1128,20 @@ async def process_api_action(request, table_name, pk_val):
 
         # 3. Mandatory Session Username and Audit Trail Binding
         session_username = getattr(request.ctx, 'username', None) or 'System'
-        session_user_id = getattr(request.ctx, 'user_id', 1)
         who_cols = [c for c in schema_map if 'created' in c.lower() or 'modified' in c.lower() or 'edited' in c.lower() or 'updated' in c.lower()]
         for wc in who_cols:
-            if ('modified' in wc or 'edited' in wc) and 'by' not in wc: clean_data[wc] = datetime.now()
-            elif ('modified' in wc or 'edited' in wc) and 'by' in wc: clean_data[wc] = str(user_id or "System")
+            max_len = schema_map.get(wc, {}).get('character_maximum_length') or 50
+            user_str = str(session_username)[:max_len]
+            
+            if ('modified' in wc.lower() or 'edited' in wc.lower() or 'updated' in wc.lower()) and 'by' not in wc.lower():
+                clean_data[wc] = datetime.now()
+            elif ('modified' in wc.lower() or 'edited' in wc.lower() or 'updated' in wc.lower()) and 'by' in wc.lower():
+                clean_data[wc] = user_str
             elif method == 'POST':
-                if 'created' in wc and 'by' not in wc: clean_data[wc] = datetime.now()
-                elif 'created' in wc and 'by' in wc: clean_data[wc] = str(user_id or "System")
+                if 'created' in wc.lower() and 'by' not in wc.lower():
+                    clean_data[wc] = datetime.now()
+                elif 'created' in wc.lower() and 'by' in wc.lower():
+                    clean_data[wc] = user_str
 
         try:
             async with conn.transaction():
