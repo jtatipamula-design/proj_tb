@@ -759,10 +759,15 @@ async def show_table(request, table_name):
         if table_name == 'phc_lookup_values_t':
             try:
                 lookup_categories = await conn.fetch(
-                    "SELECT plt_lookup_type_code as code, plt_lookup_type_name as name FROM phc_lookup_types_t WHERE plt_status = 'ACT' ORDER BY plt_lookup_type_name"
+                    "SELECT plt_lookup_type_code as code, COALESCE(plt_lookup_type, plt_lookup_type_code) as name FROM phc_lookup_types WHERE plt_status = 'ACT' ORDER BY name"
                 )
             except Exception:
-                lookup_categories = []
+                try:
+                    lookup_categories = await conn.fetch(
+                        "SELECT plt_lookup_type_code as code, COALESCE(plt_lookup_type_name, plt_lookup_type, plt_lookup_type_code) as name FROM phc_lookup_types_t WHERE plt_status = 'ACT' ORDER BY name"
+                    )
+                except Exception:
+                    lookup_categories = []
 
         q_table = quote_ident(table_name)
         q_pk = quote_ident(pk_column)
@@ -1284,6 +1289,7 @@ async def fixdb_route(request):
         "phc_emp_t": "HR",
         "phc_apps_t": "HR",
         "phc_emp_apps_grant_t": "HR",
+        "phc_lookup_types": "ERPAdmin",
         "phc_lookup_types_t": "ERPAdmin",
         "phc_lookup_values_t": "MasterData",
         "phc_users_t": "User Management",
