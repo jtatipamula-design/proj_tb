@@ -508,27 +508,77 @@ async def get_fk_display_dict(conn, f_table, f_pk, specific_ids=None):
         rows = await conn.fetch(q)
         return [{"id": str(r['id']), "name": f"{r['name']} (ID: {r['id']})"} for r in rows]
 
+def resolve_lookup_type(column_name: str) -> str:
+    """Resolves a physical column name to its canonical lookup type code.
+    
+    Dynamically handles prefix stripping (e.g. pbl_cleanroom_grade -> CLEANROOM_GRADE)
+    and universal status fallback (e.g. *_status -> GEN_STATUS).
+    """
+    if not column_name:
+        return ""
+    col_clean = column_name.lower().strip()
+    
+    # 1. Universal status pattern
+    if col_clean.endswith('_status') or col_clean == 'status':
+        return "GEN_STATUS"
+        
+    # 2. Strip standard 2-4 letter table prefixes if present (e.g., pbl_, prm_, plc_, psl_, ppm_)
+    parts = col_clean.split('_')
+    if len(parts) > 1 and len(parts[0]) <= 4:
+        return '_'.join(parts[1:]).upper()
+        
+    return col_clean.upper()
+
 async def get_dropdown_options(conn, table_name, column_name):
     if column_name.endswith('_org_id') or column_name == 'pos_org_id':
         return []
         
-    # 1. Dynamic Lookup System Check
-    # If a user creates a Lookup Type that EXACTLY matches the column name (case-insensitive),
-    # this will instantly wire up those values as a dropdown for this field!
+    # 1. Dynamic Canonical Lookup System Check
+    lookup_code = resolve_lookup_type(column_name)
+    raw_upper = column_name.upper()
     try:
+        # Check by resolved canonical code OR direct column name
         query = """
             SELECT plv_lookup_value_code as id, plv_lookup_value_name as name 
             FROM phc_lookup_values_t 
-            WHERE upper(plv_lookup_type_code) = upper($1) 
+            WHERE (UPPER(plv_lookup_code) = UPPER($1) OR UPPER(plv_lookup_code) = UPPER($2))
               AND plv_status = 'ACT'
               AND CURRENT_DATE BETWEEN COALESCE(plv_start_date, CURRENT_DATE) AND COALESCE(plv_end_date, CURRENT_DATE + interval '1 day')
             ORDER BY plv_lookup_value_name
         """
-        rows = await conn.fetch(query, column_name)
+        rows = await conn.fetch(query, lookup_code, raw_upper)
         if rows:
-            return [{"id": str(r['id']), "name": str(r['name'])} for r in rows]
+            seen = set()
+            deduped = []
+            for r in rows:
+                key = str(r['name']).strip().lower()
+                if key not in seen:
+                    seen.add(key)
+                    deduped.append({"id": str(r['id']), "name": str(r['name'])})
+            return deduped
     except Exception:
-        pass
+        # Resilient fallback if schema uses plv_lookup_type_code
+        try:
+            query_fallback = """
+                SELECT plv_lookup_value_code as id, plv_lookup_value_name as name 
+                FROM phc_lookup_values_t 
+                WHERE (UPPER(plv_lookup_type_code) = UPPER($1) OR UPPER(plv_lookup_type_code) = UPPER($2))
+                  AND plv_status = 'ACT'
+                  AND CURRENT_DATE BETWEEN COALESCE(plv_start_date, CURRENT_DATE) AND COALESCE(plv_end_date, CURRENT_DATE + interval '1 day')
+                ORDER BY plv_lookup_value_name
+            """
+            rows = await conn.fetch(query_fallback, lookup_code, raw_upper)
+            if rows:
+                seen = set()
+                deduped = []
+                for r in rows:
+                    key = str(r['name']).strip().lower()
+                    if key not in seen:
+                        seen.add(key)
+                        deduped.append({"id": str(r['id']), "name": str(r['name'])})
+                return deduped
+        except Exception:
+            pass
 
     # 2. Foreign Key Dropdown Fallback
     f_table, f_pk = await resolve_fk_details(conn, table_name, column_name)
@@ -752,7 +802,7 @@ async def show_table(request, table_name):
         lookup_map = {}
         try:
             l_rows = await conn.fetch("""
-                SELECT upper(plv_lookup_type_code) as type_code, plv_lookup_value_code as id, plv_lookup_value_name as name 
+                SELECT upper(plv_lookup_code) as type_code, plv_lookup_value_code as id, plv_lookup_value_name as name 
                 FROM phc_lookup_values_t 
                 WHERE plv_status = 'ACT'
                   AND CURRENT_DATE BETWEEN COALESCE(plv_start_date, CURRENT_DATE) AND COALESCE(plv_end_date, CURRENT_DATE + interval '1 day')
@@ -763,7 +813,20 @@ async def show_table(request, table_name):
                     lookup_map[tc] = {}
                 lookup_map[tc][str(lr['id'])] = str(lr['name'])
         except Exception:
-            lookup_map = {}
+            try:
+                l_rows = await conn.fetch("""
+                    SELECT upper(plv_lookup_type_code) as type_code, plv_lookup_value_code as id, plv_lookup_value_name as name 
+                    FROM phc_lookup_values_t 
+                    WHERE plv_status = 'ACT'
+                      AND CURRENT_DATE BETWEEN COALESCE(plv_start_date, CURRENT_DATE) AND COALESCE(plv_end_date, CURRENT_DATE + interval '1 day')
+                """)
+                for lr in l_rows:
+                    tc = lr['type_code']
+                    if tc not in lookup_map:
+                        lookup_map[tc] = {}
+                    lookup_map[tc][str(lr['id'])] = str(lr['name'])
+            except Exception:
+                lookup_map = {}
 
         # Resolve FKs and lookups
         fk_map = await get_fk_map(conn, table_name)
@@ -786,10 +849,11 @@ async def show_table(request, table_name):
                     except Exception as e:
                         pass
             
-            # 2. Dynamic Lookups (In-Memory Resolution)
+            # 2. Dynamic Lookups (In-Memory Resolution with Prefix Stripping)
+            canonical_lookup = resolve_lookup_type(cname)
             upper_cname = cname.upper()
-            if upper_cname in lookup_map:
-                col_lookup = lookup_map[upper_cname]
+            col_lookup = lookup_map.get(canonical_lookup) or lookup_map.get(upper_cname)
+            if col_lookup:
                 for r in resolved_rows:
                     val_str = str(r[cname]) if r[cname] is not None else None
                     if val_str and val_str in col_lookup:
