@@ -157,6 +157,22 @@
         .mod-chevron.rotate-180 {
             transform: rotate(180deg);
         }
+        .screen-link {
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+        }
+        .screen-link.active-screen {
+            background: rgba(56, 189, 248, 0.15) !important;
+            color: var(--color-glacier, #ffffff) !important;
+            font-weight: 600;
+            border-left: 3px solid #38bdf8;
+            box-shadow: inset 0 0 12px rgba(56, 189, 248, 0.1);
+        }
+        html:not(.dark) .screen-link.active-screen {
+            background: rgba(14, 165, 233, 0.12) !important;
+            color: #0369a1 !important;
+            border-left: 3px solid #0284c7;
+        }
 
         /* Toast Notifications */
         .toast-container { position: fixed; bottom: 30px; right: 30px; z-index: 9999; display: flex; flex-direction: column; gap: 12px; }
@@ -226,9 +242,14 @@
                 <div class="px-4 pt-4 pb-2">
                     <div class="relative">
                         <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style="color: var(--color-fog);"></i>
-                        <input type="text" id="sidebar-search-input" oninput="filterSidebarModules(this.value)" placeholder="Search modules..." 
-                               class="w-full rounded-lg pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
+                        <input type="text" id="sidebar-search-input" oninput="handleSidebarSearch(this.value)" placeholder="Search modules..." 
+                               class="w-full rounded-lg pl-9 pr-8 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all"
                                style="background: var(--color-midnight-ink); border: 1px solid var(--glass-border); color: var(--color-moonlight);">
+                        <button type="button" id="sidebar-search-clear" onclick="clearSidebarSearch()" 
+                                class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                                title="Clear search">
+                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                        </button>
                     </div>
                 </div>
 
@@ -429,18 +450,59 @@
             }
         };
 
-        // ======== SIDEBAR LIVE SEARCH FILTER ========
+        // ======== SIDEBAR LIVE SEARCH FILTER & PERSISTENCE ========
+        function handleSidebarSearch(query) {
+            filterSidebarModules(query);
+            const clearBtn = document.getElementById('sidebar-search-clear');
+            if (clearBtn) {
+                if (query && query.trim().length > 0) {
+                    clearBtn.classList.remove('hidden');
+                } else {
+                    clearBtn.classList.add('hidden');
+                }
+            }
+            if (query && query.trim().length > 0) {
+                sessionStorage.setItem('sidebarSearchQuery', query);
+            } else {
+                sessionStorage.removeItem('sidebarSearchQuery');
+            }
+        }
+
+        function clearSidebarSearch() {
+            const input = document.getElementById('sidebar-search-input');
+            if (input) {
+                input.value = '';
+                handleSidebarSearch('');
+                input.focus();
+            }
+        }
+
         function filterSidebarModules(query) {
             const q = (query || '').trim().toLowerCase();
             const modules = document.querySelectorAll('.sidebar-module');
             
             modules.forEach(mod => {
+                const modId = mod.id.replace('mod-container-', '');
+                const screens = mod.querySelector('.mod-screens');
+                const chevron = mod.querySelector('.mod-chevron');
+
                 if (!q) {
                     mod.style.display = '';
                     const links = mod.querySelectorAll('.screen-link');
                     links.forEach(l => l.style.display = '');
+
+                    // Restore accordion state
+                    const hasActiveLink = mod.querySelector('.screen-link.active-screen');
+                    if (localStorage.getItem('mod_' + modId) === 'open' || hasActiveLink) {
+                        screens?.classList.remove('hidden');
+                        chevron?.classList.add('rotate-180');
+                    } else {
+                        screens?.classList.add('hidden');
+                        chevron?.classList.remove('rotate-180');
+                    }
                     return;
                 }
+
                 const btnText = mod.querySelector('.mod-title')?.textContent.toLowerCase() || '';
                 const links = mod.querySelectorAll('.screen-link');
                 let anyLinkMatched = false;
@@ -460,8 +522,8 @@
                 
                 if (btnText.includes(q) || anyLinkMatched) {
                     mod.style.display = '';
-                    const screens = mod.querySelector('.mod-screens');
                     if (screens) screens.classList.remove('hidden');
+                    if (chevron) chevron.classList.add('rotate-180');
                 } else {
                     mod.style.display = 'none';
                 }
@@ -527,15 +589,67 @@
             document.querySelectorAll('.sidebar-module').forEach(mod => {
                 const modId = mod.id.replace('mod-container-', '');
                 if (localStorage.getItem('mod_' + modId) === 'open') {
-                    mod.querySelector('.mod-screen-list')?.classList.remove('hidden');
+                    mod.querySelector('.mod-screens')?.classList.remove('hidden');
                     mod.querySelector('.mod-chevron')?.classList.add('rotate-180');
                 }
             });
 
-            // 4. Lucide icons
+            // 4. Highlight active table/screen and ensure its parent module is open
+            const currentPath = window.location.pathname;
+            let activeLink = null;
+            document.querySelectorAll('.screen-link').forEach(link => {
+                const href = link.getAttribute('href');
+                if (href) {
+                    const screenPath = href;
+                    // Exact match or form subpath match
+                    const screenCode = screenPath.replace('/table/', '');
+                    if (currentPath === screenPath || (screenCode && (currentPath.startsWith('/form/' + screenCode) || currentPath.startsWith('/table/' + screenCode)))) {
+                        link.classList.add('active-screen');
+                        activeLink = link;
+                        // Auto-expand parent module
+                        const parentModule = link.closest('.sidebar-module');
+                        if (parentModule) {
+                            const screens = parentModule.querySelector('.mod-screens');
+                            const chevron = parentModule.querySelector('.mod-chevron');
+                            screens?.classList.remove('hidden');
+                            chevron?.classList.add('rotate-180');
+                            const modId = parentModule.id.replace('mod-container-', '');
+                            localStorage.setItem('mod_' + modId, 'open');
+                        }
+                    }
+                }
+            });
+
+            // 5. Restore sidebar search query
+            const savedSearch = sessionStorage.getItem('sidebarSearchQuery');
+            if (savedSearch) {
+                const searchInput = document.getElementById('sidebar-search-input');
+                if (searchInput) {
+                    searchInput.value = savedSearch;
+                    handleSidebarSearch(savedSearch);
+                }
+            }
+
+            // 6. Restore sidebar scroll position
+            const moduleList = document.getElementById('sidebar-module-list');
+            if (moduleList) {
+                const savedScroll = sessionStorage.getItem('sidebarScrollTop');
+                if (savedScroll) {
+                    moduleList.scrollTop = parseInt(savedScroll, 10);
+                } else if (activeLink) {
+                    setTimeout(() => {
+                        activeLink.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }, 80);
+                }
+                moduleList.addEventListener('scroll', () => {
+                    sessionStorage.setItem('sidebarScrollTop', moduleList.scrollTop);
+                });
+            }
+
+            // 7. Lucide icons
             if (window.lucide) lucide.createIcons();
 
-            // 5. Check pending toast
+            // 8. Check pending toast
             const pendingToast = sessionStorage.getItem('pendingToast');
             if (pendingToast) {
                 const toastData = JSON.parse(pendingToast);
