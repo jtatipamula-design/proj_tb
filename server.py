@@ -552,7 +552,7 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
                 continue
             if v == "" or v is None:
                 continue 
-        if 'created' in k.lower() or 'modified' in k.lower() or 'edited' in k.lower():
+        if 'created' in k.lower() or 'modified' in k.lower() or 'edited' in k.lower() or 'updated' in k.lower():
             continue
 
         if is_update and (v == "" or v is None):
@@ -1020,6 +1020,8 @@ async def process_api_action(request, table_name, pk_val):
     method = request.method
     if request.form and request.form.get('_method'):
         method = request.form.get('_method')[0].upper()
+    elif pk_val is not None and method != 'DELETE':
+        method = 'PUT'
 
     async with app.ctx.pool.acquire() as conn:
         auth_tables, _ = await get_authorized_tables(conn, user_id, role)
