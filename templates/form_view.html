@@ -174,6 +174,10 @@
               hx-encoding="multipart/form-data"
               hx-swap="none">
               
+            {% if is_update %}
+            <input type="hidden" name="_method" value="PUT">
+            {% endif %}
+
             <div class="form-grid">
                 {% for col in columns %}
                     {% set is_who_col = col.column_name.lower().endswith('_created') or col.column_name.lower().endswith('_modified') or col.column_name.lower().endswith('_created_by') or col.column_name.lower().endswith('_modified_by') or col.column_name.lower() in ('creation_date', 'last_update_date', 'created_by', 'last_updated_by') %}
