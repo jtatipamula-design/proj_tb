@@ -222,14 +222,15 @@ async def get_authorized_tables(conn, user_id, role):
 
 @app.before_server_start
 async def setup_db(app, loop):
-    """Initializes the optimized asyncpg connection pool with statement caching and connection pooling."""
+    """Initializes the optimized asyncpg connection pool without statement caching for full DDL/schema resilience."""
     if DATABASE_URL:
         app.ctx.pool = await asyncpg.create_pool(
             dsn=DATABASE_URL,
             min_size=5,
             max_size=25,
             max_inactive_connection_lifetime=300.0,
-            statement_cache_size=1024
+            statement_cache_size=0,
+            max_cached_statement_lifetime=0
         )
     else:
         app.ctx.pool = None
@@ -819,9 +820,15 @@ async def show_table(request, table_name):
 
         base_query += f" ORDER BY {q_pk} DESC LIMIT ${len(params)+1} OFFSET ${len(params)+2}"
         
-        total_count = await conn.fetchval(count_query, *params)
-        total_count = total_count or 0
-        raw_rows = await conn.fetch(base_query, *(params + [per_page, offset]))
+        try:
+            total_count = await conn.fetchval(count_query, *params)
+            total_count = total_count or 0
+            raw_rows = await conn.fetch(base_query, *(params + [per_page, offset]))
+        except Exception:
+            clear_schema_cache()
+            total_count = await conn.fetchval(count_query, *params)
+            total_count = total_count or 0
+            raw_rows = await conn.fetch(base_query, *(params + [per_page, offset]))
 
         resolved_rows = [dict(r) for r in raw_rows]
         
