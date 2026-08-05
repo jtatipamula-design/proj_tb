@@ -169,15 +169,26 @@
             {% endif %}
 
             <!-- Live Search Bar -->
-            <input type="text" class="search-box" id="searchInput" name="q" placeholder="Search records..." 
-                   hx-get="/table/{{ table_name }}" 
-                   hx-trigger="keyup changed delay:300ms, search" 
-                   hx-target="#tableContent" 
-                   hx-select="#tableContent" 
-                   hx-swap="outerHTML"
-                   {% if table_name == 'phc_lookup_values_t' %}hx-include="#typeFilter"{% endif %}
-                   value="{{ search_query | default('') }}"
-                   autocomplete="off">
+            <div style="position: relative; display: inline-flex; align-items: center;">
+                <input type="text" class="search-box" id="searchInput" name="q" placeholder="Search records..." 
+                       hx-get="/table/{{ table_name }}" 
+                       hx-trigger="keyup changed delay:300ms, search" 
+                       hx-target="#tableContent" 
+                       hx-select="#tableContent" 
+                       hx-swap="outerHTML"
+                       hx-push-url="true"
+                       {% if table_name == 'phc_lookup_values_t' %}hx-include="#typeFilter"{% endif %}
+                       value="{{ search_query | default('') }}"
+                       oninput="const clr=document.getElementById('tableSearchClear'); if(clr) clr.style.display = this.value ? 'flex' : 'none';"
+                       autocomplete="off"
+                       style="padding-right: 30px;">
+                <button type="button" id="tableSearchClear" 
+                        onclick="const input=document.getElementById('searchInput'); input.value=''; input.dispatchEvent(new Event('search')); this.style.display='none'; input.focus();"
+                        style="display: {{ 'flex' if search_query else 'none' }}; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--color-fog); cursor: pointer; padding: 2px; align-items: center; justify-content: center;"
+                        title="Clear search">
+                    <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+                </button>
+            </div>
 
         </div>
     </div>
@@ -198,6 +209,17 @@
                         </tr>
                     </thead>
                     <tbody>
+                        {% if not rows %}
+                        <tr>
+                            <td colspan="{{ columns|length + 1 }}" style="text-align: center; padding: 48px 20px; color: var(--color-fog);">
+                                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+                                    <i data-lucide="search-x" style="width: 32px; height: 32px; opacity: 0.4;"></i>
+                                    <p style="font-size: 14px; font-weight: 500; margin: 0; color: var(--color-moonlight);">No matching records found</p>
+                                    <p style="font-size: 12px; margin: 0; opacity: 0.7;">Try refining your search keyword or clearing the filter</p>
+                                </div>
+                            </td>
+                        </tr>
+                        {% else %}
                         {% for row in rows %}
                         <tr>
                             <td style="text-align: center;">
@@ -217,6 +239,7 @@
                             {% endfor %}
                         </tr>
                         {% endfor %}
+                        {% endif %}
                     </tbody>
                 </table>
             </div>
@@ -232,6 +255,7 @@
                         hx-get="/table/{{ table_name }}?page={{ page - 1 }}" 
                         hx-include="#searchInput{% if table_name == 'phc_lookup_values_t' %}, #typeFilter{% endif %}"
                         hx-target="#tableContent" hx-select="#tableContent" hx-swap="outerHTML"
+                        hx-push-url="true"
                         {% else %} disabled {% endif %}>
                     <i data-lucide="chevron-left" style="width: 14px; height: 14px;"></i> Prev
                 </button>
@@ -243,6 +267,7 @@
                         hx-get="/table/{{ table_name }}?page={{ page + 1 }}" 
                         hx-include="#searchInput{% if table_name == 'phc_lookup_values_t' %}, #typeFilter{% endif %}"
                         hx-target="#tableContent" hx-select="#tableContent" hx-swap="outerHTML"
+                        hx-push-url="true"
                         {% else %} disabled {% endif %}>
                     Next <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i>
                 </button>
