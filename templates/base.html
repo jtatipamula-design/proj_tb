@@ -10,6 +10,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     
     <script>
         tailwind.config = {
@@ -656,6 +657,11 @@
                 showToast(toastData.msg, toastData.type);
                 sessionStorage.removeItem('pendingToast');
             }
+        });
+
+        // Re-initialize dynamic elements on HTMX swaps
+        document.addEventListener('htmx:afterSwap', function() {
+            if (window.lucide) lucide.createIcons();
         });
     </script>
 </body>

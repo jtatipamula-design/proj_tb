@@ -419,9 +419,29 @@ async def get_pk_column(conn, table_name):
         pk = await conn.fetchval(query, table_name)
         if pk:
             SCHEMA_CACHE["pks"][table_name] = pk
-        return pk
+            return pk
     except Exception:
-        return None
+        pass
+
+    # Heuristic fallback if table lacks formal primary key constraint
+    try:
+        cols = await conn.fetch("""
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = $1 AND table_schema = 'public'
+            ORDER BY ordinal_position
+        """, table_name)
+        col_names = [c['column_name'] for c in cols]
+        for c in col_names:
+            if c.endswith('_id') or c.endswith('_code') or c == 'id':
+                SCHEMA_CACHE["pks"][table_name] = c
+                return c
+        if col_names:
+            SCHEMA_CACHE["pks"][table_name] = col_names[0]
+            return col_names[0]
+    except Exception:
+        pass
+    return None
 
 # --- SMART FOREIGN KEY RESOLUTION ---
 FK_HEURISTICS = {
@@ -782,12 +802,14 @@ async def show_table(request, table_name):
             where_clauses.append(f"{quote_ident('plv_lookup_type_code')} = ${len(params)}")
 
         if search_query:
-            text_cols = [c['column_name'] for c in columns_data if c['data_type'] in ('character varying', 'text', 'character')]
-            if text_cols:
-                search_clauses = []
-                for col in text_cols:
-                    params.append(f"%{search_query}%")
-                    search_clauses.append(f"{quote_ident(col)} ILIKE ${len(params)}")
+            params.append(f"%{search_query}%")
+            param_idx = len(params)
+            searchable_cols = [
+                c['column_name'] for c in columns_data 
+                if c['data_type'] not in ('bytea', 'json', 'jsonb', 'geometry', 'point', 'polygon')
+            ]
+            if searchable_cols:
+                search_clauses = [f"CAST({quote_ident(col)} AS TEXT) ILIKE ${param_idx}" for col in searchable_cols]
                 where_clauses.append("(" + " OR ".join(search_clauses) + ")")
 
         if where_clauses:
@@ -1115,6 +1137,7 @@ async def process_api_action(request, table_name, pk_val):
                     res = await conn.execute(f"DELETE FROM {q_table} WHERE {q_pk} = $1", cast_pk)
                 if res.endswith(" 0"):
                     return add_security_headers(response.json({"error": "Record not found"}, status=404))
+                clear_schema_cache()
                 return add_security_headers(response.json({"status": "success"}))
             except Exception as e:
                 return add_security_headers(response.json({"error": str(e)}, status=400))
@@ -1261,6 +1284,9 @@ async def process_api_action(request, table_name, pk_val):
                     res = await conn.execute(q, *(vals + [cast_pk]))
                     if res.endswith(" 0"):
                         return add_security_headers(response.json({"error": "Record not found"}, status=404))
+
+            # Immediately flush auth and schema caches so changes to screens, modules, or lookups take effect instantly
+            clear_schema_cache()
 
             if request.headers.get("HX-Request"):
                 res = response.json({"status": "success"})
