@@ -97,8 +97,74 @@ async def get_table_columns(conn, table_name: str):
     SCHEMA_CACHE["schema_maps"][table_name] = {c['column_name']: c for c in cols}
     return cols
 
+MODULE_ICON_MAP = {
+    'general': 'layers',
+    'erpadmin': 'settings-2',
+    'erp admin': 'settings-2',
+    'admin': 'settings-2',
+    'masterdata': 'database',
+    'master data': 'database',
+    'cleaning': 'sparkles',
+    'cleaning validation': 'sparkles',
+    'quality': 'shield-check',
+    'qa': 'shield-check',
+    'qc': 'test-tube-2',
+    'facilities': 'building-2',
+    'facility': 'building-2',
+    'plant': 'factory',
+    'ehs': 'activity',
+    'ehs & safety': 'activity',
+    'safety': 'activity',
+    'hr': 'users',
+    'human resources': 'users',
+    'inventory': 'box',
+    'materials': 'package',
+    'finance': 'wallet',
+    'gl': 'book-open',
+    'ap': 'receipt',
+    'ar': 'credit-card',
+    'procurement': 'shopping-cart',
+    'purchasing': 'shopping-bag',
+    'sales': 'trending-up',
+    'manufacturing': 'cpu',
+    'production': 'factory',
+    'maintenance': 'wrench',
+    'lab': 'flask-conical',
+    'laboratory': 'flask-conical',
+    'documents': 'file-text',
+    'security': 'lock',
+    'compliance': 'clipboard-check',
+    'supply chain': 'truck',
+    'logistics': 'truck',
+    'calibration': 'scale',
+    'workflow': 'workflow',
+    'reports': 'bar-chart-3',
+}
+
+CURATED_ICON_LIST = [
+    "layers", "database", "shield-check", "settings-2", "sparkles",
+    "flask-conical", "clipboard-list", "building-2", "users", "cpu",
+    "box", "package", "truck", "file-text", "activity", "heart-pulse",
+    "scale", "workflow", "archive", "lock", "gauge", "test-tube-2",
+    "wallet", "shopping-cart", "factory", "wrench", "bar-chart-3",
+    "briefcase", "compass", "book-open", "grid", "folder", "globe", "zap"
+]
+
+def get_module_icon(module_name: str, explicit_icon: str = None) -> str:
+    if explicit_icon and str(explicit_icon).strip():
+        return str(explicit_icon).strip().lower()
+    if not module_name:
+        return 'layers'
+    norm = module_name.strip().lower()
+    if norm in MODULE_ICON_MAP:
+        return MODULE_ICON_MAP[norm]
+    for k, icon in MODULE_ICON_MAP.items():
+        if k in norm or norm in k:
+            return icon
+    return 'layers'
+
 async def build_modules_tree(conn, all_tables, table_modules):
-    """Constructs the hierarchical module and screen navigation tree with cached search indexing."""
+    """Constructs the hierarchical module and screen navigation tree with icons and cached search indexing."""
     if not all_tables:
         return {}
         
@@ -123,14 +189,27 @@ async def build_modules_tree(conn, all_tables, table_modules):
     else:
         cols_map = SCHEMA_CACHE["cols_map"]
 
+    mod_icons = {}
+    try:
+        mod_rows = await conn.fetch("SELECT pmd_module_name, pmd_module_icon FROM phc_module_t WHERE pmd_status = 'ACT' OR pmd_status IS NULL")
+        for mr in mod_rows:
+            if mr['pmd_module_name']:
+                mod_icons[mr['pmd_module_name']] = mr.get('pmd_module_icon')
+    except Exception:
+        pass
+
     modules_tree = {}
     for tbl_code, tbl_name in all_tables.items():
-        mod_name = table_modules.get(tbl_code, 'Uncategorized')
+        mod_name = table_modules.get(tbl_code, 'General')
         if mod_name not in modules_tree:
-            modules_tree[mod_name] = []
+            modules_tree[mod_name] = {
+                "name": mod_name,
+                "icon": get_module_icon(mod_name, mod_icons.get(mod_name)),
+                "screens": []
+            }
             
         search_str = f"{tbl_name.lower()} {' '.join(cols_map.get(tbl_code, []))}"
-        modules_tree[mod_name].append({
+        modules_tree[mod_name]["screens"].append({
             "code": tbl_code, 
             "name": tbl_name,
             "search_terms": search_str
@@ -146,7 +225,8 @@ def render_template(template_name, request=None, **context):
         "all_tables": [],
         "table_modules": {},
         "lookup_categories": [],
-        "type_filter": ""
+        "type_filter": "",
+        "curated_icons": CURATED_ICON_LIST
     }
     if request and hasattr(request, 'ctx'):
         all_tables = getattr(request.ctx, "all_tables", {})

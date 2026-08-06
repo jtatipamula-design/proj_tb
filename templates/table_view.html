@@ -1,160 +1,263 @@
 {% extends "base.html" %}
 
+{% block head_title %}{{ table_title }}{% endblock %}
+{% block header_title %}{{ table_title }}{% endblock %}
+
 {% block content %}
 <style>
-    .content-wrapper {
-        width: 100%; max-width: 98%; margin: 0 auto;
-        display: flex; flex-direction: column;
+    .table-view-container {
+        max-width: 1350px;
+        margin: 0 auto;
+        padding-bottom: 90px;
     }
 
-    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px; }
-    .page-header h1 { font-size: 26px; font-weight: 700; color: var(--color-glacier); letter-spacing: -0.02em; line-height: 1.2; margin: 0; }
-    
-    .action-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-
-    .search-box {
-        background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border);
-        padding: 9px 14px; border-radius: 8px; width: 260px;
-        color: white; font-family: var(--font-ui); font-size: 13.5px;
-        box-shadow: inset 0 1px 2px rgba(0,0,0,0.2); transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    .table-card {
+        background-color: var(--surface-pure-white-cards);
+        border: 1px solid var(--color-fog);
+        border-radius: var(--radius-cards);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+        margin-top: 20px;
     }
-    .search-box:hover { border-color: rgba(186, 215, 247, 0.3); background: rgba(255,255,255,0.03); }
-    .search-box:focus { outline: none; border-color: var(--color-frost-link); box-shadow: 0 0 0 2px rgba(186, 215, 247, 0.2); }
-    html.light-mode .search-box { background: rgba(255,255,255,0.5); color: var(--color-glacier); }
-    
-    select.search-box { appearance: none; cursor: pointer; padding-right: 32px; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2381899b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>'); background-repeat: no-repeat; background-position: right 12px center; }
-    select.search-box option { background: var(--color-midnight-ink); color: var(--color-glacier); }
-    html.light-mode select.search-box option { background: #fff; color: var(--color-midnight-ink); }
 
-    /* Floating Round Glass Action Dock Pill (Bottom Center Viewport) */
+    .table-scroll-wrap {
+        overflow-x: auto;
+        width: 100%;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        text-align: left;
+    }
+
+    th {
+        background: var(--color-bone);
+        color: var(--color-slate);
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 600;
+        padding: 13px 18px;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        border-bottom: 1px solid var(--color-fog);
+        user-select: none;
+        cursor: pointer;
+        transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    th:hover {
+        background: var(--color-fog);
+        color: var(--color-obsidian);
+    }
+
+    td {
+        padding: 13px 18px;
+        font-size: 13.5px;
+        color: var(--color-graphite);
+        border-bottom: 1px solid var(--color-fog);
+        transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    tbody tr:last-child td {
+        border-bottom: none;
+    }
+
+    tbody tr:hover td {
+        background-color: var(--color-bone);
+        color: var(--color-obsidian);
+    }
+
+    /* Status Pills */
+    .status-pill {
+        padding: 3px 9px;
+        border-radius: var(--radius-badges);
+        font-size: 11px;
+        font-weight: 600;
+        font-family: var(--font-mono);
+        letter-spacing: 0.02em;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .status-act {
+        background: rgba(3, 203, 188, 0.12);
+        color: var(--color-lagoon);
+        border: 1px solid rgba(3, 203, 188, 0.25);
+    }
+
+    .status-ina {
+        background: rgba(239, 68, 68, 0.1);
+        color: #ef4444;
+        border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+
+    .status-def {
+        background: var(--color-bone);
+        color: var(--color-mist);
+        border: 1px solid var(--color-fog);
+    }
+
+    /* Row Action Icon Button */
+    .row-action-btn {
+        background: var(--color-bone);
+        border: 1px solid var(--color-fog);
+        color: var(--color-slate);
+        padding: 5px 8px;
+        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s ease;
+        text-decoration: none;
+    }
+
+    .row-action-btn:hover {
+        background: var(--surface-onyx-action);
+        color: #ffffff;
+        border-color: var(--surface-onyx-action);
+        transform: translateY(-1px);
+    }
+
+    /* Floating Action Dock Pill */
     .floating-action-dock {
         position: fixed;
         bottom: 24px;
         left: 50%;
         transform: translateX(-50%);
         z-index: 50;
-        display: inline-flex;
-        align-items: center;
-        background: var(--glass-surface, rgba(15, 23, 42, 0.8));
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        border: 1px solid var(--glass-border);
+        background: var(--surface-pure-white-cards);
+        border: 1px solid var(--color-fog);
         border-radius: 9999px;
-        padding: 6px 10px;
-        gap: 6px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 1px rgba(255, 255, 255, 0.2);
-        pointer-events: auto;
+        padding: 6px 8px 6px 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.04);
+        backdrop-filter: blur(16px);
     }
-    .dock-btn {
-        display: inline-flex;
+
+    html.dark .floating-action-dock {
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    .dock-icon-btn {
+        background: transparent;
+        border: 1px solid transparent;
+        color: var(--color-slate);
+        width: 36px;
+        height: 36px;
+        border-radius: 9999px;
+        display: flex;
         align-items: center;
         justify-content: center;
-        width: 38px;
-        height: 38px;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid var(--glass-border);
-        color: var(--color-moonlight, #c7d3ea);
         cursor: pointer;
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: all 0.15s ease;
         text-decoration: none;
     }
-    .dock-btn:hover {
-        background: rgba(255, 255, 255, 0.15);
-        color: #ffffff;
-        transform: scale(1.1);
-        border-color: rgba(255, 255, 255, 0.3);
+
+    .dock-icon-btn:hover {
+        background: var(--color-bone);
+        color: var(--color-obsidian);
+        border-color: var(--color-fog);
     }
-    .dock-btn:active {
-        transform: scale(0.95);
-    }
-    .dock-btn:hover i[data-lucide="refresh-cw"] {
-        transform: rotate(180deg);
-        transition: transform 0.4s ease;
-    }
+
     .dock-divider {
         width: 1px;
-        height: 18px;
-        background: var(--glass-border);
+        height: 20px;
+        background: var(--color-fog);
         margin: 0 2px;
     }
 
-    /* Table Container & Rows */
-    .table-container {
-        background: var(--glass-surface); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-        border: 1px solid var(--glass-border); border-radius: 12px; overflow: hidden; 
-        box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5); width: 100%;
+    /* Search & Filter Inputs */
+    .table-search-input, .table-filter-select {
+        background: var(--surface-pure-white-cards);
+        border: 1px solid var(--color-fog);
+        color: var(--color-obsidian);
+        border-radius: 10px;
+        padding: 8px 14px;
+        font-size: 13px;
+        transition: all 0.15s ease;
+        outline: none;
     }
-    .table-scroll { overflow-x: auto; max-height: 65vh; overflow-y: auto; width: 100%; }
-    table { width: 100%; border-collapse: collapse; white-space: nowrap; text-align: left; }
-    
-    th {
-        background: rgba(5, 6, 15, 0.65); color: var(--color-fog); 
-        font-size: 12px; font-family: var(--font-mono); text-transform: uppercase;
-        letter-spacing: 0.06em; font-weight: 600; padding: 14px 20px; position: sticky; top: 0; z-index: 10;
-        border-bottom: 1px solid var(--glass-border); cursor: pointer; user-select: none;
-        backdrop-filter: blur(12px);
-        transition: color 0.15s ease, background 0.15s ease;
-    }
-    th:hover { color: var(--color-glacier); background: rgba(186, 215, 247, 0.08); }
-    html.light-mode th { background: rgba(255,255,255,0.8); }
-    
-    td {
-        padding: 14px 20px; font-size: 13.5px; font-weight: 400; color: var(--color-moonlight);
-        border-bottom: 1px solid var(--glass-border); transition: background 0.15s, color 0.15s; background: transparent;
-    }
-    tbody tr:last-child td { border-bottom: none; }
-    tbody tr:hover td { background: rgba(186, 215, 247, 0.06); color: var(--color-glacier); }
-    html.light-mode tbody tr:hover td { background: rgba(0, 0, 0, 0.03); color: var(--color-glacier); }
 
-    .pill { padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.5px; border: 1px solid transparent; }
-    .pill-act { background: rgba(38, 150, 132, 0.15); color: var(--color-cipher-mint); border-color: rgba(38, 150, 132, 0.3); }
-    .pill-ina { background: rgba(228, 109, 76, 0.15); color: var(--color-ember); border-color: rgba(228, 109, 76, 0.3); }
-    .pill-def { background: rgba(255,255,255,0.05); color: var(--color-fog); border-color: var(--glass-border); }
+    .table-search-input:focus, .table-filter-select:focus {
+        border-color: var(--color-iris);
+        box-shadow: 0 0 0 3px rgba(85, 93, 255, 0.12);
+    }
 
-    .action-btn { 
-        background: rgba(255, 255, 255, 0.03); border: 1px solid var(--glass-border); color: var(--color-fog); cursor: pointer; 
-        padding: 6px 8px; border-radius: 6px; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); display: inline-flex; align-items: center; justify-content: center;
+    /* Pagination */
+    .pagination-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 16px 20px;
+        background: var(--surface-pure-white-cards);
+        border-top: 1px solid var(--color-fog);
+        font-size: 13px;
+        color: var(--color-slate);
+    }
+
+    .pagination-btn {
+        background: var(--color-bone);
+        border: 1px solid var(--color-fog);
+        color: var(--color-obsidian);
+        padding: 6px 14px;
+        border-radius: 8px;
+        font-size: 12.5px;
+        font-weight: 500;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.15s ease;
         text-decoration: none;
     }
-    .action-btn:hover { color: var(--color-electric-iris); background: rgba(102, 58, 243, 0.15); border-color: var(--color-electric-iris); transform: scale(1.12); }
-    html.light-mode .action-btn { background: rgba(0,0,0,0.03); }
 
-    .pagination-wrapper {
-        display: flex; justify-content: space-between; align-items: center;
-        padding: 14px 8px; color: var(--color-fog); font-size: 13px; font-weight: 500;
+    .pagination-btn:hover:not(:disabled) {
+        background: var(--color-fog);
+        border-color: var(--color-ash);
     }
-    .pagination-controls { display: flex; gap: 8px; align-items: center; }
-    .page-btn {
-        background: rgba(255, 255, 255, 0.05); border: 1px solid var(--glass-border);
-        color: var(--color-moonlight); padding: 7px 12px; border-radius: 8px;
-        cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 6px;
-        font-family: var(--font-ui); font-size: 13px; font-weight: 500;
+
+    .pagination-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
     }
-    .page-btn:hover:not(:disabled) { background: rgba(186, 215, 247, 0.08); color: var(--color-glacier); border-color: var(--color-moonlight); }
-    .page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-    html.light-mode .page-btn { background: rgba(0,0,0,0.03); color: var(--color-pebble); }
 </style>
 
-<div class="content-wrapper">
-    <!-- Breadcrumbs Navigation -->
-    <div class="breadcrumbs" style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 20px; color: var(--color-fog);">
-        <a href="/" preload="mouseover" style="color: var(--color-fog); text-decoration: none;" onmouseenter="this.style.color='var(--color-glacier)'" onmouseleave="this.style.color='var(--color-fog)'">Brihas ERP</a> 
-        <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i> 
-        <span style="color: var(--color-moonlight); font-weight: 500;">{{ table_title }}</span>
+<div class="table-view-container">
+    <!-- Breadcrumbs -->
+    <div class="flex items-center gap-2 text-xs font-mono mb-3" style="color: var(--color-mist);">
+        <a href="/" class="hover:underline" style="color: var(--color-slate);">Brihas ERP</a>
+        <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+        <span style="color: var(--color-obsidian);" class="font-semibold">{{ table_title }}</span>
     </div>
 
-    <!-- Page Header & Action Toolbar -->
-    <div class="page-header">
+    <!-- Header & Action Row -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-2">
         <div>
-            <p class="eyebrow-text" style="font-family: var(--font-mono); color: var(--color-fog); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px;">DATABASE TABLE</p>
-            <h1>{{ table_title }}</h1>
+            <div class="flex items-center gap-2.5 mb-1.5">
+                <span class="badge-iris text-xs font-mono uppercase tracking-wider">
+                    <i data-lucide="database" class="w-3.5 h-3.5"></i>
+                    {{ table_name }}
+                </span>
+                <span class="text-xs font-mono" style="color: var(--color-mist);">•</span>
+                <span class="text-xs font-mono" style="color: var(--color-steel);">{{ total_count }} Records</span>
+            </div>
+            <h1 class="text-2xl md:text-3xl font-semibold tracking-tight font-serif-heading" style="color: var(--color-obsidian);">
+                {{ table_title }}
+            </h1>
         </div>
-        
-        <div class="action-toolbar">
+
+        <div class="flex flex-wrap items-center gap-3">
             {% if table_name == 'phc_lookup_values_t' %}
             <!-- Lookup Category Filter -->
-            <select class="search-box" id="typeFilter" name="type_filter" style="width: 220px;"
+            <select class="table-filter-select" id="typeFilter" name="type_filter" style="min-width: 200px;"
                     hx-get="/table/{{ table_name }}" 
                     hx-trigger="change" 
                     hx-target="#tableContent" 
@@ -169,8 +272,9 @@
             {% endif %}
 
             <!-- Live Search Bar -->
-            <div style="position: relative; display: inline-flex; align-items: center;">
-                <input type="text" class="search-box" id="searchInput" name="q" placeholder="Search records..." 
+            <div class="relative inline-flex items-center">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3" style="color: var(--color-mist);"></i>
+                <input type="text" class="table-search-input pl-9 pr-8" id="searchInput" name="q" placeholder="Search records..." 
                        hx-get="/table/{{ table_name }}" 
                        hx-trigger="keyup changed delay:300ms, search" 
                        hx-target="#tableContent" 
@@ -180,30 +284,32 @@
                        {% if table_name == 'phc_lookup_values_t' %}hx-include="#typeFilter"{% endif %}
                        value="{{ search_query | default('') }}"
                        oninput="const clr=document.getElementById('tableSearchClear'); if(clr) clr.style.display = this.value ? 'flex' : 'none';"
-                       autocomplete="off"
-                       style="padding-right: 30px;">
+                       autocomplete="off">
                 <button type="button" id="tableSearchClear" 
                         onclick="const input=document.getElementById('searchInput'); input.value=''; input.dispatchEvent(new Event('search')); this.style.display='none'; input.focus();"
-                        style="display: {{ 'flex' if search_query else 'none' }}; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--color-fog); cursor: pointer; padding: 2px; align-items: center; justify-content: center;"
+                        style="display: {{ 'flex' if search_query else 'none' }};"
+                        class="absolute right-2.5 p-0.5 rounded text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
                         title="Clear search">
-                    <i data-lucide="x" style="width: 14px; height: 14px;"></i>
+                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
                 </button>
             </div>
-
         </div>
     </div>
 
     <!-- Table Dynamic Content Container -->
     <div id="tableContent">
-        <div class="table-container">
-            <div class="table-scroll">
+        <div class="table-card">
+            <div class="table-scroll-wrap">
                 <table id="dataTable">
                     <thead>
                         <tr>
-                            <th style="width: 60px; text-align: center;">Action</th>
+                            <th style="width: 50px; text-align: center;">Action</th>
                             {% for col in columns %}
                             <th data-index="{{ loop.index }}" onclick="sortTable({{ loop.index }}, false)">
-                                {{ col.label }} <i class="sort-icon" data-lucide="arrow-up-down" style="width:12px; height:12px; opacity:0.35; margin-left: 4px; vertical-align: middle;"></i>
+                                <span class="inline-flex items-center gap-1.5">
+                                    {{ col.label }}
+                                    <i class="sort-icon w-3 h-3 opacity-40" data-lucide="arrow-up-down"></i>
+                                </span>
                             </th>
                             {% endfor %}
                         </tr>
@@ -211,11 +317,13 @@
                     <tbody>
                         {% if not rows %}
                         <tr>
-                            <td colspan="{{ columns|length + 1 }}" style="text-align: center; padding: 48px 20px; color: var(--color-fog);">
-                                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
-                                    <i data-lucide="search-x" style="width: 32px; height: 32px; opacity: 0.4;"></i>
-                                    <p style="font-size: 14px; font-weight: 500; margin: 0; color: var(--color-moonlight);">No matching records found</p>
-                                    <p style="font-size: 12px; margin: 0; opacity: 0.7;">Try refining your search keyword or clearing the filter</p>
+                            <td colspan="{{ columns|length + 1 }}" class="text-center py-16">
+                                <div class="flex flex-col items-center justify-center gap-2">
+                                    <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background: var(--color-bone); color: var(--color-mist);">
+                                        <i data-lucide="search-x" class="w-5 h-5"></i>
+                                    </div>
+                                    <p class="text-sm font-semibold mt-1" style="color: var(--color-obsidian);">No matching records found</p>
+                                    <p class="text-xs" style="color: var(--color-graphite);">Try refining your search keyword or clearing active filters.</p>
                                 </div>
                             </td>
                         </tr>
@@ -223,18 +331,24 @@
                         {% for row in rows %}
                         <tr>
                             <td style="text-align: center;">
-                                <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" preload="mouseover" class="action-btn" title="Edit Record">
-                                    <i data-lucide="edit-2" style="width: 14px; height: 14px;"></i>
+                                <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" class="row-action-btn" title="Edit Record">
+                                    <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
                                 </a>
                             </td>
                             {% for col in columns %}
                                 <td>
                                     {% set val = row[col.raw] %}
-                                    {% if val == 'ACT' %} <span class="pill pill-act">Active</span>
-                                    {% elif val == 'INA' %} <span class="pill pill-ina">Inactive</span>
-                                    {% elif val == 'None' or val == None or val == '' %} <span class="pill pill-def">Empty</span>
-                                    {% elif val.strftime is defined %} {{ val.strftime('%Y-%m-%d %H:%M') }}
-                                    {% else %} {{ val }} {% endif %}
+                                    {% if val == 'ACT' %} 
+                                        <span class="status-pill status-act">Active</span>
+                                    {% elif val == 'INA' %} 
+                                        <span class="status-pill status-ina">Inactive</span>
+                                    {% elif val == 'None' or val == None or val == '' %} 
+                                        <span class="status-pill status-def">Empty</span>
+                                    {% elif val.strftime is defined %} 
+                                        <span class="font-mono text-xs">{{ val.strftime('%Y-%m-%d %H:%M') }}</span>
+                                    {% else %} 
+                                        {{ val }} 
+                                    {% endif %}
                                 </td>
                             {% endfor %}
                         </tr>
@@ -243,64 +357,69 @@
                     </tbody>
                 </table>
             </div>
-        </div>
 
-        <!-- Pagination Controls -->
-        <div class="pagination-wrapper">
-            <div>Showing {{ start_row }} to {{ end_row }} of {{ total_count }} entries</div>
-            
-            <div class="pagination-controls">
-                <button class="page-btn" 
-                        {% if page > 1 %}
-                        hx-get="/table/{{ table_name }}?page={{ page - 1 }}" 
-                        hx-include="#searchInput{% if table_name == 'phc_lookup_values_t' %}, #typeFilter{% endif %}"
-                        hx-target="#tableContent" hx-select="#tableContent" hx-swap="outerHTML"
-                        hx-push-url="true"
-                        {% else %} disabled {% endif %}>
-                    <i data-lucide="chevron-left" style="width: 14px; height: 14px;"></i> Prev
-                </button>
+            <!-- Pagination Controls -->
+            <div class="pagination-bar">
+                <div class="font-mono text-xs" style="color: var(--color-steel);">
+                    Showing <span class="font-semibold" style="color: var(--color-obsidian);">{{ start_row }}</span> to <span class="font-semibold" style="color: var(--color-obsidian);">{{ end_row }}</span> of <span class="font-semibold" style="color: var(--color-obsidian);">{{ total_count }}</span> entries
+                </div>
                 
-                <span style="padding: 6px 12px; font-weight: 500;">Page {{ page }} of {{ total_pages }}</span>
-                
-                <button class="page-btn" 
-                        {% if page < total_pages %}
-                        hx-get="/table/{{ table_name }}?page={{ page + 1 }}" 
-                        hx-include="#searchInput{% if table_name == 'phc_lookup_values_t' %}, #typeFilter{% endif %}"
-                        hx-target="#tableContent" hx-select="#tableContent" hx-swap="outerHTML"
-                        hx-push-url="true"
-                        {% else %} disabled {% endif %}>
-                    Next <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i>
-                </button>
+                <div class="flex items-center gap-2">
+                    <button class="pagination-btn" 
+                            {% if page > 1 %}
+                            hx-get="/table/{{ table_name }}?page={{ page - 1 }}" 
+                            hx-include="#searchInput{% if table_name == 'phc_lookup_values_t' %}, #typeFilter{% endif %}"
+                            hx-target="#tableContent" hx-select="#tableContent" hx-swap="outerHTML"
+                            hx-push-url="true"
+                            {% else %} disabled {% endif %}>
+                        <i data-lucide="chevron-left" class="w-4 h-4"></i> Prev
+                    </button>
+                    
+                    <span class="px-3 py-1 font-mono text-xs font-semibold" style="color: var(--color-obsidian);">
+                        Page {{ page }} of {{ total_pages }}
+                    </span>
+                    
+                    <button class="pagination-btn" 
+                            {% if page < total_pages %}
+                            hx-get="/table/{{ table_name }}?page={{ page + 1 }}" 
+                            hx-include="#searchInput{% if table_name == 'phc_lookup_values_t' %}, #typeFilter{% endif %}"
+                            hx-target="#tableContent" hx-select="#tableContent" hx-swap="outerHTML"
+                            hx-push-url="true"
+                            {% else %} disabled {% endif %}>
+                        Next <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Floating Round Glass Action Dock Pill (Bottom Center) -->
-    <div class="floating-action-dock" style="position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 999; pointer-events: auto;">
+    <!-- Floating Action Dock Pill (Bottom Center) -->
+    <div class="floating-action-dock">
         <!-- Refresh Button -->
-        <button class="dock-btn" onclick="window.location.reload()" title="Refresh Table" type="button">
-            <i data-lucide="refresh-cw" style="width: 16px; height: 16px;"></i>
+        <button class="dock-icon-btn" onclick="window.location.reload()" title="Refresh Table" type="button">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
         </button>
 
         <div class="dock-divider"></div>
 
         <!-- Export CSV -->
-        <a href="/export/{{ table_name }}" class="dock-btn" title="Export CSV">
-            <i data-lucide="download" style="width: 16px; height: 16px;"></i>
+        <a href="/export/{{ table_name }}" class="dock-icon-btn" title="Export CSV">
+            <i data-lucide="download" class="w-4 h-4"></i>
         </a>
 
         <div class="dock-divider"></div>
 
-        <!-- Add Record -->
-        <a href="/new/{{ table_name }}" id="topAddRecordBtn" class="dock-btn" title="Add Record">
-            <i data-lucide="plus" style="width: 18px; height: 18px;"></i>
+        <!-- Add Record with Signature Glow Halo -->
+        <a href="/new/{{ table_name }}" id="topAddRecordBtn" class="glow-halo-btn" style="border-radius: 9999px; padding: 7px 18px; font-size: 13px;">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>Add Record</span>
         </a>
     </div>
 </div>
 
 <script>
     (function initTableView() {
-        lucide.createIcons();
+        if (window.lucide) lucide.createIcons();
 
         const addRecordBtn = document.getElementById('topAddRecordBtn');
         const typeFilter = document.getElementById('typeFilter');
