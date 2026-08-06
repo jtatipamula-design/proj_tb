@@ -239,7 +239,7 @@
 
         /* Sidebar Styles */
         #main-sidebar {
-            width: 18rem;
+            width: 20rem;
             background-color: var(--surface-pure-white-cards);
             border-right: 1px solid var(--color-fog);
             transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, transform 0.3s ease;
@@ -325,7 +325,7 @@
         
         <!-- Sidebar -->
         <aside id="main-sidebar" class="flex-shrink-0 flex flex-col overflow-hidden z-20">
-            <div class="w-72 flex flex-col h-full flex-shrink-0">
+            <div class="w-80 flex flex-col h-full flex-shrink-0">
                 
                 <!-- Branding Header -->
                 <div class="p-5 flex items-center justify-between" style="border-bottom: 1px solid var(--color-fog);">
@@ -336,7 +336,7 @@
                         </div>
                         <div>
                             <h1 class="text-lg font-semibold tracking-tight font-serif-heading" style="color: var(--color-obsidian);">Brihas ERP</h1>
-                            <p class="text-[11px] font-mono uppercase tracking-wider" style="color: var(--color-mist);">Enterprise Platform</p>
+                            <p class="text-xs font-mono uppercase tracking-wider" style="color: var(--color-mist);">Enterprise Platform</p>
                         </div>
                     </a>
                 </div>
@@ -351,8 +351,8 @@
                              style="background: rgba(85, 93, 255, 0.1); color: var(--color-iris);">
                             <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
                         </div>
-                        <span class="flex-1 font-semibold text-xs tracking-wide">Command Center</span>
-                        <span class="badge-lagoon text-[10px] py-0.5 px-2 font-mono">Overview</span>
+                        <span class="flex-1 font-semibold text-sm tracking-normal">Dashboard</span>
+                        <span class="badge-lagoon text-xs py-0.5 px-2 font-mono">Overview</span>
                     </a>
                 </div>
 
@@ -361,7 +361,7 @@
                     <div class="relative">
                         <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2" style="color: var(--color-mist);"></i>
                         <input type="text" id="sidebar-search-input" oninput="handleSidebarSearch(this.value)" placeholder="Filter screens or tables..." 
-                               class="w-full rounded-[10px] pl-9 pr-8 py-2 text-xs focus:outline-none transition-all"
+                               class="w-full rounded-[10px] pl-9 pr-8 py-2.5 text-[13.5px] focus:outline-none transition-all"
                                style="background: var(--color-bone); border: 1px solid var(--color-fog); color: var(--color-obsidian);">
                         <button type="button" id="sidebar-search-clear" onclick="clearSidebarSearch()" 
                                 class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors cursor-pointer"
@@ -372,39 +372,39 @@
                 </div>
 
                 <!-- 3. Module Tree Navigation Accordions -->
-                <div class="flex-1 overflow-y-auto py-2 px-3 space-y-1" id="sidebar-module-list">
+                <div class="flex-1 overflow-y-auto py-2 px-3 space-y-1.5" id="sidebar-module-list">
                     {% for module_name, mod_info in modules_tree.items() %}
                     {% set screens = mod_info.screens if mod_info is mapping and mod_info.screens is defined else mod_info %}
                     {% set mod_icon = mod_info.icon if mod_info is mapping and mod_info.icon is defined else 'layers' %}
                     <div class="sidebar-module mb-1" id="mod-container-{{ module_name | urlencode }}">
                         <button type="button" 
                                 onclick="toggleSidebarModule('{{ module_name | urlencode }}')"
-                                class="sidebar-mod-btn w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded-lg transition-all"
+                                class="sidebar-mod-btn w-full flex items-center justify-between px-3.5 py-2.5 text-sm font-semibold rounded-lg transition-all"
                                 style="color: var(--color-graphite);"
                                 onmouseenter="this.style.background='var(--color-bone)'"
                                 onmouseleave="this.style.background='transparent'">
                             <span class="flex items-center gap-2.5 truncate">
                                 <div class="w-5 h-5 rounded flex items-center justify-center flex-shrink-0" style="color: var(--color-iris);">
-                                    <i data-lucide="{{ mod_icon }}" class="w-4 h-4"></i>
+                                    <i data-lucide="{{ mod_icon }}" class="w-4.5 h-4.5"></i>
                                 </div>
-                                <span class="mod-title font-semibold truncate">{{ module_name }}</span>
+                                <span class="mod-title font-semibold text-sm truncate">{{ module_name }}</span>
                             </span>
-                            <div class="flex items-center gap-1.5 flex-shrink-0">
-                                <span class="text-[10px] font-mono px-1.5 py-0.2 rounded-full" style="color: var(--color-mist); background: var(--color-bone);">{{ screens|length }}</span>
-                                <i data-lucide="chevron-down" class="mod-chevron w-3.5 h-3.5 transition-transform opacity-60"></i>
+                            <div class="flex items-center gap-2 flex-shrink-0">
+                                <span class="text-xs font-mono px-2 py-0.5 rounded-full" style="color: var(--color-mist); background: var(--color-bone);">{{ screens|length }}</span>
+                                <i data-lucide="chevron-down" class="mod-chevron w-4 h-4 transition-transform opacity-60"></i>
                             </div>
                         </button>
                         
                         <!-- Nested Screens -->
                         <div id="mod-screens-{{ module_name | urlencode }}" 
-                             class="mod-screens hidden mt-1 space-y-0.5 px-1 ml-4 py-1" 
-                             style="border-left: 1.5px solid var(--color-fog);">
+                             class="mod-screens hidden mt-1 space-y-1 px-1 ml-4 py-1" 
+                             style="border-left: 2px solid var(--color-fog);">
                             {% for screen in screens %}
                             <a href="/table/{{ screen.code }}" 
-                               class="screen-link block px-2.5 py-1.5 text-xs rounded-lg transition-colors flex items-center gap-2"
+                               class="screen-link block px-3 py-2 text-[13.5px] font-medium rounded-lg transition-colors flex items-center gap-2.5"
                                data-screen-name="{{ screen.name | lower }}"
                                data-search-terms="{{ screen.search_terms | lower }}">
-                                <i data-lucide="table" class="w-3.5 h-3.5 opacity-60"></i>
+                                <i data-lucide="table" class="w-4 h-4 opacity-60"></i>
                                 <span class="truncate">{{ screen.name }}</span>
                             </a>
                             {% endfor %}
@@ -419,13 +419,13 @@
                         <a href="/form/phc_users_t/{{ user_id }}" 
                            class="flex items-center gap-2.5 flex-1 min-w-0 group cursor-pointer text-decoration-none"
                            title="View User Profile">
-                            <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold"
+                            <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold"
                                  style="background: var(--surface-onyx-action); color: #ffffff;">
                                 {{ username[:2] | upper if username else 'U' }}
                             </div>
                             <div class="flex-1 min-w-0">
-                                <p class="text-xs font-semibold truncate group-hover:text-iris" style="color: var(--color-obsidian);">{{ username }}</p>
-                                <span class="badge-iris text-[10px] py-0 px-1.5 font-mono">{{ user_role }}</span>
+                                <p class="text-sm font-semibold truncate group-hover:text-iris" style="color: var(--color-obsidian);">{{ username }}</p>
+                                <span class="badge-iris text-[11px] py-0 px-1.5 font-mono">{{ user_role }}</span>
                             </div>
                         </a>
                         
@@ -465,7 +465,7 @@
                         <i data-lucide="panel-left" class="w-4 h-4"></i>
                     </button>
                     <h2 id="header-title" class="text-base font-semibold tracking-tight font-serif-heading" style="color: var(--color-obsidian);">
-                        {% block header_title %}Command Center{% endblock %}
+                        {% block header_title %}Dashboard{% endblock %}
                     </h2>
                 </div>
             </header>
