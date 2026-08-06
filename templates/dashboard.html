@@ -1,108 +1,182 @@
 {% extends "base.html" %}
 
-{% block head_title %}Dashboard{% endblock %}
-{% block header_title %}Command Center Dashboard{% endblock %}
+{% block head_title %}Command Center{% endblock %}
+{% block header_title %}Command Center{% endblock %}
 
 {% block content %}
 <style>
-    /* 6-Column Responsive Glass Module Grid */
-    .icon-btns {
-      display: grid;
-      grid-gap: 12px;
-      grid-template-columns: repeat(2, 1fr);
-      margin: 0 auto;
-      padding: 1.5rem 0 3rem;
-      width: 100%;
-      max-width: 1280px;        
+    /* 6-Column Responsive Module Grid */
+    .module-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 18px;
+        width: 100%;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding-bottom: 48px;
     }
     
     @media (min-width: 640px) {
-      .icon-btns {
-        grid-template-columns: repeat(3, 1fr);
-      }
+        .module-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
     }
 
     @media (min-width: 1024px) {
-      .icon-btns {
-        grid-template-columns: repeat(6, 1fr);
-      }
+        .module-grid {
+            grid-template-columns: repeat(6, 1fr);
+            gap: 20px;
+        }
     }
     
-    .icon-btn {
-      background: var(--glass-bg, var(--glass-surface));
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid var(--glass-border);
-      border-radius: 12px;
-      outline: none;
-      position: relative;
-      min-height: 70px;
-      padding: 12px 10px;
-      -webkit-tap-highlight-color: transparent;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+    /* Module Card */
+    .module-card {
+        background-color: var(--surface-pure-white-cards);
+        border: 1px solid var(--color-fog);
+        border-radius: var(--radius-cards);
+        padding: 24px 16px 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        cursor: pointer;
+        outline: none;
+        position: relative;
+        transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: var(--shadow-card);
+        text-decoration: none;
     }
     
-    .icon-btn:hover {
-      transform: translateY(-2px);
-      border-color: rgba(255, 255, 255, 0.3);
-      background: rgba(255, 255, 255, 0.08);
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+    .module-card:hover {
+        transform: translateY(-3px);
+        border-color: var(--color-ash);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.04);
+    }
+    
+    html.dark .module-card:hover {
+        border-color: rgba(255, 255, 255, 0.2);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
     }
 
-    .icon-btn:active {
-      transform: scale(0.97);
+    .module-card:active {
+        transform: scale(0.98);
     }
     
-    .icon-btn__name {
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 0.01em;
-      line-height: 1.35;
-      font-family: var(--font-ui);
-      color: var(--color-glacier, #fff);
-      word-break: break-word;
-      transition: color 0.2s ease;
+    /* Icon Container at Top */
+    .module-icon-wrap {
+        width: 58px;
+        height: 58px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 14px;
+        background: rgba(85, 93, 255, 0.08);
+        color: var(--color-iris);
+        border: 1px solid rgba(85, 93, 255, 0.15);
+        transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    
-    html:not(.dark) .icon-btn__name {
-      color: #1e293b;
+
+    .module-card:hover .module-icon-wrap {
+        transform: scale(1.08);
+        background: rgba(85, 93, 255, 0.14);
+        border-color: rgba(85, 93, 255, 0.3);
+    }
+
+    /* Module Name Underneath Icon */
+    .module-name {
+        font-family: var(--font-ui);
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        line-height: 1.3;
+        color: var(--color-obsidian);
+        margin-bottom: 6px;
+        word-break: break-word;
+        transition: color 0.15s ease;
+    }
+
+    .module-card:hover .module-name {
+        color: var(--color-iris);
+    }
+
+    /* Hero Headline Section */
+    .dashboard-hero {
+        max-width: 1200px;
+        margin: 0 auto 36px;
+        padding-top: 12px;
+    }
+
+    .hero-title {
+        font-family: var(--font-reckless);
+        font-size: 34px;
+        font-weight: 500;
+        letter-spacing: -0.02em;
+        line-height: 1.15;
+        color: var(--color-obsidian);
+        margin-bottom: 8px;
+    }
+
+    .hero-sub {
+        font-family: var(--font-ui);
+        font-size: 15px;
+        color: var(--color-graphite);
+        max-width: 520px;
+        line-height: 1.5;
     }
 </style>
 
-<div class="mb-8 w-full flex flex-col items-center">
-    <p class="text-xs uppercase tracking-widest font-mono mb-4 w-full text-center" style="color: var(--color-fog);">ERP Modules</p>
-    
-    <!-- 6-across Grid (wraps naturally into rows of 6) -->
-    <div class="icon-btns">
-        {% for module_name, screens in modules_tree.items() %}
-        <button class="icon-btn" 
+<div class="w-full">
+    <!-- Hero Header -->
+    <div class="dashboard-hero">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="badge-iris">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                <span>Enterprise Suite</span>
+            </span>
+            <span class="text-xs font-mono" style="color: var(--color-mist);">•</span>
+            <span class="text-xs font-mono" style="color: var(--color-steel);">{{ all_tables|length }} Active Screens</span>
+        </div>
+        <h1 class="hero-title">Command Center</h1>
+        <p class="hero-sub">Select an enterprise module below or navigate through the sidebar index to manage pharmaceutical tables, workflows, and configurations.</p>
+    </div>
+
+    <!-- 6-Across Responsive Grid with Module Icons at Top & Names Underneath -->
+    <div class="module-grid">
+        {% for module_name, mod_info in modules_tree.items() %}
+        {% set screens = mod_info.screens if mod_info is mapping and mod_info.screens is defined else mod_info %}
+        {% set mod_icon = mod_info.icon if mod_info is mapping and mod_info.icon is defined else 'layers' %}
+        
+        <button class="module-card group" 
                 aria-label="{{ module_name }}" 
                 type="button" 
                 onclick="openModuleFromDashboard('{{ module_name | urlencode }}')">
-            <span class="icon-btn__name">{{ module_name }}</span>
+            
+            <!-- Module Icon (Large at Top) -->
+            <div class="module-icon-wrap">
+                <i data-lucide="{{ mod_icon }}" class="w-7 h-7"></i>
+            </div>
+            
+            <!-- Module Name Underneath -->
+            <span class="module-name">{{ module_name }}</span>
+            
+            <!-- Screen Count Badge -->
+            <span class="badge-lagoon text-[11px] py-0.5 px-2 font-mono mt-1">
+                {{ screens|length }} screen{{ 's' if screens|length != 1 else '' }}
+            </span>
         </button>
         {% endfor %}
     </div>
-</div>
 
-{% if not modules_tree %}
-<div style="padding: 80px 0; text-align: center; color: var(--color-fog);">
-    <i data-lucide="folder-search" style="width: 48px; height: 48px; margin: 0 auto 16px; opacity: 0.5;"></i>
-    <p style="font-size: 16px;">No modules available or authorized for your role.</p>
+    {% if not modules_tree %}
+    <div class="sketch-card p-12 text-center max-w-md mx-auto my-12" style="border-radius: 20px;">
+        <div class="w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center" style="background: var(--color-bone); color: var(--color-mist);">
+            <i data-lucide="folder-search" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-base font-semibold mb-1" style="color: var(--color-obsidian);">No Authorized Modules</h3>
+        <p class="text-xs" style="color: var(--color-graphite);">Your account role currently does not have assigned screen permissions.</p>
+    </div>
+    {% endif %}
 </div>
-{% endif %}
-
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        if (window.lucide) {
-            lucide.createIcons();
-        }
-    });
-</script>
 {% endblock %}

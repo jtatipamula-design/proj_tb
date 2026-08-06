@@ -1,168 +1,276 @@
 {% extends "base.html" %}
 
+{% block head_title %}{{ 'Edit' if is_update else 'New' }} - {{ table_title }}{% endblock %}
+{% block header_title %}{{ 'Edit' if is_update else 'New' }} - {{ table_title }}{% endblock %}
+
 {% block content %}
 <style>
-    .content-wrapper {
-        width: 100%; max-width: 920px; margin: 0 auto;
-        display: flex; flex-direction: column;
-    }
-
-    .page-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; }
-    .page-header h1 { font-size: 26px; font-weight: 700; color: var(--color-glacier); letter-spacing: -0.02em; line-height: 1.2; margin: 0; }
-    
-    .form-card {
-        background: var(--glass-surface); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-        border: 1px solid var(--glass-border); border-radius: 14px; padding: 32px;
-        box-shadow: 0 12px 40px -10px rgba(0, 0, 0, 0.5);
-    }
-
-    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
-    .full-width { grid-column: 1 / -1; }
-
-    .form-group { display: flex; flex-direction: column; gap: 8px; }
-    .form-group label { font-size: 13px; font-weight: 500; color: var(--color-moonlight); display: flex; justify-content: space-between; align-items: center; }
-    .required-star { color: var(--color-ember); margin-left: 4px; font-weight: 700; }
-
-    .form-control {
-        background: rgba(0, 0, 0, 0.35); border: 1px solid var(--glass-border);
-        color: var(--color-glacier); padding: 11px 14px; border-radius: 8px;
-        font-family: var(--font-ui); font-size: 13.5px; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    .form-page-container {
         width: 100%;
+        max-width: 960px;
+        margin: 0 auto;
+        padding-bottom: 80px;
     }
-    .form-control:hover:not(:read-only):not(:disabled) {
-        border-color: rgba(186, 215, 247, 0.4);
-        background: rgba(255, 255, 255, 0.04);
-        transform: translateY(-1px);
+
+    .form-card {
+        background-color: var(--surface-pure-white-cards);
+        border: 1px solid var(--color-fog);
+        border-radius: var(--radius-cards);
+        padding: 36px 32px;
+        box-shadow: var(--shadow-card);
+        margin-top: 20px;
     }
-    .form-control:focus {
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+    }
+
+    .full-width {
+        grid-column: 1 / -1;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+    }
+
+    .form-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-graphite);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .required-star {
+        color: #ef4444;
+        margin-left: 3px;
+        font-weight: 700;
+    }
+
+    .sketch-input {
+        background-color: var(--color-bone);
+        border: 1px solid var(--color-fog);
+        color: var(--color-obsidian);
+        padding: 10px 14px;
+        border-radius: var(--radius-inputs);
+        font-family: var(--font-ui);
+        font-size: 13.5px;
+        transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        width: 100%;
         outline: none;
-        border-color: var(--color-electric-iris);
-        box-shadow: 0 0 0 3px rgba(102, 58, 243, 0.25), 0 0 16px rgba(102, 58, 243, 0.2);
-        background: rgba(0, 0, 0, 0.45);
-        transform: translateY(-1px);
     }
-    .form-control:read-only {
-        background: rgba(255, 255, 255, 0.02);
-        border: 1px dashed var(--glass-border);
-        color: var(--color-fog);
+
+    .sketch-input:hover:not(:read-only):not(:disabled) {
+        border-color: var(--color-ash);
+        background-color: var(--surface-pure-white-cards);
+    }
+
+    .sketch-input:focus {
+        border-color: var(--color-iris);
+        background-color: var(--surface-pure-white-cards);
+        box-shadow: 0 0 0 3px rgba(85, 93, 255, 0.12);
+    }
+
+    .sketch-input:read-only {
+        background-color: var(--color-bone);
+        border: 1px dashed var(--color-fog);
+        color: var(--color-mist);
         cursor: default;
     }
-    html.light-mode .form-control { background: rgba(255, 255, 255, 0.6); color: var(--color-midnight-ink); }
-    html.light-mode .form-control:hover:not(:read-only):not(:disabled) { background: rgba(255, 255, 255, 0.9); }
-    html.light-mode .form-control:read-only { background: rgba(0, 0, 0, 0.03); }
-    
-    textarea.form-control { resize: vertical; min-height: 100px; line-height: 1.5; }
-    select.form-control {
-        appearance: none; cursor: pointer; padding-right: 36px;
-        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2381899b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>');
-        background-repeat: no-repeat; background-position: right 14px center;
+
+    textarea.sketch-input {
+        resize: vertical;
+        min-height: 100px;
+        line-height: 1.5;
     }
-    select.form-control option { background: var(--color-midnight-ink); color: var(--color-glacier); }
-    html.light-mode select.form-control option { background: #fff; color: var(--color-midnight-ink); }
+
+    select.sketch-input {
+        appearance: none;
+        cursor: pointer;
+        padding-right: 36px;
+        background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%2371717a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>');
+        background-repeat: no-repeat;
+        background-position: right 14px center;
+    }
 
     /* Custom Status Toggle */
     .status-toggle {
-        display: flex; background: rgba(0,0,0,0.35); border-radius: 8px;
-        border: 1px solid var(--glass-border); overflow: hidden; height: 42px;
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        display: flex;
+        background-color: var(--color-bone);
+        border-radius: var(--radius-inputs);
+        border: 1px solid var(--color-fog);
+        overflow: hidden;
+        height: 42px;
+        padding: 2px;
     }
-    .status-toggle:hover { border-color: rgba(186, 215, 247, 0.3); }
-    html.light-mode .status-toggle { background: rgba(255, 255, 255, 0.6); }
-    .status-toggle input[type="radio"] { display: none; }
+
+    .status-toggle input[type="radio"] {
+        display: none;
+    }
+
     .status-toggle label {
-        flex: 1; display: flex; align-items: center; justify-content: center;
-        font-size: 13px; font-weight: 500; color: var(--color-fog); cursor: pointer;
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12.5px;
+        font-weight: 500;
+        font-family: var(--font-mono);
+        color: var(--color-slate);
+        cursor: pointer;
+        border-radius: 6px;
+        transition: all 0.18s ease;
     }
-    .status-toggle label:hover { color: var(--color-glacier); background: rgba(255, 255, 255, 0.04); }
+
     .status-toggle input[type="radio"]:checked + .status-act {
-        background: rgba(38, 150, 132, 0.2); color: var(--color-cipher-mint);
-        font-weight: 600; box-shadow: inset 0 0 12px rgba(38, 150, 132, 0.25);
+        background-color: var(--surface-pure-white-cards);
+        color: var(--color-lagoon);
+        font-weight: 600;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     }
+
     .status-toggle input[type="radio"]:checked + .status-ina {
-        background: rgba(228, 109, 76, 0.2); color: var(--color-ember);
-        font-weight: 600; box-shadow: inset 0 0 12px rgba(228, 109, 76, 0.25);
+        background-color: var(--surface-pure-white-cards);
+        color: #ef4444;
+        font-weight: 600;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     }
 
-    /* Action Buttons */
+    /* Visual Icon Picker Component */
+    .icon-picker-panel {
+        background: var(--color-bone);
+        border: 1px solid var(--color-fog);
+        border-radius: 14px;
+        padding: 16px;
+        margin-top: 4px;
+    }
+
+    .icon-picker-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+        gap: 8px;
+        max-height: 190px;
+        overflow-y: auto;
+        padding: 4px;
+    }
+
+    .icon-choice-btn {
+        background: var(--surface-pure-white-cards);
+        border: 1px solid var(--color-fog);
+        border-radius: 10px;
+        padding: 10px 6px 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        outline: none;
+    }
+
+    .icon-choice-btn:hover {
+        border-color: var(--color-iris);
+        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(85, 93, 255, 0.15);
+    }
+
+    .icon-choice-btn.selected-icon {
+        border-color: var(--color-iris) !important;
+        background: rgba(85, 93, 255, 0.1) !important;
+        color: var(--color-iris) !important;
+        box-shadow: 0 0 0 2px var(--color-iris) !important;
+    }
+
+    .icon-choice-btn i {
+        width: 20px;
+        height: 20px;
+    }
+
+    .icon-choice-name {
+        font-family: var(--font-mono);
+        font-size: 9px;
+        color: var(--color-slate);
+        max-width: 58px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Form Bottom Actions */
     .form-actions {
-        display: flex; justify-content: space-between; align-items: center;
-        margin-top: 36px; padding-top: 24px; border-top: 1px solid var(--glass-border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 36px;
+        padding-top: 24px;
+        border-top: 1px solid var(--color-fog);
     }
-    .action-group { display: flex; gap: 12px; }
-    
-    .btn-submit {
-        background: linear-gradient(135deg, var(--color-electric-iris), #7c4dff);
-        color: white; border: 1px solid rgba(255, 255, 255, 0.2);
-        padding: 11px 26px; border-radius: 8px; font-weight: 600; font-size: 13.5px;
-        cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        display: inline-flex; align-items: center; gap: 8px;
-        box-shadow: 0 4px 14px rgba(102, 58, 243, 0.35);
-    }
-    .btn-submit:hover {
-        transform: translateY(-2px) scale(1.02);
-        box-shadow: 0 6px 20px rgba(102, 58, 243, 0.55);
-        border-color: rgba(255, 255, 255, 0.4);
-        color: #ffffff;
-    }
-    .btn-submit:hover i { transform: scale(1.15); transition: transform 0.2s ease; }
-    .btn-submit:active { transform: translateY(0) scale(0.98); }
-    
-    .btn-cancel, .btn-clear {
-        background: rgba(255, 255, 255, 0.05); color: var(--color-fog);
-        border: 1px solid var(--glass-border); padding: 11px 20px;
-        border-radius: 8px; font-weight: 500; font-size: 13.5px;
-        cursor: pointer; transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-        display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
-    }
-    .btn-cancel:hover {
-        color: var(--color-glacier); background: rgba(186, 215, 247, 0.1);
-        border-color: var(--color-frost-link); transform: translateY(-1px);
-    }
-    .btn-cancel:active { transform: translateY(0) scale(0.98); }
-    
-    .btn-clear { border-style: dashed; }
-    .btn-clear:hover {
-        color: var(--color-ember); border-color: var(--color-ember);
-        background: rgba(228, 109, 76, 0.15); transform: translateY(-1px);
-    }
-    .btn-clear:active { transform: translateY(0) scale(0.98); }
-    
-    html.light-mode .btn-cancel:hover { background: rgba(0,0,0,0.05); color: var(--color-midnight-ink); }
 
-    /* Virtual Checkboxes for JSONB */
+    /* Checkbox List for JSON Arrays */
     .checkbox-list {
-        display: flex; flex-direction: column; gap: 10px; max-height: 200px;
-        overflow-y: auto; padding: 12px; background: rgba(0,0,0,0.25);
-        border: 1px solid var(--glass-border); border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 180px;
+        overflow-y: auto;
+        padding: 12px;
+        background: var(--color-bone);
+        border: 1px solid var(--color-fog);
+        border-radius: var(--radius-inputs);
     }
-    html.light-mode .checkbox-list { background: rgba(255,255,255,0.5); }
-    .checkbox-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--color-moonlight); cursor: pointer; }
-    .checkbox-item:hover { color: var(--color-glacier); }
-    .checkbox-item input { accent-color: var(--color-electric-iris); width: 16px; height: 16px; cursor: pointer; }
+
+    .checkbox-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 13px;
+        color: var(--color-graphite);
+        cursor: pointer;
+    }
+
+    .checkbox-item input {
+        accent-color: var(--color-iris);
+        width: 15px;
+        height: 15px;
+        cursor: pointer;
+    }
 </style>
 
-<div class="content-wrapper">
-    <!-- Breadcrumbs Navigation -->
-    <div class="breadcrumbs" style="display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 20px; color: var(--color-fog);">
-        <a href="/" preload="mouseover" style="color: var(--color-fog); text-decoration: none;" onmouseenter="this.style.color='var(--color-glacier)'" onmouseleave="this.style.color='var(--color-fog)'">Brihas ERP</a> 
-        <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i> 
-        <a href="/table/{{ table_name }}" preload="mouseover" style="color: var(--color-fog); text-decoration: none;" onmouseenter="this.style.color='var(--color-glacier)'" onmouseleave="this.style.color='var(--color-fog)'">{{ table_title }}</a> 
-        <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i> 
-        <span style="color: var(--color-moonlight); font-weight: 500;">{{ 'Edit' if is_update else 'New' }} Record</span>
+<div class="form-page-container">
+    <!-- Breadcrumbs -->
+    <div class="flex items-center gap-2 text-xs font-mono mb-3" style="color: var(--color-mist);">
+        <a href="/" class="hover:underline" style="color: var(--color-slate);">Brihas ERP</a>
+        <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+        <a href="/table/{{ table_name }}" class="hover:underline" style="color: var(--color-slate);">{{ table_title }}</a>
+        <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+        <span style="color: var(--color-obsidian);" class="font-semibold">{{ 'Edit' if is_update else 'New' }} Record</span>
     </div>
 
     <!-- Header -->
-    <div class="page-header">
+    <div class="flex items-center justify-between gap-4">
         <div>
-            <p class="eyebrow-text" style="font-family: var(--font-mono); color: var(--color-fog); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px;">DATABASE TABLE</p>
-            <h1>{{ table_title }}</h1>
-            <p style="color: var(--color-fog); font-size: 14px; margin-top: 4px;">{{ 'Update existing record values' if is_update else 'Create and insert a new record' }}</p>
+            <div class="flex items-center gap-2 mb-1.5">
+                <span class="badge-iris text-xs font-mono uppercase tracking-wider">
+                    <i data-lucide="database" class="w-3.5 h-3.5"></i>
+                    {{ table_name }}
+                </span>
+                <span class="text-xs font-mono" style="color: var(--color-mist);">•</span>
+                <span class="text-xs font-mono" style="color: var(--color-steel);">{{ 'Modify Record' if is_update else 'Create Record' }}</span>
+            </div>
+            <h1 class="text-2xl md:text-3xl font-semibold tracking-tight font-serif-heading" style="color: var(--color-obsidian);">
+                {{ table_title }}
+            </h1>
         </div>
     </div>
 
     <div class="form-card">
-        <!-- Form with Multipart encoding for uploads -->
+        <!-- Form with Multipart Encoding -->
         <form id="recordForm" class="dynamic-form"
               action="/api/{{ table_name }}{{ '/' ~ pk_val if is_update else '' }}"
               method="POST"
@@ -182,33 +290,34 @@
                 {% for col in columns %}
                     {% set is_who_col = col.column_name.lower().endswith('_created') or col.column_name.lower().endswith('_modified') or col.column_name.lower().endswith('_created_by') or col.column_name.lower().endswith('_modified_by') or col.column_name.lower() in ('creation_date', 'last_update_date', 'created_by', 'last_updated_by') %}
                     {% set is_company_col = (col.column_name.lower() == 'company_id' or col.column_name.lower().endswith('_company_id')) and not (table_name == 'phc_screens_t' and user_role == 'ADM') %}
+                    {% set is_icon_col = 'icon' in col.column_name.lower() or (table_name == 'phc_module_t' and col.column_name.lower() in ('pmd_module_icon', 'icon', 'module_icon')) %}
                     {% set is_large_text = col.data_type in ('text', 'json', 'jsonb') or 'desc' in col.column_name.lower() or 'note' in col.column_name.lower() or 'message' in col.column_name.lower() or 'address' in col.column_name.lower() %}
                     {% set is_file_col = 'image' in col.column_name.lower() or 'file' in col.column_name.lower() or 'document' in col.column_name.lower() or col.data_type == 'bytea' %}
 
                     {% if not is_who_col and not is_company_col %}
-                        <div class="form-group {% if is_large_text or is_file_col %}full-width{% endif %}">
-                            <label for="{{ col.column_name }}">
+                        <div class="form-group {% if is_large_text or is_file_col or is_icon_col %}full-width{% endif %}">
+                            <label for="{{ col.column_name }}" class="form-label">
                                 <span>{{ col.label }} {% if col.required and not col.is_pk %}<span class="required-star">*</span>{% endif %}</span>
                                 {% if col.is_pk %}
                                     {% set is_auto = col.data_type in ('integer', 'bigint', 'smallint') %}
                                     {% if is_auto %}
-                                        <span style="font-size: 11px; color: var(--color-fog); font-weight: 400;">(Auto-Assigned ID)</span>
+                                        <span class="text-[11px] font-mono" style="color: var(--color-mist);">(Auto-Assigned ID)</span>
                                     {% elif is_update %}
-                                        <span style="font-size: 11px; color: var(--color-fog); font-weight: 400;">(Primary Key Locked)</span>
+                                        <span class="text-[11px] font-mono" style="color: var(--color-mist);">(Primary Key Locked)</span>
                                     {% endif %}
                                 {% endif %}
                             </label>
 
-                            {# PRIMARY KEY #}
+                            {# 1. PRIMARY KEY #}
                             {% if col.is_pk %}
                                 {% set is_auto = col.data_type in ('integer', 'bigint', 'smallint') %}
-                                <input type="text" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" 
+                                <input type="text" id="{{ col.column_name }}" name="{{ col.column_name }}" class="sketch-input" 
                                     value="{{ col.value if col.value is not none else '' }}" 
                                     {% if is_auto or is_update %}readonly{% endif %}
                                     {% if is_auto and not is_update %}placeholder="Auto-Generated on Save..."{% endif %}
                                     {% if not is_auto and not is_update %}required{% endif %}>
 
-                            {# STATUS TOGGLE #}
+                            {# 2. STATUS TOGGLE #}
                             {% elif 'status' in col.column_name.lower() %}
                                 <div class="status-toggle">
                                     <input type="radio" id="{{ col.column_name }}_act" name="{{ col.column_name }}" value="ACT" {% if col.value == 'ACT' or not is_update %}checked{% endif %}>
@@ -218,59 +327,95 @@
                                     <label for="{{ col.column_name }}_ina" class="status-ina">Inactive</label>
                                 </div>
 
-                            {# FILE UPLOAD (Restricted Types) #}
-                            {% elif is_file_col %}
-                                <input type="file" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" multiple accept=".docx,.ppt,.pptx,.jpg,.jpeg,.png,.txt" style="padding: 9px 14px; background: rgba(0,0,0,0.2);" {% if col.required and not is_update %}required{% endif %}>
-                                <span style="font-size: 11px; color: var(--color-fog); margin-top: 4px;"><i data-lucide="shield-check" style="width: 12px; height: 12px; display: inline-block; vertical-align: -2px;"></i> Files will be validated and automatically compressed into a secure .ZIP archive.</span>
+                            {# 3. VISUAL ICON PICKER (For Module Icons & Icon Columns) #}
+                            {% elif is_icon_col %}
+                                <div class="icon-picker-panel">
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <div id="icon-preview-box" class="w-10 h-10 rounded-xl flex items-center justify-center font-semibold" style="background: rgba(85, 93, 255, 0.12); color: var(--color-iris); border: 1px solid rgba(85, 93, 255, 0.25);">
+                                            <i data-lucide="{{ col.value or 'layers' }}" id="icon-preview-glyph" class="w-5 h-5"></i>
+                                        </div>
+                                        <div class="flex-1">
+                                            <p class="text-xs font-semibold" style="color: var(--color-obsidian);">Selected Icon: <span id="icon-preview-label" class="font-mono font-normal text-iris">{{ col.value or 'layers' }}</span></p>
+                                            <p class="text-[11px]" style="color: var(--color-slate);">Click any icon below to assign it to this module</p>
+                                        </div>
+                                        <input type="text" id="icon-search-input" oninput="filterIconPicker(this.value)" placeholder="Search icons..." 
+                                               class="text-xs rounded-lg px-3 py-1.5 outline-none" style="background: var(--surface-pure-white-cards); border: 1px solid var(--color-fog); width: 160px; color: var(--color-obsidian);">
+                                    </div>
+                                    
+                                    <input type="hidden" id="{{ col.column_name }}" name="{{ col.column_name }}" value="{{ col.value or 'layers' }}">
 
-                            {# DROPDOWNS #}
+                                    <div class="icon-picker-grid" id="icon-picker-grid">
+                                        {% for icon_name in (curated_icons | default(['layers', 'database', 'shield-check', 'settings-2', 'sparkles', 'flask-conical', 'clipboard-list', 'building-2', 'users', 'cpu', 'box', 'package', 'truck', 'file-text', 'activity', 'heart-pulse', 'scale', 'workflow', 'archive', 'lock', 'gauge', 'test-tube-2', 'wallet', 'shopping-cart', 'factory', 'wrench', 'bar-chart-3', 'briefcase', 'compass', 'book-open', 'grid', 'folder', 'globe', 'zap'])) %}
+                                        <button type="button" 
+                                                class="icon-choice-btn {% if (col.value or 'layers') == icon_name %}selected-icon{% endif %}"
+                                                data-icon="{{ icon_name }}"
+                                                onclick="selectModuleIcon('{{ col.column_name }}', '{{ icon_name }}')">
+                                            <i data-lucide="{{ icon_name }}"></i>
+                                            <span class="icon-choice-name">{{ icon_name }}</span>
+                                        </button>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+
+                            {# 4. FILE UPLOAD (Restricted Types) #}
+                            {% elif is_file_col %}
+                                <input type="file" id="{{ col.column_name }}" name="{{ col.column_name }}" class="sketch-input" multiple accept=".docx,.ppt,.pptx,.jpg,.jpeg,.png,.txt" {% if col.required and not is_update %}required{% endif %}>
+                                <span class="text-[11px] flex items-center gap-1.5 mt-1" style="color: var(--color-slate);">
+                                    <i data-lucide="shield-check" class="w-3.5 h-3.5 text-lagoon"></i> Files will be validated and encrypted into a secure archive.
+                                </span>
+
+                            {# 5. DROPDOWNS #}
                             {% elif col.options %}
-                                <select id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" {% if col.required and not is_update %}required{% endif %}>
+                                <select id="{{ col.column_name }}" name="{{ col.column_name }}" class="sketch-input" {% if col.required and not is_update %}required{% endif %}>
                                     <option value="" disabled {% if not col.value %}selected{% endif %}>Select {{ col.label }}...</option>
                                     {% for opt in col.options %}
                                         <option value="{{ opt.id }}" {% if col.value|string == opt.id|string %}selected{% endif %}>{{ opt.name }}</option>
                                     {% endfor %}
                                 </select>
 
-                            {# VIRTUAL CHECKBOXES (For JSON arrays) #}
+                            {# 6. VIRTUAL CHECKBOXES (For JSON arrays) #}
                             {% elif col.json_options %}
                                 <div class="checkbox-list">
-                                    <div style="display: flex; gap: 8px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--glass-border);">
-                                        <button type="button" class="btn-cancel" style="padding: 4px 8px; font-size: 11px;" onclick="toggleCheckboxes('{{ col.column_name }}', true)">Select All</button>
-                                        <button type="button" class="btn-cancel" style="padding: 4px 8px; font-size: 11px;" onclick="toggleCheckboxes('{{ col.column_name }}', false)">Clear</button>
+                                    <div class="flex gap-2 pb-2 mb-2" style="border-bottom: 1px solid var(--color-fog);">
+                                        <button type="button" class="ghost-btn py-1 px-2.5 text-xs" onclick="toggleCheckboxes('{{ col.column_name }}', true)">Select All</button>
+                                        <button type="button" class="ghost-btn py-1 px-2.5 text-xs" onclick="toggleCheckboxes('{{ col.column_name }}', false)">Clear</button>
                                     </div>
                                     {% for opt in col.json_options %}
                                         <label class="checkbox-item">
                                             <input type="checkbox" data-group="{{ col.column_name }}" value="{{ opt.id }}" 
                                                 {% if col.value and opt.id in col.value %}checked{% endif %}>
-                                            {{ opt.name }}
+                                            <span>{{ opt.name }}</span>
                                         </label>
                                     {% endfor %}
                                     <input type="hidden" id="{{ col.column_name }}" name="{{ col.column_name }}" value="{{ col.value | default('[]') | forceescape }}">
                                 </div>
 
-                            {# DATES #}
+                            {# 7. DATES #}
                             {% elif 'date' in col.data_type or 'timestamp' in col.data_type or 'date' in col.column_name.lower() %}
-                                <input type="date" id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" 
+                                <input type="date" id="{{ col.column_name }}" name="{{ col.column_name }}" class="sketch-input" 
                                     value="{{ (col.value|string)[:10] if col.value else '' }}"
                                     {% if not is_update and 'start' in col.column_name.lower() %}data-auto-today="true"{% endif %}
                                     {% if col.required %}required{% endif %}>
                             
-                            {# LARGE TEXT #}
+                            {# 8. LARGE TEXT #}
                             {% elif is_large_text %}
-                                <textarea id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" {% if col.required and not is_update %}required{% endif %}>{{ col.value if col.value is not none else '' }}</textarea>
+                                <textarea id="{{ col.column_name }}" name="{{ col.column_name }}" class="sketch-input" {% if col.required and not is_update %}required{% endif %}>{{ col.value if col.value is not none else '' }}</textarea>
 
-                            {# STANDARD INPUT #}
+                            {# 9. STANDARD INPUT #}
                             {% else %}
                                 <input type="{% if col.data_type in ('integer', 'numeric', 'bigint', 'smallint') %}number{% elif col.column_name == 'pus_pwd' %}password{% else %}text{% endif %}" 
-                                       id="{{ col.column_name }}" name="{{ col.column_name }}" class="form-control" 
+                                       id="{{ col.column_name }}" name="{{ col.column_name }}" class="sketch-input" 
                                        value="{{ col.value if col.value is not none else '' }}" 
                                        {% if col.column_name == 'pus_pwd' and not is_update %}placeholder="At least 6 chars with 1+ uppercase letter (A-Z)"{% endif %}
                                        {% if col.required and not is_update and col.column_name != 'pus_pwd' %}required{% endif %}>
                                 {% if col.column_name == 'pus_pwd' %}
-                                    <span style="font-size: 11px; color: var(--color-fog); margin-top: 4px;"><i data-lucide="shield-alert" style="width: 12px; height: 12px; display: inline-block; vertical-align: -2px;"></i> Must contain at least one uppercase letter (A-Z) and 6+ characters.</span>
+                                    <span class="text-[11px] flex items-center gap-1 mt-1" style="color: var(--color-slate);">
+                                        <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-amber-500"></i> Must contain at least one uppercase letter (A-Z) and 6+ characters.
+                                    </span>
                                 {% elif col.column_name in ('pus_user_name', 'pus_usr_name') %}
-                                    <span style="font-size: 11px; color: var(--color-fog); margin-top: 4px;"><i data-lucide="user-check" style="width: 12px; height: 12px; display: inline-block; vertical-align: -2px;"></i> Username must be unique across all system accounts.</span>
+                                    <span class="text-[11px] flex items-center gap-1 mt-1" style="color: var(--color-slate);">
+                                        <i data-lucide="user-check" class="w-3.5 h-3.5 text-lagoon"></i> Username must be unique across all system accounts.
+                                    </span>
                                 {% endif %}
                             {% endif %}
                         </div>
@@ -279,45 +424,47 @@
             </div>
 
             {% if is_update and audit_info and (audit_info.created_by or audit_info.modified_by) %}
-            <div style="margin-top: 24px; padding: 14px 18px; border-radius: 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--color-glass-border); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; font-size: 12px; color: var(--color-fog);">
-                <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 24px;">
+            <div class="mt-6 p-4 rounded-xl flex flex-wrap items-center justify-between gap-4 text-xs"
+                 style="background: var(--color-bone); border: 1px solid var(--color-fog); color: var(--color-slate);">
+                <div class="flex flex-wrap items-center gap-6">
                     {% if audit_info.created_by %}
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <i data-lucide="user-plus" style="width: 15px; height: 15px; color: var(--color-cyan);"></i>
-                        <span>Created by: <strong style="color: var(--color-white);">{{ audit_info.created_by }}</strong>{% if audit_info.created_at %} <span style="opacity: 0.7;">({{ audit_info.created_at.strftime('%Y-%m-%d %H:%M') if audit_info.created_at.strftime is defined else audit_info.created_at }})</span>{% endif %}</span>
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="user-plus" class="w-4 h-4 text-iris"></i>
+                        <span>Created by: <strong style="color: var(--color-obsidian);">{{ audit_info.created_by }}</strong>{% if audit_info.created_at %} <span class="font-mono opacity-80">({{ audit_info.created_at.strftime('%Y-%m-%d %H:%M') if audit_info.created_at.strftime is defined else audit_info.created_at }})</span>{% endif %}</span>
                     </div>
                     {% endif %}
                     {% if audit_info.modified_by %}
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <i data-lucide="user-check" style="width: 15px; height: 15px; color: var(--color-amber);"></i>
-                        <span>Last edited by: <strong style="color: var(--color-white);">{{ audit_info.modified_by }}</strong>{% if audit_info.modified_at %} <span style="opacity: 0.7;">({{ audit_info.modified_at.strftime('%Y-%m-%d %H:%M') if audit_info.modified_at.strftime is defined else audit_info.modified_at }})</span>{% endif %}</span>
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="user-check" class="w-4 h-4 text-lagoon"></i>
+                        <span>Last modified by: <strong style="color: var(--color-obsidian);">{{ audit_info.modified_by }}</strong>{% if audit_info.modified_at %} <span class="font-mono opacity-80">({{ audit_info.modified_at.strftime('%Y-%m-%d %H:%M') if audit_info.modified_at.strftime is defined else audit_info.modified_at }})</span>{% endif %}</span>
                     </div>
                     {% endif %}
                 </div>
-                <div style="font-family: var(--font-mono); font-size: 11px; opacity: 0.6; display: flex; align-items: center; gap: 4px;">
-                    <i data-lucide="shield-check" style="width: 13px; height: 13px; color: var(--color-emerald);"></i>
-                    <span>Audit Trail Logged</span>
+                <div class="flex items-center gap-1.5 font-mono text-[11px] opacity-70">
+                    <i data-lucide="shield-check" class="w-3.5 h-3.5 text-lagoon"></i>
+                    <span>Audit Trail Recorded</span>
                 </div>
             </div>
             {% endif %}
 
             <div class="form-actions">
-                <div class="action-group">
-                    <a href="/table/{{ table_name }}" preload="mouseover" class="btn-cancel">
-                        <i data-lucide="x" style="width: 16px; height: 16px;"></i>
+                <div class="flex items-center gap-3">
+                    <a href="/table/{{ table_name }}" class="ghost-btn">
+                        <i data-lucide="x" class="w-4 h-4"></i>
                         <span>Cancel</span>
                     </a>
                     
                     {% if not is_update %}
-                    <button type="button" class="btn-clear" onclick="clearFormDraft()">
-                        <i data-lucide="eraser" style="width: 16px; height: 16px;"></i>
+                    <button type="button" class="ghost-btn" style="border-style: dashed;" onclick="clearFormDraft()">
+                        <i data-lucide="eraser" class="w-4 h-4"></i>
                         <span>Clear Form</span>
                     </button>
                     {% endif %}
                 </div>
                 
-                <button type="submit" class="btn-submit">
-                    <i data-lucide="save" style="width: 16px; height: 16px;"></i>
+                <!-- Save Record Button wrapped in Signature Glow Halo -->
+                <button type="submit" class="glow-halo-btn">
+                    <i data-lucide="save" class="w-4 h-4"></i>
                     <span>Save Record</span>
                 </button>
             </div>
@@ -326,8 +473,44 @@
 </div>
 
 <script>
+    // Module Icon Picker Logic
+    function selectModuleIcon(inputName, iconName) {
+        const input = document.getElementById(inputName);
+        if (input) input.value = iconName;
+
+        const previewLabel = document.getElementById('icon-preview-label');
+        if (previewLabel) previewLabel.textContent = iconName;
+
+        const previewBox = document.getElementById('icon-preview-box');
+        if (previewBox) {
+            previewBox.innerHTML = `<i data-lucide="${iconName}" class="w-5 h-5"></i>`;
+        }
+
+        document.querySelectorAll('.icon-choice-btn').forEach(btn => {
+            if (btn.getAttribute('data-icon') === iconName) {
+                btn.classList.add('selected-icon');
+            } else {
+                btn.classList.remove('selected-icon');
+            }
+        });
+
+        if (window.lucide) lucide.createIcons();
+    }
+
+    function filterIconPicker(query) {
+        const q = (query || '').toLowerCase().trim();
+        document.querySelectorAll('.icon-choice-btn').forEach(btn => {
+            const iconName = btn.getAttribute('data-icon') || '';
+            if (!q || iconName.includes(q)) {
+                btn.style.display = 'flex';
+            } else {
+                btn.style.display = 'none';
+            }
+        });
+    }
+
     (function initFormScript() {
-        lucide.createIcons();
+        if (window.lucide) lucide.createIcons();
 
         const form = document.getElementById('recordForm');
         if (!form) return;
