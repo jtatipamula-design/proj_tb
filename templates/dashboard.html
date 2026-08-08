@@ -130,13 +130,20 @@
 <div class="w-full">
     <!-- Hero Header -->
     <div class="dashboard-hero">
-        <div class="flex items-center gap-2 mb-3">
-            <span class="badge-iris">
-                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
-                <span>Enterprise Suite</span>
-            </span>
-            <span class="text-xs font-mono" style="color: var(--color-mist);">•</span>
-            <span class="text-xs font-mono" style="color: var(--color-steel);">{{ all_tables|length }} Active Screens</span>
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+            <div class="flex items-center gap-2">
+                <span class="badge-iris">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                    <span>Enterprise Suite</span>
+                </span>
+                <span class="text-xs font-mono" style="color: var(--color-mist);">•</span>
+                <span class="text-xs font-mono" style="color: var(--color-steel);">{{ all_tables|length }} Active Screens</span>
+            </div>
+            
+            <a href="/table/phc_module_t" class="ghost-btn text-xs font-semibold py-1.5 px-3.5 rounded-full" title="Customize Module Names & Icons">
+                <i data-lucide="palette" class="w-3.5 h-3.5" style="color: var(--color-iris);"></i>
+                <span>Manage Module Icons</span>
+            </a>
         </div>
         <h1 class="hero-title">Dashboard</h1>
         <p class="hero-sub">Select an enterprise module below or navigate through the sidebar index to manage pharmaceutical tables, workflows, and configurations.</p>

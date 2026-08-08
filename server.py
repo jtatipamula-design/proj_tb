@@ -312,6 +312,35 @@ async def setup_db(app, loop):
             statement_cache_size=0,
             max_cached_statement_lifetime=0
         )
+        try:
+            async with app.ctx.pool.acquire() as conn:
+                # 1. Ensure phc_module_t exists
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS phc_module_t (
+                        pmd_module_id SERIAL PRIMARY KEY,
+                        pmd_module_name VARCHAR(100) UNIQUE,
+                        pmd_module_icon VARCHAR(50),
+                        pmd_status VARCHAR(10) DEFAULT 'ACT',
+                        pmd_created_by VARCHAR(50) DEFAULT 'System',
+                        pmd_modified_by VARCHAR(50) DEFAULT 'System',
+                        pmd_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        pmd_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                # 2. Ensure pmd_module_icon column exists
+                await conn.execute("ALTER TABLE phc_module_t ADD COLUMN IF NOT EXISTS pmd_module_icon VARCHAR(50);")
+
+                # 3. Ensure phc_module_t screen exists in phc_screens_t
+                has_mod_screen = await conn.fetchval("SELECT psn_screen_id FROM phc_screens_t WHERE psn_screen_code = 'phc_module_t'")
+                if not has_mod_screen:
+                    max_id = await conn.fetchval("SELECT MAX(psn_screen_id) FROM phc_screens_t")
+                    erp_mod_id = await conn.fetchval("SELECT pmd_module_id FROM phc_module_t WHERE pmd_module_name = 'ERPAdmin'")
+                    await conn.execute("""
+                        INSERT INTO phc_screens_t (psn_screen_id, psn_company_id, psn_module_id, psn_screen_code, psn_screen_name, psn_status, psn_created_by, psn_modified_by)
+                        VALUES ($1, 1001, $2, 'phc_module_t', 'Module Management', 'ACT', 'System', 'System')
+                    """, (max_id or 0) + 1, erp_mod_id)
+        except Exception as e:
+            print("DB init safeguard non-fatal notice:", e)
     else:
         app.ctx.pool = None
 

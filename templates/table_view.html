@@ -6,7 +6,8 @@
 {% block content %}
 <style>
     .table-view-container {
-        max-width: 1350px;
+        width: 100%;
+        max-width: 100%;
         margin: 0 auto;
         padding-bottom: 90px;
     }
@@ -23,10 +24,26 @@
     .table-scroll-wrap {
         overflow-x: auto;
         width: 100%;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table-scroll-wrap::-webkit-scrollbar {
+        height: 7px;
+    }
+    .table-scroll-wrap::-webkit-scrollbar-track {
+        background: var(--color-bone);
+    }
+    .table-scroll-wrap::-webkit-scrollbar-thumb {
+        background: var(--color-fog);
+        border-radius: 4px;
+    }
+    .table-scroll-wrap::-webkit-scrollbar-thumb:hover {
+        background: var(--color-ash);
     }
 
     table {
         width: 100%;
+        min-width: 100%;
         border-collapse: separate;
         border-spacing: 0;
         text-align: left;
@@ -40,13 +57,14 @@
         text-transform: uppercase;
         letter-spacing: 0.05em;
         font-weight: 600;
-        padding: 13px 18px;
+        padding: 13px 20px;
         position: sticky;
         top: 0;
         z-index: 10;
         border-bottom: 1px solid var(--color-fog);
         user-select: none;
         cursor: pointer;
+        white-space: nowrap;
         transition: background-color 0.15s ease, color 0.15s ease;
     }
 
@@ -56,10 +74,11 @@
     }
 
     td {
-        padding: 13px 18px;
+        padding: 13px 20px;
         font-size: 13.5px;
         color: var(--color-graphite);
         border-bottom: 1px solid var(--color-fog);
+        white-space: nowrap;
         transition: background-color 0.15s ease, color 0.15s ease;
     }
 
@@ -83,6 +102,7 @@
         display: inline-flex;
         align-items: center;
         gap: 4px;
+        white-space: nowrap;
     }
 
     .status-act {
@@ -124,7 +144,7 @@
         transform: translateY(-1px);
     }
 
-    /* Floating Action Dock Pill */
+    /* Floating Action Dock Pill with Micro-Expansion on Hover */
     .floating-action-dock {
         position: fixed;
         bottom: 24px;
@@ -134,37 +154,108 @@
         background: var(--surface-pure-white-cards);
         border: 1px solid var(--color-fog);
         border-radius: 9999px;
-        padding: 6px 8px 6px 12px;
+        padding: 5px 7px;
         display: flex;
         align-items: center;
-        gap: 8px;
-        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.04);
+        gap: 5px;
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
         backdrop-filter: blur(16px);
+        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     html.dark .floating-action-dock {
         box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 2px 8px rgba(0, 0, 0, 0.4);
     }
 
-    .dock-icon-btn {
+    .dock-btn {
         background: transparent;
         border: 1px solid transparent;
         color: var(--color-slate);
-        width: 36px;
-        height: 36px;
+        height: 38px;
+        min-width: 38px;
         border-radius: 9999px;
-        display: flex;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        transition: all 0.15s ease;
+        padding: 0 10px;
         text-decoration: none;
+        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        overflow: hidden;
+        white-space: nowrap;
+        font-size: 13px;
+        font-weight: 500;
     }
 
-    .dock-icon-btn:hover {
+    .dock-btn:hover {
         background: var(--color-bone);
         color: var(--color-obsidian);
         border-color: var(--color-fog);
+        padding: 0 14px;
+    }
+
+    .dock-btn-label {
+        max-width: 0;
+        opacity: 0;
+        margin-left: 0;
+        transition: max-width 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, margin-left 0.25s ease;
+        overflow: hidden;
+        white-space: nowrap;
+        display: inline-block;
+        pointer-events: none;
+    }
+
+    .dock-btn:hover .dock-btn-label {
+        max-width: 140px;
+        opacity: 1;
+        margin-left: 6px;
+    }
+
+    /* Glow Halo Dock CTA (Add Record) */
+    .dock-btn-cta {
+        background: var(--surface-onyx-action);
+        color: #ffffff !important;
+        border: 1px solid transparent;
+        height: 38px;
+        min-width: 38px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        padding: 0 10px;
+        text-decoration: none;
+        box-shadow: 0 0 0 2px rgba(252, 122, 155, 0.35), 0 0 12px 2px rgba(252, 122, 155, 0.25);
+        transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        overflow: hidden;
+        white-space: nowrap;
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    .dock-btn-cta:hover {
+        background: var(--surface-onyx-action);
+        color: #ffffff !important;
+        box-shadow: 0 0 0 4px rgba(252, 122, 155, 0.5), 0 0 18px 4px rgba(252, 122, 155, 0.4);
+        padding: 0 16px;
+    }
+
+    .dock-btn-cta .dock-btn-label {
+        max-width: 0;
+        opacity: 0;
+        margin-left: 0;
+        transition: max-width 0.25s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease, margin-left 0.25s ease;
+        overflow: hidden;
+        white-space: nowrap;
+        color: #ffffff;
+        display: inline-block;
+        pointer-events: none;
+    }
+
+    .dock-btn-cta:hover .dock-btn-label {
+        max-width: 140px;
+        opacity: 1;
+        margin-left: 6px;
     }
 
     .dock-divider {
@@ -393,26 +484,28 @@
         </div>
     </div>
 
-    <!-- Floating Action Dock Pill (Bottom Center) -->
+    <!-- Floating Action Dock Pill (Bottom Center) with Micro-Expansion on Hover -->
     <div class="floating-action-dock">
         <!-- Refresh Button -->
-        <button class="dock-icon-btn" onclick="window.location.reload()" title="Refresh Table" type="button">
-            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+        <button class="dock-btn" onclick="window.location.reload()" title="Refresh Table" type="button">
+            <i data-lucide="refresh-cw" class="w-4 h-4 flex-shrink-0"></i>
+            <span class="dock-btn-label">Refresh</span>
         </button>
 
         <div class="dock-divider"></div>
 
         <!-- Export CSV -->
-        <a href="/export/{{ table_name }}" class="dock-icon-btn" title="Export CSV">
-            <i data-lucide="download" class="w-4 h-4"></i>
+        <a href="/export/{{ table_name }}" class="dock-btn" title="Export CSV">
+            <i data-lucide="download" class="w-4 h-4 flex-shrink-0"></i>
+            <span class="dock-btn-label">Export CSV</span>
         </a>
 
         <div class="dock-divider"></div>
 
         <!-- Add Record with Signature Glow Halo -->
-        <a href="/new/{{ table_name }}" id="topAddRecordBtn" class="glow-halo-btn" style="border-radius: 9999px; padding: 7px 18px; font-size: 13px;">
-            <i data-lucide="plus" class="w-4 h-4"></i>
-            <span>Add Record</span>
+        <a href="/new/{{ table_name }}" id="topAddRecordBtn" class="dock-btn-cta" title="Add Record">
+            <i data-lucide="plus" class="w-4 h-4 flex-shrink-0"></i>
+            <span class="dock-btn-label">Add Record</span>
         </a>
     </div>
 </div>
