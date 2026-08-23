@@ -1,0 +1,5001 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html lang="en-US">
+<head>
+<title>Oracle eTRM</title>
+<style type="text/css">
+<!-- hide from old browsers
+   body { font: 10pt Arial; 
+          background-color: #ffffff;}
+
+   div, p, li, dt, dd { font: 10pt Arial;}
+
+   img, td, tr { font: 10pt Arial;
+         border-width: 0;
+         vertical-align:top;}
+
+  ul.version {list-style-image: url("/images/workarea.gif") }
+
+th         {text-align: left;
+         vertical-align:top;}
+
+    td.bottom { font: 10pt Arial;
+         border-width: 0;
+         text-align: right;
+         vertical-align:bottom;}
+
+    td.x_repeat { font: 10pt Arial;
+         border-width: 0;
+         text-align: left;
+         background-repeat: repeat-x;
+         vertical-align:bottom;}
+
+    .rightAligned { font: 10pt Arial;
+         border-width: 0;
+         text-align: right;
+         vertical-align:top;}
+
+    .100_table {text-align:left; 
+           padding:0;
+           border-width: 0;
+           border-style: none;
+           border: none;
+           margin:none;
+           white-space: none;
+           width:100%;
+           vertical-align:top;}
+
+   .actTab  { background-color: #336699;
+              color: #99ccff; 
+                font-family:Arial, Helvetica, Geneva, sans-serif; 
+                color:#99ccff; 
+                font-size:11pt; 
+                font-weight: bold; 
+                vertical-align:bottom;}
+
+   .inactTab  { background-color: #cccc99;
+               color: #336699;
+               font-weight: bold;
+                font-size:10pt; 
+               cursor: hand;
+               vertical-align:bottom;}
+
+   .disabledTab  { background-color: #cccc99;
+              color: #99ccff; 
+                font-family:Arial, Helvetica, Geneva, sans-serif; 
+                color:#ffffcc; 
+                font-size:10pt; 
+                font-weight: normal; 
+                vertical-align:bottom;}
+
+   a             { color: #663300; }
+
+   a.actTab      {color: #99ccff; 
+              font-family:Arial, Helvetica, Geneva, sans-serif; 
+              font-size:11pt; 
+              text-decoration: none;  
+              font-weight: bold; }
+
+   a.inactTab      { font-family:Arial, Helvetica, Geneva, sans-serif; 
+              color:#003366; 
+              font-weight: normal; 
+              text-decoration: none; 
+              font-size:11pt; }
+
+  h1 {font-family:Arial, Helvetica, Geneva, sans-serif;
+                      color:#336699;
+                      font-size:16pt}
+
+  h2 {font-family:Arial, Helvetica, Geneva, sans-serif;
+                      color:#336699;
+                      font-size:15pt}
+
+      h3  {font-family:Arial, Helvetica, Geneva, sans-serif;
+                        font-weight:bold;
+                        color:#336699;
+                        font-size:14pt}
+
+  h4 {font-family:Arial, Helvetica, Geneva, sans-serif;
+                      color:#336699;
+                      font-size:12pt}
+
+     h5 {font-family:Arial, Helvetica, Geneva, sans-serif;
+                        font-weight:bold;
+                        color:#336699;
+                        font-size:11pt }
+
+     b {font-family:Arial, Helvetica, Geneva, sans-serif;
+                        font-weight:bold;
+                        color:#336699;
+                        font-size:10pt }
+
+     h5.errorText {font-family:Arial, Helvetica, Geneva, sans-serif;
+                        font-weight:bold;
+                        color:#ff0000;
+                        font-size:11pt }
+
+     b.errorText {font-family:Arial, Helvetica, Geneva, sans-serif;
+                        font-weight:bold;
+                        font-style:italic;
+                        color:#ff0000;
+                        font-size:10pt }
+    .TableColumnHeader   {background-color:#cccc99;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            font-weight:bold; 
+                            color:#336699;
+                            font-size:10pt; 
+                            text-align:left; 
+                            border:#336699;
+                            width:100;
+                            text-indent:1}
+    .TableCellText       {background-color:#f7f7e7;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            color:black;
+                            font-size:10pt;
+                            border:#336699;
+                            width:100;
+                            text-indent:1}
+<!-- The following styles can be removed and referenced from a central style sheet if required -->
+
+    .OraLightHeader        {font-family:Arial, Helvetica, Geneva, sans-serif; 
+                            font-size:16pt; 
+                            font-weight:normal; 
+                            color:#6699cc}
+
+    .OraPrivacy           {font-family:Arial, Helvetica, Geneva, sans-serif; 
+                           font-size:8pt; 
+                           font-weight:normal; 
+                           text-align:right; 
+                           color:#663300}
+
+    .OraCopyright         {font-family:Arial, Helvetica, Geneva, sans-serif; 
+                           font-size:8pt; 
+                           font-weight:normal; 
+                           text-align:left; 
+                           color:black}
+
+    .OraTableColumnHeader   {background-color:#cccc99;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            font-weight:bold; 
+                            color:#336699;
+                            font-size:10pt; 
+                            text-align:left; 
+                            text-indent:1}
+    .OraTableRowHeader            {background-color:#cccc99;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            font-weight:bold;
+                            color:#336699;
+                            font-size:10pt;
+                            text-align:right;
+                            text-indent:1}
+    .OraTableCellText       {background-color:#f7f7e7;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            color:black;
+                            font-size:10pt;
+                            text-indent:1}
+    .OraTableCellTextBand   {background-color:white;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            color:black;
+                            font-size:10pt;
+                            text-indent:1}
+    .OraTableCellNumber    {background-color:#f7f7e7;
+                           font-family:arial, helvetica, geneva, sans-serif; 
+                           color:black; font-size:10pt; 
+                           text-align:right; 
+                           text-indent:1}
+    .OraTableCellNumberBand {background-color:white; 
+                            font-family:arial, helvetica, geneva, sans-serif; 
+                            color:black; 
+                            font-size:10pt;
+                            text-align:right;
+                            text-indent:1}
+    .OraTableCellSelect     {background-color:#f7f7e7;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            color:black;
+                            font-size:10pt;
+                            text-align:center;
+                            text-indent:1}
+    .OraTableCellSelectBand {background-color:white;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            color:black;
+                            font-size:10pt;
+                            text-align:center;
+                            text-indent:1}
+-->
+</style>
+</head>
+<script type="text/javascript" language="JavaScript">
+  function etrm_window(the_url)
+  {
+      etrm_main_view = window.open(the_url, "etrm_main_view", "scrollbars,resizable,toolbar,status");
+  }
+</script>
+<noscript>
+<p>eTRM uses javascript that opens and focuses a separate window to display reports.
+Your browser does not appear to support javascript.  This should not prevent you from using
+eTRM but it does mean the window focus feature will not work.   Please check the contents of
+other windows on your desktop if you click on a link that does not appear to do anything.</p>
+</noscript>
+<h1>Oracle eBusiness Suite Technical Reference</h1>
+<h5>Release 11i - Copyright (c) 2001 - 2005 Oracle  </h5>
+
+<p class="OraCopyright">
+This Technical Reference Manual (TRM) in any form, software or printed matter, contains proprietary information of Oracle ; it is
+provided under an Oracle  agreement containing restrictions on use and disclosure and is also protected by copyright, patent, and
+other intellectual property law. Restrictions applicable to this TRM include, but are not limited to: (a) exercising either the same degree of care to
+safeguard the confidentiality of this TRM as you exercise to safeguard the confidentiality of your own most important Confidential Information or
+a reasonable degree of care, whichever is greater; (b) maintaining agreements with your employees and agents that protect the Confidential
+Information of third parties such as Oracle  and instructing such employees and agents of these requirements for this TRM; (c)
+restricting disclosure of this TRM to those of your employees who have a 'need to know' consistent with the purposes for which this TRM was
+disclosed to you; (d) maintaining this TRM at all times on your premises; (e) not removing or destroying any proprietary or confidential legends
+or markings placed upon this TRM in whatever form, software or printed matter; and (f) not reproducing or transmitting this TRM in any form or
+by any means, electronic or mechanical, for any purpose, without the express written permission of Oracle. You should not use this
+TRM in any form, software or printed matter, to create software that performs the same or similar functions as any Oracle  products.
+</p>
+<p class="OraCopyright">
+The information in this TRM is subject to change without notice. If you find any problems in the TRM in any form, software or printed matter,
+please report them to us in writing. Oracle  does not warrant that this TRM is error free. This TRM is provided to customer 'as is'
+with no warranty of any kind. This TRM does not constitute Documentation as that term is defined in Oracle's agreements.
+Reverse engineering of the Programs (software and documentation) associated with this TRM are prohibited. The Programs associated with this
+TRM are not intended for use in any nuclear, aviation, mass transit, medical, or other inherently dangerous applications. It shall be licensee's
+responsibility to take all appropriate fail safe, backup, redundancy and other measures to ensure the safe use of such applications if the
+Programs are used for such purposes, and Oracle disclaims liability for any damages caused by such use of the Programs.
+Program Documentation is licensed for use solely to support the deployment of the Programs and not for any other any other purpose.
+Restricted Rights Legend
+</p><p class="OraCopyright">
+This TRM and the Programs associated with this TRM delivered subject to the DOD FAR Supplement are 'commercial computer software' and
+use, duplication and disclosure of the TRM and the Programs associated with this TRM shall be subject to the licensing restrictions set forth in the
+applicable Oracle license agreement. Otherwise, this TRM and the Programs associated with this TRM delivered subject to the Federal
+Acquisition Regulations are 'restricted computer software' and use, duplication and disclosure of the TRM and the Programs associated with this
+TRM shall be subject to the restrictions in FAR 52.227-14, Rights in Data General, including Alternate III (June 1987). Oracle, 500
+Oracle Parkway, Redwood City, CA 94065.
+</p>
+<p class="OraCopyright">
+Oracle is a registered trademark. AIM Advantage&#153, Big Business. Small Business. All Business.&#153, CDM Advantage&#153,
+.comference&#153, ConText&#174, Des40&#174, Easy*Query&#153, Easy*SQL&#174, Education Objects&#153, EMM Advantage&#153, Enabling the Information Age&#174, ExpertDetectSM, Express&#174, FastForwardSM,
+GEMMS&#174, Gist&#153, Hyper*SQL&#153, instantOracle&#153, "Internet Business Intelligence - Insight for Everyone"&#153, iSQL*Plus&#153, JInitiator&#153,
+NLS*Workbench&#174, Object Marketplace&#153, ODP Pulse&#153, ODP Techwire&#153, OLA&#153,
+On Oracle&#153, Oracle&#174, Oracle Book&#174, Oracle Bookbatch&#174, Oracle BookBuilder&#174, Oracle<i>BRONZE</i>&#174, Oracle Business OnLine&#174,
+Oracle<i>DevConnect</i>SM, Oracle&#174 Discoverer&#153,
+Oracle&#174 Expert&#153, Oracle Financials&#174, Oracle<i>GOLD</i>SM,
+Oracle<i>Incident</i>SM, OracleJSP&#153,
+OracleLifeCycleSM, Oracle Media Objects&#174, Oracle<i>MERCURY</i>SM,
+Oracle<i>MetaLink</i>SM, Oracle<i>metals</i>SM, OracleMobile&#153, Oracle Names&#174,
+Oracle NetSolutions&#174, Oracle&#174 One&#153, Oracle Open Gateways&#174,
+Oracle OpenWorld&#174, Oracle<i>PLATINUM</i>SM,
+Oracle Power Objects&#174, Oracle Press&#174, Oracle Procedural Gateway&#174,
+Oracle Quality&#174, Oracle Secure Network Services&#174, Oracle<i>SILVER</i>SM,
+Oracle&#174 SQL/Services&#153, Oracle&#174 SQL*TutorSM,
+Oracle<i>STERLING</i>SM, Oracle Store&#174,
+Oracle Transparent Gateway&#174, OracleWare&#174, Oracle8i&#153, Oracle9i&#153,
+PC Express&#174, Personal Express&#174, PJM Advantage&#153, PL/SQL&#153, Pro*Ada&#174,
+Pro*C&#153, Pro*C/C++&#153, Pro*COBOL&#174, Pro*FORTRAN&#174, Pro*Pascal&#174,
+Pro*PL/1&#174, Pro*REXX&#174, Profit&#153, ProREXX&#153, Report Card&#153,
+Secure Access 2.0&#153, Secure Network Services&#174, Security Without Compromise&#153,
+SellingPoint&#174, SQL*Plus&#174, Tutor&#153 are trademarks or
+registered trademarks of Oracle. Other names may be trademarks of their respective owners.
+The absence of a product or service name, slogan, or logo from this list does not constitute a
+waiver of Oracle's trademark or other intellectual property rights concerning that name, slogan,
+or logo.</p>
+<a name="top-of-page"></a>
+<h1>eTRM - XDO Tables and Views</h1>
+<dl>
+<dt>
+TABLE - <a href="#TABLEXDO_CONCURRENT_REQUESTS_GT">XDO.XDO_CONCURRENT_REQUESTS_GT</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_CONFIG_KEYS">XDO.XDO_CONFIG_KEYS</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_CONFIG_PROPERTIES_B">XDO.XDO_CONFIG_PROPERTIES_B</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_CONFIG_PROPERTIES_TL">XDO.XDO_CONFIG_PROPERTIES_TL</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_CONFIG_VALUES">XDO.XDO_CONFIG_VALUES</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_CURRENCY_FORMATS">XDO.XDO_CURRENCY_FORMATS</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_CURRENCY_FORMAT_SETS_B">XDO.XDO_CURRENCY_FORMAT_SETS_B</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_CURRENCY_FORMAT_SETS_TL">XDO.XDO_CURRENCY_FORMAT_SETS_TL</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_DGF_BLOCK_CONTEXTS">XDO.XDO_DGF_BLOCK_CONTEXTS</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_DGF_RPT_CONTEXTS">XDO.XDO_DGF_RPT_CONTEXTS</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_DGF_RPT_CONTEXT_PARAMETERS">XDO.XDO_DGF_RPT_CONTEXT_PARAMETERS</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_DGF_RULE_CATALOG_B">XDO.XDO_DGF_RULE_CATALOG_B</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_DGF_RULE_CATALOG_TL">XDO.XDO_DGF_RULE_CATALOG_TL</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_DGF_TPL_CONTEXTS">XDO.XDO_DGF_TPL_CONTEXTS</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_DGF_TPL_RULES">XDO.XDO_DGF_TPL_RULES</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_DS_DEFINITIONS_B">XDO.XDO_DS_DEFINITIONS_B</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_DS_DEFINITIONS_TL">XDO.XDO_DS_DEFINITIONS_TL</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_EFT_SEQUENCE_NAMES">XDO.XDO_EFT_SEQUENCE_NAMES</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_FONT_MAPPINGS">XDO.XDO_FONT_MAPPINGS</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_FONT_MAPPING_SETS_B">XDO.XDO_FONT_MAPPING_SETS_B</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_FONT_MAPPING_SETS_TL">XDO.XDO_FONT_MAPPING_SETS_TL</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_LOBS">XDO.XDO_LOBS</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_TEMPLATES_B">XDO.XDO_TEMPLATES_B</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_TEMPLATES_TL">XDO.XDO_TEMPLATES_TL</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_TEMPLATE_FIELDS">XDO.XDO_TEMPLATE_FIELDS</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_TRANS_UNITS">XDO.XDO_TRANS_UNITS</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_TRANS_UNIT_PROPS">XDO.XDO_TRANS_UNIT_PROPS</a>
+</dt>
+<dt>
+TABLE - <a href="#TABLEXDO_TRANS_UNIT_VALUES">XDO.XDO_TRANS_UNIT_VALUES</a>
+</dt>
+<dt>
+VIEW - <a href="#VIEWXDO_CONFIG_PROPERTIES_VL">APPS.XDO_CONFIG_PROPERTIES_VL</a>
+</dt>
+<dt>
+VIEW - <a href="#VIEWXDO_CURRENCY_FORMAT_SETS_VL">APPS.XDO_CURRENCY_FORMAT_SETS_VL</a>
+</dt>
+<dt>
+VIEW - <a href="#VIEWXDO_DS_DEFINITIONS_VL">APPS.XDO_DS_DEFINITIONS_VL</a>
+</dt>
+<dt>
+VIEW - <a href="#VIEWXDO_FONT_MAPPING_SETS_VL">APPS.XDO_FONT_MAPPING_SETS_VL</a>
+</dt>
+<dt>
+VIEW - <a href="#VIEWXDO_TEMPLATES_VL">APPS.XDO_TEMPLATES_VL</a>
+</dt>
+</dl>
+<a name="TABLEXDO_CONCURRENT_REQUESTS_GT"></a>
+<h3>Table: XDO_CONCURRENT_REQUESTS_GT</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Comments</h5>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">CONC_REQUEST_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_CONCURRENT_REQUESTS_GT does not reference any database object<p>
+<b>XDO.XDO_CONCURRENT_REQUESTS_GT is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_CONCURRENT_REQUESTS_GT</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_CONFIG_KEYS"></a>
+<h3>Table: XDO_CONFIG_KEYS</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td>XDO_CONFIG_KEYS table is used to store the encryption keys for certain values stored in XDO_CONFIG_VALUES.</td></tr>
+</table>
+<h5>Primary Key: XDO_CONFIG_KEYS_PK</h5>
+<ol>
+<li>VALUE_ID</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_CONFIG_KEYS table is used to store the encryption keys for certain values stored in XDO_CONFIG_VALUES.<br>
+ </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">VALUE_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Unique ID for the Configuration</TD></TR>
+<TR> <TD  headers="name">VALUE_KEY</TD>
+<TD  headers="datatype">RAW</TD>
+<TD  headers="length">(20)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Key of the value</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_CONFIG_KEYS does not reference any database object<p>
+<b>XDO.XDO_CONFIG_KEYS is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_CONFIG_KEYS</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_CONFIG_PROPERTIES_B"></a>
+<h3>Table: XDO_CONFIG_PROPERTIES_B</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td>XDO_CONFIG_PROPERTIES_B table stores the XML Publisher configuration properties that are accessible from the OA Framework interface.</td></tr>
+</table>
+<h5>Primary Key: XDO_CONFIG_PROPERTIES_B_PK</h5>
+<ol>
+<li>PROPERTY_CODE</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_CONFIG_PROPERTIES_B table stores the XML Publisher configuration properties that are accessible from the OA Framework interface.<br>
+ </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">PROPERTY_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(100)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Property Code</TD></TR>
+<TR> <TD  headers="name">CATEGORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Category of the Property</TD></TR>
+<TR> <TD  headers="name">XDO_CFG_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(100)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Configuration Name that is used by XML Publisher</TD></TR>
+<TR> <TD  headers="name">LOOKUP_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Lookup Type</TD></TR>
+<TR> <TD  headers="name">SORT_ORDER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Sort Order</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_CONFIG_PROPERTIES_B does not reference any database object<p>
+<b>XDO.XDO_CONFIG_PROPERTIES_B is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_CONFIG_PROPERTIES_B</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_CONFIG_PROPERTIES_TL"></a>
+<h3>Table: XDO_CONFIG_PROPERTIES_TL</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Primary Key: XDO_CONFIG_PROPERTIES_TL_PK</h5>
+<ol>
+<li>PROPERTY_CODE</li>
+<li>LANGUAGE</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_CONFIG_PROPERTIES_TL is a translation table for XDO_CONFIG_PROPERTIES_B.<br>
+ </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">PROPERTY_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(100)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Property Code</TD></TR>
+<TR> <TD  headers="name">LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Language Code</TD></TR>
+<TR> <TD  headers="name">PROPERTY_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Tranlsated Property Name</TD></TR>
+<TR> <TD  headers="name">SOURCE_LANG</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Source Language</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_CONFIG_PROPERTIES_TL does not reference any database object<p>
+<b>XDO.XDO_CONFIG_PROPERTIES_TL is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_CONFIG_PROPERTIES_TL</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_CONFIG_VALUES"></a>
+<h3>Table: XDO_CONFIG_VALUES</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td>XDO_CONFIG_VALUES stores the values of XML Publisher configuration properties entered from the Oracle Applications interface.</td></tr>
+</table>
+<h5>Primary Key: XDO_CONFIG_VALUES_PK</h5>
+<ol>
+<li>VALUE_ID</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_CONFIG_VALUES stores the values of XML Publisher configuration properties entered from the Oracle Applications interface.<br>
+ </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">VALUE_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Unique ID of the Configuration Value</TD></TR>
+<TR> <TD  headers="name">PROPERTY_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Property Code</TD></TR>
+<TR> <TD  headers="name">CONFIG_LEVEL</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Level of the Configuration (10: Site Level, 30: Data Level, 50: Template Level)</TD></TR>
+<TR> <TD  headers="name">APPLICATION_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Foreign key to fnd_application(APPLICATION_SHORT_NAME)</TD></TR>
+<TR> <TD  headers="name">DATA_SOURCE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Data Source Code</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Template Code</TD></TR>
+<TR> <TD  headers="name">VALUE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(240)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Property Value</TD></TR>
+<TR> <TD  headers="name">BVALUE</TD>
+<TD  headers="datatype">RAW</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Byte Value</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_CONFIG_VALUES does not reference any database object<p>
+<b>XDO.XDO_CONFIG_VALUES is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_CONFIG_VALUES</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_CURRENCY_FORMATS"></a>
+<h3>Table: XDO_CURRENCY_FORMATS</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td>XDO_CURRENCY_FORMATS stores the format masks for various currencies.  A collection of these formats forms a currency format set.</td></tr>
+</table>
+<h5>Primary Key: XDO_CURRENCY_FORMATS_PK</h5>
+<ol>
+<li>CURRENCY_CODE</li>
+<li>FORMAT_SET_CODE</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_CURRENCY_FORMATS stores the format masks for various currencies.  A collection of these formats forms a currency format set.<br>
+ </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">FORMAT_SET_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Currency Format Set Code</TD></TR>
+<TR> <TD  headers="name">CURRENCY_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Currency Code</TD></TR>
+<TR> <TD  headers="name">FORMAT_MASK</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(40)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Currency Format Mask</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_CURRENCY_FORMATS does not reference any database object<p>
+<b>XDO.XDO_CURRENCY_FORMATS is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_CURRENCY_FORMATS</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_CURRENCY_FORMAT_SETS_B"></a>
+<h3>Table: XDO_CURRENCY_FORMAT_SETS_B</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Primary Key: XDO_CURRENCY_FORMAT_SETS_B_PK</h5>
+<ol>
+<li>FORMAT_SET_CODE</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_CURRENCY_FORMAT_SETS_B table stores the Currency Format Sets that are accessible from the OA Framework interface. </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">FORMAT_SET_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Currency Format Set Code</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_CURRENCY_FORMAT_SETS_B does not reference any database object<p>
+<b>XDO.XDO_CURRENCY_FORMAT_SETS_B is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_CURRENCY_FORMAT_SETS_B</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_CURRENCY_FORMAT_SETS_TL"></a>
+<h3>Table: XDO_CURRENCY_FORMAT_SETS_TL</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Primary Key: XDO_CURRENCY_FORMAT_SETS_TL_PK</h5>
+<ol>
+<li>FORMAT_SET_CODE</li>
+<li>LANGUAGE</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_CURRENCY_FORMAT_SETS_TL is a translation table for XDO_CURRENCY_FORMAT_SETS_B. </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">FORMAT_SET_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Currency Format Set Code</TD></TR>
+<TR> <TD  headers="name">LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Language</TD></TR>
+<TR> <TD  headers="name">FORMAT_SET_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Translated Format Set Name</TD></TR>
+<TR> <TD  headers="name">SOURCE_LANG</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Source Language</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_CURRENCY_FORMAT_SETS_TL does not reference any database object<p>
+<b>XDO.XDO_CURRENCY_FORMAT_SETS_TL is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_CURRENCY_FORMAT_SETS_TL</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_DGF_BLOCK_CONTEXTS"></a>
+<h3>Table: XDO_DGF_BLOCK_CONTEXTS</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Comments</h5>
+
+<h5>Unique Key: XDO_DGF_BLOCK_CONTEXTS_U1</h5>
+<ol>
+<li> BLOCK_CONTEXT_ID</li>
+</ol>
+<h5>Unique Key: XDO_DGF_BLOCK_CONTEXTS_U2</h5>
+<ol>
+<li> FORM_NAME</li>
+<li> BLOCK_NAME</li>
+</ol>
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_DGF_BLOCK_CONTEXTS_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+BLOCK_CONTEXT_ID
+</td></tr>
+<tr >
+<td  headers="name">
+XDO_DGF_BLOCK_CONTEXTS_U2
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+FORM_NAME
+<br>
+BLOCK_NAME
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">BLOCK_CONTEXT_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">FORM_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(256)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">BLOCK_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(256)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">FORM_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(256)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">BLOCK_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(256)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">OBJECT_VERSION_NUMBER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(9)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE_CATEGORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE1</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE2</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE3</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE4</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE5</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE6</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE7</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE8</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE9</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE10</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE11</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE12</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE13</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE14</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE15</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_DGF_BLOCK_CONTEXTS does not reference any database object<p>
+<b>XDO.XDO_DGF_BLOCK_CONTEXTS is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_DGF_BLOCK_CONTEXTS</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_DGF_RPT_CONTEXTS"></a>
+<h3>Table: XDO_DGF_RPT_CONTEXTS</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Comments</h5>
+
+<h5>Unique Key: XDO_DGF_RPT_CONTEXTS_U1</h5>
+<ol>
+<li> REPORT_CONTEXT_ID</li>
+</ol>
+<h5>Unique Key: XDO_DGF_RPT_CONTEXTS_U2</h5>
+<ol>
+<li> BLOCK_CONTEXT_ID</li>
+<li> REPORT_CODE</li>
+<li> REPORT_APPLICATION</li>
+</ol>
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_DGF_RPT_CONTEXTS_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+REPORT_CONTEXT_ID
+</td></tr>
+<tr >
+<td  headers="name">
+XDO_DGF_RPT_CONTEXTS_U2
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+BLOCK_CONTEXT_ID
+<br>
+REPORT_CODE
+<br>
+REPORT_APPLICATION
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">REPORT_CONTEXT_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(10)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">BLOCK_CONTEXT_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">REPORT_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">REPORT_APPLICATION</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(20)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">OBJECT_VERSION_NUMBER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(9)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE_CATEGORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE1</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE2</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE3</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE4</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE5</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE6</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE7</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE8</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE9</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE10</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE11</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE12</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE13</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE14</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE15</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_DGF_RPT_CONTEXTS does not reference any database object<p>
+<b>XDO.XDO_DGF_RPT_CONTEXTS is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_DGF_RPT_CONTEXTS</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_DGF_RPT_CONTEXT_PARAMETERS"></a>
+<h3>Table: XDO_DGF_RPT_CONTEXT_PARAMETERS</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Comments</h5>
+
+<h5>Unique Key: XDO_DGF_RPT_CONTEXT_PARAM_U1</h5>
+<ol>
+<li> REPORT_CONTEXT_PARAMETER_ID</li>
+</ol>
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_DGF_RPT_CONTEXT_PARAM_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+REPORT_CONTEXT_PARAMETER_ID
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">REPORT_CONTEXT_PARAMETER_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">REPORT_CONTEXT_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(10)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">PARAMETER_SEQUENCE</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">PARAMETER_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">PARAMETER_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(100)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">PARAMETER_VALUE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(500)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">OBJECT_VERSION_NUMBER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(9)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE_CATEGORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE1</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE2</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE3</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE4</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE5</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE6</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE7</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE8</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE9</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE10</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE11</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE12</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE13</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE14</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE15</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_DGF_RPT_CONTEXT_PARAMETERS does not reference any database object<p>
+<b>XDO.XDO_DGF_RPT_CONTEXT_PARAMETERS is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_DGF_RPT_CONTEXT_PARAMETERS</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_DGF_RULE_CATALOG_B"></a>
+<h3>Table: XDO_DGF_RULE_CATALOG_B</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Comments</h5>
+
+<h5>Unique Key: XDO_DGF_RULE_CATALOG_B_U1</h5>
+<ol>
+<li> RULE_CATALOG_ID</li>
+</ol>
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_DGF_RULE_CATALOG_B_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+RULE_CATALOG_ID
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">RULE_CATALOG_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">RULE_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(20)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">RULE_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">RULE_VARIABLE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(500)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">RULE_OPERATOR</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">RULE_VALUES_DATATYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">BLOCK_CONTEXT_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">DB_FUNCTION</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG_NUMBER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG01</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG02</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG03</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG04</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG05</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG06</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG07</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG08</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG09</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG10</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG01_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG02_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG03_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG04_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG05_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG06_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG07_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG08_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG09_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ARG10_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">OBJECT_VERSION_NUMBER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(9)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE_CATEGORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE1</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE2</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE3</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE4</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE5</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE6</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE7</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE8</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE9</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE10</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE11</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE12</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE13</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE14</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE15</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_DGF_RULE_CATALOG_B does not reference any database object<p>
+<b>XDO.XDO_DGF_RULE_CATALOG_B is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_DGF_RULE_CATALOG_B</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_DGF_RULE_CATALOG_TL"></a>
+<h3>Table: XDO_DGF_RULE_CATALOG_TL</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Comments</h5>
+
+<h5>Unique Key: XDO_DGF_RULE_CATALOG_TL_U1</h5>
+<ol>
+<li> RULE_CATALOG_ID</li>
+<li> LANGUAGE</li>
+</ol>
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_DGF_RULE_CATALOG_TL_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+RULE_CATALOG_ID
+<br>
+LANGUAGE
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">RULE_CATALOG_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">SOURCE_LANG</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">RULE_VALUES</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">RULE_DESCRIPTION</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_DGF_RULE_CATALOG_TL does not reference any database object<p>
+<b>XDO.XDO_DGF_RULE_CATALOG_TL is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_DGF_RULE_CATALOG_TL</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_DGF_TPL_CONTEXTS"></a>
+<h3>Table: XDO_DGF_TPL_CONTEXTS</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Comments</h5>
+
+<h5>Unique Key: XDO_DGF_TPL_CONTEXTS_U1</h5>
+<ol>
+<li> TEMPLATE_CONTEXT_ID</li>
+</ol>
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_DGF_TPL_CONTEXTS_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+TEMPLATE_CONTEXT_ID
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">TEMPLATE_CONTEXT_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">REPORT_CONTEXT_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(10)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">TEMPLATE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">PDF_ALLOWED</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">RTF_ALLOWED</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">HTM_ALLOWED</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">XLS_ALLOWED</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">TXT_ALLOWED</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">TEMPLATE_APPLICATION</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(20)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">OBJECT_VERSION_NUMBER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(9)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE_CATEGORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE1</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE2</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE3</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE4</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE5</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE6</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE7</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE8</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE9</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE10</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE11</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE12</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE13</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE14</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE15</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_DGF_TPL_CONTEXTS does not reference any database object<p>
+<b>XDO.XDO_DGF_TPL_CONTEXTS is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_DGF_TPL_CONTEXTS</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_DGF_TPL_RULES"></a>
+<h3>Table: XDO_DGF_TPL_RULES</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Comments</h5>
+
+<h5>Unique Key: XDO_DGF_TPL_RULES_U1</h5>
+<ol>
+<li> TEMPLATE_RULE_ID</li>
+</ol>
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_DGF_TPL_RULES_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+TEMPLATE_RULE_ID
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">TEMPLATE_RULE_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">TEMPLATE_CONTEXT_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">RULE_CATALOG_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">TPL_RULE_DESCRIPTION</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">FORMAT_FILTER_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(3)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">OBJECT_VERSION_NUMBER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(9)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE_CATEGORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE1</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE2</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE3</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE4</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE5</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE6</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE7</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIUBTE8</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE9</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE10</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE11</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE12</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE13</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE14</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE15</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_DGF_TPL_RULES does not reference any database object<p>
+<b>XDO.XDO_DGF_TPL_RULES is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_DGF_TPL_RULES</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_DS_DEFINITIONS_B"></a>
+<h3>Table: XDO_DS_DEFINITIONS_B</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td>XDO_DS_DEFINITIONS_B table is a table for storing data source definition represented by XML Schema Definition (XSD). Each data source has one or more elements, and these information are stored in XDO_DS_ELEMENTS_B.</td></tr>
+</table>
+<h5>Primary Key: XDO_DS_DEFINITIONS_B_PK</h5>
+<ol>
+<li>APPLICATION_SHORT_NAME</li>
+<li>DATA_SOURCE_CODE</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_DS_DEFINITIONS_B table is a table for storing data source definition represented by XML Schema Definition (XSD). Each data source has one or more elements, and these information are stored in XDO_DS_ELEMENTS_B. </p>
+
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_DS_DEFINITIONS_B_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+APPLICATION_SHORT_NAME
+<br>
+DATA_SOURCE_CODE
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">APPLICATION_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Foreign key to fnd_application(APPLICATION_SHORT_NAME)</TD></TR>
+<TR> <TD  headers="name">DATA_SOURCE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Data source code in template manager</TD></TR>
+<TR> <TD  headers="name">DATA_SOURCE_STATUS</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Whether data source is enabled</TD></TR>
+<TR> <TD  headers="name">START_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Start effective date</TD></TR>
+<TR> <TD  headers="name">END_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">End effective date</TD></TR>
+<TR> <TD  headers="name">OBJECT_VERSION_NUMBER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(9)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Version number</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE_CATEGORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE1</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE2</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE3</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE4</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE5</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE6</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE7</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE8</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE9</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE10</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE11</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE12</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE13</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE14</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE15</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_DS_DEFINITIONS_B does not reference any database object<p>
+<b>XDO.XDO_DS_DEFINITIONS_B is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_DS_DEFINITIONS_B</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_DS_DEFINITIONS_TL"></a>
+<h3>Table: XDO_DS_DEFINITIONS_TL</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td>XDO_DS_DEFINITIONS_TL is a translation table for XDO_DS_DEFINITIONS_B.</td></tr>
+</table>
+<h5>Primary Key: XDO_DS_DEFINITIONS_TL_PK</h5>
+<ol>
+<li>APPLICATION_SHORT_NAME</li>
+<li>DATA_SOURCE_CODE</li>
+<li>LANGUAGE</li>
+</ol>
+<h5>Primary Key: XDO_DS_DEFINITIONS_TL_UK1</h5>
+<ol>
+<li>APPLICATION_SHORT_NAME</li>
+<li>DATA_SOURCE_NAME</li>
+<li>LANGUAGE</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_DS_DEFINITIONS_TL is a translation table for XDO_DS_DEFINITIONS_B. </p>
+
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_DS_DEFINITIONS_TL_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+APPLICATION_SHORT_NAME
+<br>
+DATA_SOURCE_CODE
+<br>
+LANGUAGE
+</td></tr>
+<tr >
+<td  headers="name">
+XDO_DS_DEFINITIONS_TL_U2
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+APPLICATION_SHORT_NAME
+<br>
+DATA_SOURCE_NAME
+<br>
+LANGUAGE
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">APPLICATION_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Foreign key to fnd_application(APPLICATION_SHORT_NAME)</TD></TR>
+<TR> <TD  headers="name">DATA_SOURCE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Unique developer¿s key with application_short_name</TD></TR>
+<TR> <TD  headers="name">LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Language</TD></TR>
+<TR> <TD  headers="name">DATA_SOURCE_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Data source name</TD></TR>
+<TR> <TD  headers="name">DESCRIPTION</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Data source description</TD></TR>
+<TR> <TD  headers="name">SOURCE_LANG</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Source Language</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard Who column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_DS_DEFINITIONS_TL does not reference any database object<p>
+<b>XDO.XDO_DS_DEFINITIONS_TL is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_DS_DEFINITIONS_TL</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_EFT_SEQUENCE_NAMES"></a>
+<h3>Table: XDO_EFT_SEQUENCE_NAMES</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Comments</h5>
+<p>
+XDO_EFT_SEQUENCE_NAMES is a table for storing the names of periodic sequences found in eText templates.<br>
+ </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">APPLICATION_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Foreign key to fnd_application(APPLICATION_SHORT_NAME)</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template Code</TD></TR>
+<TR> <TD  headers="name">LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Language</TD></TR>
+<TR> <TD  headers="name">TERRITORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Territory</TD></TR>
+<TR> <TD  headers="name">SEQUENCE_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(240)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Name of the sequence</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_EFT_SEQUENCE_NAMES does not reference any database object<p>
+<b>XDO.XDO_EFT_SEQUENCE_NAMES is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_EFT_SEQUENCE_NAMES</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_FONT_MAPPINGS"></a>
+<h3>Table: XDO_FONT_MAPPINGS</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Primary Key: XDO_FONT_MAPPINGS_PK</h5>
+<ol>
+<li>BASE_FONT</li>
+<li>LANGUAGE</li>
+<li>MAPPING_CODE</li>
+<li>STYLE</li>
+<li>TERRITORY</li>
+<li>WEIGHT</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_FONT_MAPPINGS stores the mappings from a base font to a target Truetype or Type 1 font.  A collection of these mappings forms a font mapping set.<br>
+ </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">MAPPING_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Font Mapping Code</TD></TR>
+<TR> <TD  headers="name">BASE_FONT</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Base Font</TD></TR>
+<TR> <TD  headers="name">STYLE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(10)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Font Style</TD></TR>
+<TR> <TD  headers="name">WEIGHT</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(10)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Font Weight</TD></TR>
+<TR> <TD  headers="name">LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Language</TD></TR>
+<TR> <TD  headers="name">TERRITORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Territory</TD></TR>
+<TR> <TD  headers="name">TARGET_FONT_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(10)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Target Font Type</TD></TR>
+<TR> <TD  headers="name">TARGET_FONT</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Target Font</TD></TR>
+<TR> <TD  headers="name">TTC_NUMBER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">TTC Number</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_FONT_MAPPINGS does not reference any database object<p>
+<b>XDO.XDO_FONT_MAPPINGS is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_FONT_MAPPINGS</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_FONT_MAPPING_SETS_B"></a>
+<h3>Table: XDO_FONT_MAPPING_SETS_B</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Primary Key: XDO_FONT_MAPPING_SETS_B_PK</h5>
+<ol>
+<li>MAPPING_CODE</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_FONT_MAPPING_SETS_B stores the header information for a font mapping set, which is a collection of font mappings (see XDO_FONT_MAPPINGS table).<br>
+ </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">MAPPING_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Font Mapping Code</TD></TR>
+<TR> <TD  headers="name">MAPPING_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Font Mapping Type</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_FONT_MAPPING_SETS_B does not reference any database object<p>
+<b>XDO.XDO_FONT_MAPPING_SETS_B is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_FONT_MAPPING_SETS_B</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_FONT_MAPPING_SETS_TL"></a>
+<h3>Table: XDO_FONT_MAPPING_SETS_TL</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td></td></tr>
+</table>
+<h5>Primary Key: XDO_FONT_MAPPING_SETS_TL_PK</h5>
+<ol>
+<li>LANGUAGE</li>
+<li>MAPPING_CODE</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_FONT_MAPPING_SETS_TL is a translation table for XDO_FONT_MAPPING_SETS_B.<br>
+ </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">MAPPING_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Font Mapping Code</TD></TR>
+<TR> <TD  headers="name">LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Language</TD></TR>
+<TR> <TD  headers="name">MAPPING_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Translated Font Mapping Name</TD></TR>
+<TR> <TD  headers="name">SOURCE_LANG</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Source Language</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_FONT_MAPPING_SETS_TL does not reference any database object<p>
+<b>XDO.XDO_FONT_MAPPING_SETS_TL is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_FONT_MAPPING_SETS_TL</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_LOBS"></a>
+<h3>Table: XDO_LOBS</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td>This table is used for storing locale(langauge and territory) sensitive binary and text files. It is mainly used for storing language layout templates.</td></tr>
+</table>
+<h5>Primary Key: XDO_LOBS_PK</h5>
+<ol>
+<li>LOB_TYPE</li>
+<li>APPLICATION_SHORT_NAME</li>
+<li>LOB_CODE</li>
+<li>LANGUAGE</li>
+<li>TERRITORY</li>
+</ol>
+<h5>Comments</h5>
+<p>
+This table is used for storing locale(langauge and territory) sensitive binary and text files. It is mainly used for storing language layout templates.  </p>
+
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+SYS_IL0000332070C00010$$
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_DATA
+</td>
+<td  headers="col">
+</td></tr>
+<tr >
+<td  headers="name">
+XDO_LOBS_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+LOB_TYPE
+<br>
+APPLICATION_SHORT_NAME
+<br>
+LOB_CODE
+<br>
+LANGUAGE
+<br>
+TERRITORY
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">LOB_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Lob Type</TD></TR>
+<TR> <TD  headers="name">APPLICATION_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Application short name</TD></TR>
+<TR> <TD  headers="name">LOB_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Lob code</TD></TR>
+<TR> <TD  headers="name">LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Language</TD></TR>
+<TR> <TD  headers="name">TERRITORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Territory</TD></TR>
+<TR> <TD  headers="name">FILE_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">File name</TD></TR>
+<TR> <TD  headers="name">XDO_FILE_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">File type</TD></TR>
+<TR> <TD  headers="name">FILE_STATUS</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">file status (enabled)</TD></TR>
+<TR> <TD  headers="name">FILE_CONTENT_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Content type (mime type)</TD></TR>
+<TR> <TD  headers="name">FILE_DATA</TD>
+<TD  headers="datatype">BLOB</TD>
+<TD  headers="length">(4000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">File data</TD></TR>
+<TR> <TD  headers="name">PROGRAM</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Program which inserted this record</TD></TR>
+<TR> <TD  headers="name">PROGRAM_TAG</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Program tag</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">TRANS_COMPLETE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">For MLS templates, whether all strings are translated</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_LOBS does not reference any database object<p>
+<b>XDO.XDO_LOBS is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_LOBS</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_TEMPLATES_B"></a>
+<h3>Table: XDO_TEMPLATES_B</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td>XDO_TEMPLATES_B is a table for template information. Each template has a corresponding data source definition stored in the XDO_DS_DEFINITIONS_B. Each translation of a certain template, not each template, has a correspoinding physical templ</td></tr>
+</table>
+<h5>Primary Key: XDO_TEMPLATES_B_PK</h5>
+<ol>
+<li>APPLICATION_SHORT_NAME</li>
+<li>TEMPLATE_CODE</li>
+</ol>
+<h5>Primary Key: XDO_TEMPLATES_B_UK1</h5>
+<ol>
+<li>APPLICATION_ID</li>
+<li>TEMPLATE_CODE</li>
+</ol>
+<h5>Primary Key: XDO_TEMPLATES_B_UK2</h5>
+<ol>
+<li>TEMPLATE_ID</li>
+</ol>
+<h5>Foreign Keys to this table:</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+             summary="Foreign keys from/to this table">
+             <tr class="OraTableColumnHeader" >
+             <th class="OraTableColumnHeader" id="col">Foreign Key Column</th>
+             <th class="OraTableColumnHeader" id="ftab">Foreign Table</th></tr>
+<tr >
+<td  headers="col">
+IRC_OFFERS<b>.TEMPLATE_ID</b>
+</td>
+<td  headers="ftab">
+XDO_TEMPLATES_B</td></tr>
+<tr >
+<td  headers="col">
+IRC_TEMPLATE_ASSOCIATIONS<b>.TEMPLATE_ID</b>
+</td>
+<td  headers="ftab">
+XDO_TEMPLATES_B</td></tr>
+</table>
+<h5>Comments</h5>
+<p>
+XDO_TEMPLATES_B is a table for template information. Each template has a corresponding data source definition stored in the XDO_DS_DEFINITIONS_B. Each translation of a certain template, not each template, has a correspoinding physical template file. The physical template file information are stored in the XDO_TEMPLATE_FILES.  </p>
+
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_TEMPLATES_B_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+APPLICATION_SHORT_NAME
+<br>
+TEMPLATE_CODE
+</td></tr>
+<tr >
+<td  headers="name">
+XDO_TEMPLATES_B_U2
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+APPLICATION_ID
+<br>
+TEMPLATE_CODE
+</td></tr>
+<tr >
+<td  headers="name">
+XDO_TEMPLATES_B_U3
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+TEMPLATE_ID
+</td></tr>
+<tr >
+<td  headers="name">
+XDO_TEMPLATES_B_N1
+</td>
+<td  headers="type">
+NONUNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+DS_APP_SHORT_NAME
+<br>
+DATA_SOURCE_CODE
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">TEMPLATE_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template ID</TD></TR>
+<TR> <TD  headers="name">APPLICATION_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Application ID</TD></TR>
+<TR> <TD  headers="name">APPLICATION_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Foreign Key to fnd_application(APPLICATION_SHORT_NAME)</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template code</TD></TR>
+<TR> <TD  headers="name">DS_APP_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Foreign key to xdo_ds_definitions_b(APPLICATION_SHORT_NAME)</TD></TR>
+<TR> <TD  headers="name">DATA_SOURCE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Foreign key to xdo_ds_definitions_b(DATA_SOURCE_CODE)</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_TYPE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template type</TD></TR>
+<TR> <TD  headers="name">DEFAULT_LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Foreign key to fnd_iso_languags(ISO_LANGUAGE_2)</TD></TR>
+<TR> <TD  headers="name">DEFAULT_TERRITORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Foreign key to fnd_territories(TERRITORY_CODE). '00' is used as 'Not specified' or 'Null' value.</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_STATUS</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Status (enabled)</TD></TR>
+<TR> <TD  headers="name">USE_ALIAS_TABLE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">It is used for PDF Form Field Mapping. If ¿Y¿, query xdo_template_fields table for alias names</TD></TR>
+<TR> <TD  headers="name">DEPENDENCY_FLAG</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">This column is to tell whether the template is an independent, standalone template which can be processed by XML Publisher processors or a fragment of a template that will be included into other templates. The value 'P'(parent) will be assigned to the standalone templates and 'C'(child) will be assigned to the template fragments.</TD></TR>
+<TR> <TD  headers="name">START_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Start effective date</TD></TR>
+<TR> <TD  headers="name">END_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">End effective date</TD></TR>
+<TR> <TD  headers="name">OBJECT_VERSION_NUMBER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(9)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Version number</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE_CATEGORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE1</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE2</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE3</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE4</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE5</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE6</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE7</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE8</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE9</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE10</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE11</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE12</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE13</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE14</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE15</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">MLS_LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Base translatable locale language</TD></TR>
+<TR> <TD  headers="name">MLS_TERRITORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Base translatable locale territory</TD></TR>
+<TR> <TD  headers="name">DEFAULT_OUTPUT_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(10)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Default Output Type</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_TEMPLATES_B does not reference any database object<p>
+<b>XDO.XDO_TEMPLATES_B is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_TEMPLATES_B</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_TEMPLATES_TL"></a>
+<h3>Table: XDO_TEMPLATES_TL</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td>XDO_TEMPLATES_TL is a translation table for XDO_TEMPLATES_B.</td></tr>
+</table>
+<h5>Primary Key: XDO_TEMPLATES_TL_PK</h5>
+<ol>
+<li>APPLICATION_SHORT_NAME</li>
+<li>TEMPLATE_CODE</li>
+<li>LANGUAGE</li>
+</ol>
+<h5>Primary Key: XDO_TEMPLATES_TL_UK1</h5>
+<ol>
+<li>APPLICATION_SHORT_NAME</li>
+<li>TEMPLATE_NAME</li>
+<li>LANGUAGE</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_TEMPLATES_TL is a translation table for XDO_TEMPLATES_B. <br>
+ </p>
+
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_TEMPLATES_TL_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+APPLICATION_SHORT_NAME
+<br>
+TEMPLATE_CODE
+<br>
+LANGUAGE
+</td></tr>
+<tr >
+<td  headers="name">
+XDO_TEMPLATES_TL_U2
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+APPLICATION_SHORT_NAME
+<br>
+TEMPLATE_NAME
+<br>
+LANGUAGE
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">APPLICATION_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Application Short Name</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template code</TD></TR>
+<TR> <TD  headers="name">LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Language</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template Name</TD></TR>
+<TR> <TD  headers="name">DESCRIPTION</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Description</TD></TR>
+<TR> <TD  headers="name">SOURCE_LANG</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Source Language</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard Who column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_TEMPLATES_TL does not reference any database object<p>
+<b>XDO.XDO_TEMPLATES_TL is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_TEMPLATES_TL</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_TEMPLATE_FIELDS"></a>
+<h3>Table: XDO_TEMPLATE_FIELDS</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td>XDO_TEMPLATE_FIELDS is a table for template field information. Each field belongs to one of physical template files stored in XDO_TEMPLATE_FILES.</td></tr>
+</table>
+<h5>Primary Key: XDO_TEMPLATE_FIELDS_PK</h5>
+<ol>
+<li>APPLICATION_SHORT_NAME</li>
+<li>TEMPLATE_CODE</li>
+<li>FIELD_NAME</li>
+</ol>
+<h5>Comments</h5>
+<p>
+XDO_TEMPLATE_FIELDS is a table for template field information. Each field belongs to one of physical template files stored in XDO_TEMPLATE_FILES.  </p>
+
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_TEMPLATE_FIELDS_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+APPLICATION_SHORT_NAME
+<br>
+TEMPLATE_CODE
+<br>
+FIELD_NAME
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">APPLICATION_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Application Short Name</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template Code</TD></TR>
+<TR> <TD  headers="name">FIELD_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(255)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Field Name</TD></TR>
+<TR> <TD  headers="name">ALIAS_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(255)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Alias name</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard Who column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_TEMPLATE_FIELDS does not reference any database object<p>
+<b>XDO.XDO_TEMPLATE_FIELDS is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_TEMPLATE_FIELDS</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_TRANS_UNITS"></a>
+<h3>Table: XDO_TRANS_UNITS</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td>This table is used to store the header information regarding each segment of translatable text in layout templates.</td></tr>
+</table>
+<h5>Primary Key: XDO_TRANS_UNITS_PK</h5>
+<ol>
+<li>APPLICATION_SHORT_NAME</li>
+<li>TEMPLATE_CODE</li>
+<li>UNIT_ID</li>
+</ol>
+<h5>Comments</h5>
+<p>
+This table is used to store the header information regarding each segment of translatable text in layout templates. </p>
+
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_TRANS_UNITS_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+APPLICATION_SHORT_NAME
+<br>
+TEMPLATE_CODE
+<br>
+UNIT_ID
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">APPLICATION_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Application Short Name</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template code</TD></TR>
+<TR> <TD  headers="name">UNIT_ID</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(255)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Trans Unit ID</TD></TR>
+<TR> <TD  headers="name">NOTE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Note</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard Who column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_TRANS_UNITS does not reference any database object<p>
+<b>XDO.XDO_TRANS_UNITS is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_TRANS_UNITS</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_TRANS_UNIT_PROPS"></a>
+<h3>Table: XDO_TRANS_UNIT_PROPS</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td>This table is used to store any untranslatable values embedded within a segment of text.  These values will be merged back into the text translations.</td></tr>
+</table>
+<h5>Primary Key: XDO_TRANS_UNIT_PROPS_PK</h5>
+<ol>
+<li>APPLICATION_SHORT_NAME</li>
+<li>TEMPLATE_CODE</li>
+<li>UNIT_ID</li>
+<li>PROP_TYPE</li>
+</ol>
+<h5>Comments</h5>
+<p>
+This table is used to store any untranslatable values embedded within a segment of text.  These values will be merged back into the text translations.  </p>
+
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_TRANS_UNIT_PROPS_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+APPLICATION_SHORT_NAME
+<br>
+TEMPLATE_CODE
+<br>
+UNIT_ID
+<br>
+PROP_TYPE
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">APPLICATION_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Application Short Name</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template Code</TD></TR>
+<TR> <TD  headers="name">UNIT_ID</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(255)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Trans unit ID</TD></TR>
+<TR> <TD  headers="name">PROP_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Prop type</TD></TR>
+<TR> <TD  headers="name">PROP_VALUE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Property value</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard Who column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_TRANS_UNIT_PROPS does not reference any database object<p>
+<b>XDO.XDO_TRANS_UNIT_PROPS is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_TRANS_UNIT_PROPS</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="TABLEXDO_TRANS_UNIT_VALUES"></a>
+<h3>Table: XDO_TRANS_UNIT_VALUES</h3>
+<TABLE cellpadding="0" cellspacing="3"
+                         summary="location information">
+<tr><th scope="row" align="left"><b>Description: </b></th><td>This table is used to store the actual value of the translatable text in layout templates.  There is one record for each language the text is translated to.</td></tr>
+</table>
+<h5>Primary Key: XDO_TRANS_UNIT_VALUES_PK</h5>
+<ol>
+<li>APPLICATION_SHORT_NAME</li>
+<li>TEMPLATE_CODE</li>
+<li>UNIT_ID</li>
+<li>LANGUAGE</li>
+<li>TERRITORY</li>
+</ol>
+<h5>Comments</h5>
+<p>
+This table is used to store the actual value of the translatable text in layout templates.  There is one record for each language the text is translated to. </p>
+
+<h5>Indexes</h5>
+<table cellpadding="1" cellspacing="0" border="1"
+                summary="Indexes in this table">
+                <tr class="OraTableColumnHeader" >
+                <th class="OraTableColumnHeader" id="name">Index</th>
+                <th class="OraTableColumnHeader" id="type">Type</th>
+                <th class="OraTableColumnHeader" id="ts">Tablespace</th>
+                <th class="OraTableColumnHeader" id="col">Column</th></tr>
+<tr >
+<td  headers="name">
+XDO_TRANS_UNIT_VALUES_U1
+</td>
+<td  headers="type">
+UNIQUE
+</td>
+<td  headers="ts">
+APPS_TS_TX_IDX
+</td>
+<td  headers="col">
+APPLICATION_SHORT_NAME
+<br>
+LANGUAGE
+<br>
+TEMPLATE_CODE
+<br>
+TERRITORY
+<br>
+UNIT_ID
+</td></tr>
+</table>
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">APPLICATION_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Application Short name</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template code</TD></TR>
+<TR> <TD  headers="name">UNIT_ID</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(255)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Trans unit ID</TD></TR>
+<TR> <TD  headers="name">LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Language</TD></TR>
+<TR> <TD  headers="name">TERRITORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Territory</TD></TR>
+<TR> <TD  headers="name">VALUE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(4000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">String value for this locale</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard Who column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<p>XDO.XDO_TRANS_UNIT_VALUES does not reference any database object<p>
+<b>XDO.XDO_TRANS_UNIT_VALUES is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_TRANS_UNIT_VALUES</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="VIEWXDO_CONFIG_PROPERTIES_VL"></a>
+<h3>View: XDO_CONFIG_PROPERTIES_VL</h3>
+<h5>Comments</h5>
+<h5>View Type</h5><p>MultiLingual view (a language resolved view of the data.)</p><p>
+XDO_CONFIG_PROPERTIES_VL is a view to join XDO_CONFIG_PROPERTIES_B and XDO_CONFIG_PROPERTIES_TL.<br>
+ </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">PROPERTY_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(100)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Property Code</TD></TR>
+<TR> <TD  headers="name">PROPERTY_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Property Name</TD></TR>
+<TR> <TD  headers="name">CATEGORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Category of the Property</TD></TR>
+<TR> <TD  headers="name">XDO_CFG_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(100)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Configuration name that is used by XML Publisher</TD></TR>
+<TR> <TD  headers="name">LOOKUP_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Lookup Type</TD></TR>
+<TR> <TD  headers="name">SORT_ORDER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Sort Order</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<b>APPS.XDO_CONFIG_PROPERTIES_VL references the following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_CONFIG_PROPERTIES_B</b>
+</dd>
+<dd>
+SYNONYM - <b>XDO_CONFIG_PROPERTIES_TL</b>
+</dd>
+</dl>
+<p>APPS.XDO_CONFIG_PROPERTIES_VL is not referenced by any database object<p>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="VIEWXDO_CURRENCY_FORMAT_SETS_VL"></a>
+<h3>View: XDO_CURRENCY_FORMAT_SETS_VL</h3>
+<h5>Comments</h5>
+<h5>View Type</h5><p>MultiLingual view (a language resolved view of the data.)</p><p>
+XDO_CURRENCY_FORMAT_SETS_VL is a view to join XDO_CURRENCY_FORMAT_SETS_B and XDO_CURRENCY_FORMAT_SETS_TL. </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">FORMAT_SET_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Currency Format Set Code</TD></TR>
+<TR> <TD  headers="name">FORMAT_SET_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Currency Format Set Name</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<b>APPS.XDO_CURRENCY_FORMAT_SETS_VL references the following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_CURRENCY_FORMAT_SETS_B</b>
+</dd>
+<dd>
+SYNONYM - <b>XDO_CURRENCY_FORMAT_SETS_TL</b>
+</dd>
+</dl>
+<b>APPS.XDO_CURRENCY_FORMAT_SETS_VL is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+TRIGGER - <b>XDO_CURRENCY_FORMAT_SETS_IL</b>
+</dd>
+<dd>
+TRIGGER - <b>XDO_CURRENCY_FORMAT_SETS_UL</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="VIEWXDO_DS_DEFINITIONS_VL"></a>
+<h3>View: XDO_DS_DEFINITIONS_VL</h3>
+<h5>Comments</h5>
+<h5>View Type</h5><p>MultiLingual view (a language resolved view of the data.)</p><p>
+XDO_DS_DEFINITIONS_VL is a view to join XDO_DS_DEFINITIONS_B and XDO_DS_DEFINITIONS_TL. </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">APPLICATION_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Application short name</TD></TR>
+<TR> <TD  headers="name">DATA_SOURCE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Data source code</TD></TR>
+<TR> <TD  headers="name">DATA_SOURCE_STATUS</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Status (enabled/disabled)</TD></TR>
+<TR> <TD  headers="name">START_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Start effective date</TD></TR>
+<TR> <TD  headers="name">END_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">End effective date</TD></TR>
+<TR> <TD  headers="name">DATA_SOURCE_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Data source name</TD></TR>
+<TR> <TD  headers="name">DESCRIPTION</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(2000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Description</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">OBJECT_VERSION_NUMBER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(9)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Version number</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE_CATEGORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE1</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE2</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE3</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE4</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE5</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE6</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE7</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE8</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE9</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE10</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE11</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE12</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE13</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE14</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE15</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<b>APPS.XDO_DS_DEFINITIONS_VL references the following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_DS_DEFINITIONS_B</b>
+</dd>
+<dd>
+SYNONYM - <b>XDO_DS_DEFINITIONS_TL</b>
+</dd>
+</dl>
+<b>APPS.XDO_DS_DEFINITIONS_VL is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+TRIGGER - <b>XDO_DS_DEFINITIONS_DL</b>
+</dd>
+<dd>
+TRIGGER - <b>XDO_DS_DEFINITIONS_IL</b>
+</dd>
+<dd>
+TRIGGER - <b>XDO_DS_DEFINITIONS_UL</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="VIEWXDO_FONT_MAPPING_SETS_VL"></a>
+<h3>View: XDO_FONT_MAPPING_SETS_VL</h3>
+<h5>Comments</h5>
+<h5>View Type</h5><p>MultiLingual view (a language resolved view of the data.)</p><p>
+XDO_FONT_MAPPING_SETS_VL is a view to join XDO_FONT_MAPPING_SETS_B and XDO_FONT_MAPPING_SETS_TL.<br>
+ </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">MAPPING_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Font Mapping Code</TD></TR>
+<TR> <TD  headers="name">MAPPING_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Font Mapping Name</TD></TR>
+<TR> <TD  headers="name">MAPPING_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Font Mapping Type</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard WHO Column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<b>APPS.XDO_FONT_MAPPING_SETS_VL references the following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_FONT_MAPPING_SETS_B</b>
+</dd>
+<dd>
+SYNONYM - <b>XDO_FONT_MAPPING_SETS_TL</b>
+</dd>
+</dl>
+<b>APPS.XDO_FONT_MAPPING_SETS_VL is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+TRIGGER - <b>XDO_FONT_MAPPING_SETS_IL</b>
+</dd>
+<dd>
+TRIGGER - <b>XDO_FONT_MAPPING_SETS_UL</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+<a name="VIEWXDO_TEMPLATES_VL"></a>
+<h3>View: XDO_TEMPLATES_VL</h3>
+<h5>Comments</h5>
+<h5>View Type</h5><p>MultiLingual view (a language resolved view of the data.)</p><p>
+XDO_TEMPLATES_VL is a view to join XDO_TEMPLATES_B and XDO_TEMPLATES_TL. </p>
+
+<h5> Columns</h5>
+<table cellpadding=1 cellspacing=0 border=1
+                          summary="Column details for this table">
+<TR>
+<TH class="OraTableColumnHeader" id="name">Name</TH>
+<TH class="OraTableColumnHeader" id="datatype"> Datatype</TH>
+<TH class="OraTableColumnHeader" id="length">Length</TH>
+<TH class="OraTableColumnHeader" id="null">Mandatory</TH>
+<TH class="OraTableColumnHeader" id="text">Comments</TH></TR>
+<TR> <TD  headers="name">TEMPLATE_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template ID</TD></TR>
+<TR> <TD  headers="name">APPLICATION_ID</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Application ID</TD></TR>
+<TR> <TD  headers="name">APPLICATION_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Application Short Name</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template Code</TD></TR>
+<TR> <TD  headers="name">DS_APP_SHORT_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(50)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Data source application short name</TD></TR>
+<TR> <TD  headers="name">DATA_SOURCE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(80)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Data source code</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_TYPE_CODE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template type</TD></TR>
+<TR> <TD  headers="name">DEFAULT_LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Default locale language</TD></TR>
+<TR> <TD  headers="name">DEFAULT_TERRITORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Default locale territory</TD></TR>
+<TR> <TD  headers="name">MLS_LANGUAGE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Base translatable locale language</TD></TR>
+<TR> <TD  headers="name">MLS_TERRITORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(6)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Base translatable locale territory</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_STATUS</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Status (enabled /disabled)</TD></TR>
+<TR> <TD  headers="name">USE_ALIAS_TABLE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Use PDF mapping alias</TD></TR>
+<TR> <TD  headers="name">DEPENDENCY_FLAG</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Subtemplate</TD></TR>
+<TR> <TD  headers="name">START_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Start effective date</TD></TR>
+<TR> <TD  headers="name">END_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">End effective date</TD></TR>
+<TR> <TD  headers="name">TEMPLATE_NAME</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(120)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Template name</TD></TR>
+<TR> <TD  headers="name">DEFAULT_OUTPUT_TYPE</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(10)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text"></TD></TR>
+<TR> <TD  headers="name">DESCRIPTION</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(1000)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Description</TD></TR>
+<TR> <TD  headers="name">CREATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">CREATION_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATED_BY</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_DATE</TD>
+<TD  headers="datatype">DATE</TD>
+<TD  headers="length"><br></TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">LAST_UPDATE_LOGIN</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(15)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Standard Who column</TD></TR>
+<TR> <TD  headers="name">OBJECT_VERSION_NUMBER</TD>
+<TD  headers="datatype">NUMBER</TD>
+<TD  headers="length">(9)</TD>
+<TD  headers="null">Y</TD>
+<TD  headers="text">Version number</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE_CATEGORY</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(30)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE1</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE2</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE3</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE4</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE5</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE6</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE7</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE8</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE9</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE10</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE11</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE12</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE13</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE14</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+<TR> <TD  headers="name">ATTRIBUTE15</TD>
+<TD  headers="datatype">VARCHAR2</TD>
+<TD  headers="length">(150)</TD>
+<TD  headers="null"><br></TD>
+<TD  headers="text">Descriptive Flexfield column</TD></TR>
+</table>
+<a name="dependencies"></a>
+            <p><a href="#top-of-page">[top of page]</a></p>
+<b>APPS.XDO_TEMPLATES_VL references the following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+SYNONYM - <b>XDO_TEMPLATES_B</b>
+</dd>
+<dd>
+SYNONYM - <b>XDO_TEMPLATES_TL</b>
+</dd>
+</dl>
+<b>APPS.XDO_TEMPLATES_VL is referenced by following: </b><p>
+<dl>
+<dt>
+<b>APPS</b>
+</dt>
+<dd>
+PACKAGE BODY - <b>FND_CONC_TEMPLATES</b>
+</dd>
+<dd>
+VIEW - <b>IEX_DELIVERY_TEMPLATES_V</b>
+</dd>
+<dd>
+PACKAGE BODY - <b>IEX_SEND_XML_PVT</b>
+</dd>
+<dd>
+PACKAGE BODY - <b>OKS_AUTO_REMINDER</b>
+</dd>
+<dd>
+PACKAGE BODY - <b>OKS_K_ACTIONS_PVT</b>
+</dd>
+<dd>
+VIEW - <b>OKS_LAYOUT_TEMPLATES_V</b>
+</dd>
+<dd>
+PACKAGE BODY - <b>OKS_TEMPLATE_SET_PUB</b>
+</dd>
+<dd>
+PACKAGE BODY - <b>PAY_CORE_XDO_UTILS</b>
+</dd>
+<dd>
+PACKAGE BODY - <b>PAY_MX_TRR_PKG</b>
+</dd>
+<dd>
+PACKAGE BODY - <b>PAY_PAYGTN_PKG</b>
+</dd>
+<dd>
+PACKAGE BODY - <b>PQP_EXR_SWI</b>
+</dd>
+<dd>
+PACKAGE BODY - <b>QP_PRICE_BOOK_UTIL</b>
+</dd>
+<dd>
+PACKAGE BODY - <b>RG_REPORT_SUBMISSION_PKG</b>
+</dd>
+<dd>
+PACKAGE BODY - <b>WSH_SHIPPING_PARAMS_PVT</b>
+</dd>
+<dd>
+TRIGGER - <b>XDO_TEMPLATES_DL</b>
+</dd>
+<dd>
+TRIGGER - <b>XDO_TEMPLATES_IL</b>
+</dd>
+<dd>
+TRIGGER - <b>XDO_TEMPLATES_UL</b>
+</dd>
+</dl>
+<p><a href="#top-of-page">[top of page]</a></p>
+      <table border="0" cellpadding=0 cellspacing=0 width=600 summary="">
+      <tr>
+        <td>
+          <hr size=1 noshade>
+        </td>
+        <td>
+          <hr size=1 noshade>
+        </td>
+      </tr>
+      <tr>
+        <td class="OraCopyright">
+ Copyright (c) 2001 - 2005, Oracle
+        </td>
+        <td class="OraPrivacy">
+ <a href="uiutil.copyright_notice">
+ Oracle Proprietary, Confidential Information - Use Restricted by Contract</a>
+        </td>
+      </tr>
+      </table>
+     </td>
+    </tr>
+   </table>
+ </td> <!-- end of right side -->
+</tr>
+</table>

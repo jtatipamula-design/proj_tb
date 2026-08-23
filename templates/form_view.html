@@ -272,6 +272,8 @@
     <div class="form-card">
         <!-- Form with Multipart Encoding -->
         <form id="recordForm" class="dynamic-form"
+              data-is-update="{{ 'true' if is_update else 'false' }}"
+              data-table-name="{{ table_name }}"
               action="/api/{{ table_name }}{{ '/' ~ pk_val if is_update else '' }}"
               method="POST"
               {% if is_update %}
@@ -515,61 +517,64 @@
         const form = document.getElementById('recordForm');
         if (!form) return;
 
-        {% if not is_update %}
-        const draftKey = `draft_{{ table_name }}`;
-        const draftInputs = form.querySelectorAll('input:not([type="hidden"]):not([readonly]):not([type="file"]), select, textarea');
-        
-        // 1. Restore from Draft
-        const savedDraft = sessionStorage.getItem(draftKey);
-        if (savedDraft) {
-            try {
-                const data = JSON.parse(savedDraft);
-                draftInputs.forEach(input => {
-                    if (data[input.name] !== undefined) {
-                        if (input.type === 'radio' || input.type === 'checkbox') {
-                            input.checked = data[input.name] === input.value;
-                        } else {
-                            input.value = data[input.name];
+        const isUpdate = form.getAttribute('data-is-update') === 'true';
+        const tableName = form.getAttribute('data-table-name') || '';
+
+        if (!isUpdate) {
+            const draftKey = `draft_${tableName}`;
+            const draftInputs = form.querySelectorAll('input:not([type="hidden"]):not([readonly]):not([type="file"]), select, textarea');
+            
+            // 1. Restore from Draft
+            const savedDraft = sessionStorage.getItem(draftKey);
+            if (savedDraft) {
+                try {
+                    const data = JSON.parse(savedDraft);
+                    draftInputs.forEach(input => {
+                        if (data[input.name] !== undefined) {
+                            if (input.type === 'radio' || input.type === 'checkbox') {
+                                input.checked = data[input.name] === input.value;
+                            } else {
+                                input.value = data[input.name];
+                            }
                         }
+                    });
+                } catch(e) { console.error("Draft restore failed", e); }
+            }
+
+            // 2. Save Draft on Input
+            const saveDraft = () => {
+                const data = {};
+                draftInputs.forEach(input => {
+                    if (input.type === 'radio' || input.type === 'checkbox') {
+                        if(input.checked) data[input.name] = input.value;
+                    } else {
+                        data[input.name] = input.value;
                     }
                 });
-            } catch(e) { console.error("Draft restore failed", e); }
-        }
+                sessionStorage.setItem(draftKey, JSON.stringify(data));
+            };
 
-        // 2. Save Draft on Input
-        const saveDraft = () => {
-            const data = {};
-            draftInputs.forEach(input => {
-                if (input.type === 'radio' || input.type === 'checkbox') {
-                    if(input.checked) data[input.name] = input.value;
-                } else {
-                    data[input.name] = input.value;
+            form.addEventListener('input', saveDraft);
+            form.addEventListener('change', saveDraft);
+
+            // 3. Clear Draft Function
+            window.clearFormDraft = function() {
+                sessionStorage.removeItem(draftKey);
+                form.reset();
+                const actRadios = form.querySelectorAll('input[type="radio"][value="ACT"]');
+                actRadios.forEach(r => r.checked = true);
+                if (typeof showToast === 'function') {
+                    showToast("Form draft cleared.", "success");
+                }
+            };
+
+            // 4. Wipe Draft on Successful Form Submission
+            form.addEventListener('htmx:afterRequest', function(evt) {
+                if(evt.detail.successful) {
+                    sessionStorage.removeItem(draftKey);
                 }
             });
-            sessionStorage.setItem(draftKey, JSON.stringify(data));
-        };
-
-        form.addEventListener('input', saveDraft);
-        form.addEventListener('change', saveDraft);
-
-        // 3. Clear Draft Function
-        window.clearFormDraft = function() {
-            sessionStorage.removeItem(draftKey);
-            form.reset();
-            const actRadios = form.querySelectorAll('input[type="radio"][value="ACT"]');
-            actRadios.forEach(r => r.checked = true);
-            if (typeof showToast === 'function') {
-                showToast("Form draft cleared.", "success");
-            }
-        };
-
-        // 4. Wipe Draft on Successful Form Submission
-        form.addEventListener('htmx:afterRequest', function(evt) {
-            if(evt.detail.successful) {
-                sessionStorage.removeItem(draftKey);
-            }
-        });
-        {% endif %}
+        }
 
         // ----------------------------------------------------
         // SUCCESS / ERROR HANDLING — Toast + Redirect
@@ -577,12 +582,12 @@
         form.addEventListener('htmx:afterRequest', function(evt) {
             if (evt.detail.successful) {
                 sessionStorage.setItem('pendingToast', JSON.stringify({
-                    msg: '{{ "Record updated" if is_update else "Record created" }} successfully!',
+                    msg: isUpdate ? 'Record updated successfully!' : 'Record created successfully!',
                     type: 'success'
                 }));
                 const hxRedirect = evt.detail.xhr ? evt.detail.xhr.getResponseHeader('HX-Redirect') : null;
                 if (!hxRedirect) {
-                    window.location.href = '/table/{{ table_name }}';
+                    window.location.href = `/table/${tableName}`;
                 }
             } else {
                 let errorMsg = 'Something went wrong. Please try again.';
