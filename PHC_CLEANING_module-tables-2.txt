@@ -1,0 +1,314 @@
+-- ============================================================================
+-- SCHEMA INITIALIZATION: CLEANING VALIDATION MODULE
+-- Industry: Pharmaceutical Manufacturing (GMP/FDA Compliance)
+-- ============================================================================
+
+CREATE SCHEMA IF NOT EXISTS cleaning_validation;
+SET search_path TO cleaning_validation, public;
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-------------------------------------------------------------------------------
+-- 1. MASTERS: PRODUCT & DOSAGE REGISTRATION
+-------------------------------------------------------------------------------
+
+    pea_status            varchar(3)   not null, -- 'open', 'closed', 'canceled'
+    pea_start_date        timestamptz not null default now(),
+    pea_end_date          timestamptz,
+    pea_created 	  timestamptz not null default now(),
+    pea_modified 	  timestamptz not null default now(),
+    pea_created_by 	  varchar(20)  not null enable, 
+    pea_modified_by 	  varchar(20)  not null enable,
+    pea_company_id	  bigserial    not null,
+    unique (pea_company_id, pea_assignment_id),
+    constraint pea_designation_pk primary key (pea_designation_id),
+    constraint pea_company_fk foreign key (pea_company_id) references phc_companies_t(pcp_company_id);
+
+
+-- Master Table: Products & Dosage Form
+CREATE TABLE cleaning_validation.products (
+    product_id SERIAL PRIMARY KEY,
+    product_code VARCHAR(50) UNIQUE NOT NULL,
+    product_name VARCHAR(200) NOT NULL,
+    dosage_form VARCHAR(50) NOT NULL CHECK (dosage_form IN ('Tablets', 'Capsules', 'Liquids', 'Sachets', 'Injections')),
+    grade VARCHAR(50) DEFAULT 'USP', -- e.g., USP, BP, IP, EP
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Product Strengths
+CREATE TABLE cleaning_validation.product_strengths (
+    strength_id SERIAL PRIMARY KEY,
+    product_id INT NOT NULL REFERENCES cleaning_validation.products(product_id) ON DELETE CASCADE,
+    strength_value VARCHAR(100) NOT NULL, -- e.g., "250/125"
+    uom VARCHAR(20) NOT NULL -- e.g., "mg"
+);
+
+-- Product Manufacturing Stages (MFC/MFR Mapping)
+CREATE TABLE cleaning_validation.product_stages (
+    stage_id SERIAL PRIMARY KEY,
+    product_id INT NOT NULL REFERENCES cleaning_validation.products(product_id) ON DELETE CASCADE,
+    stage_name VARCHAR(100) NOT NULL, -- e.g., "Blend/Bulk", "SFG/Bulk Finished"
+    stage_code VARCHAR(30) NOT NULL, -- e.g., "100000", "100001"
+    mfc_mfr_no VARCHAR(50) NOT NULL, -- e.g., "MFC001-00"
+    CONSTRAINT idx_prod_stage_code UNIQUE (product_id, stage_code)
+);
+
+-- Product Packaging Styles
+CREATE TABLE cleaning_validation.product_pack_styles (
+    pack_style_id SERIAL PRIMARY KEY,
+    product_id INT NOT NULL REFERENCES cleaning_validation.products(product_id) ON DELETE CASCADE,
+    pack_type VARCHAR(100) NOT NULL, -- e.g., "Bottle Packing", "Blister Packing"
+    pack_count INT NOT NULL, -- e.g., 30, 10
+    pack_code VARCHAR(30) NOT NULL -- e.g., "200001"
+);
+
+-------------------------------------------------------------------------------
+-- 2. MASTERS: PDE, SOLUBILITY, MDD, & TEST METHODS
+-------------------------------------------------------------------------------
+
+-- Permitted Daily Exposure (PDE) Registration
+CREATE TABLE cleaning_validation.pde_registrations (
+    pde_id SERIAL PRIMARY KEY,
+    product_id INT NOT NULL REFERENCES cleaning_validation.products(product_id) ON DELETE CASCADE,
+    ref_document_no VARCHAR(50) NOT NULL, -- e.g., "PDE-AP-001"
+    validity_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE cleaning_validation.pde_api_details (
+    pde_detail_id SERIAL PRIMARY KEY,
+    pde_id INT NOT NULL REFERENCES cleaning_validation.pde_registrations(pde_id) ON DELETE CASCADE,
+    api_name VARCHAR(150) NOT NULL, -- e.g., "Amoxicillin"
+    pde_value NUMERIC(10, 4) NOT NULL,
+    uom VARCHAR(20) NOT NULL DEFAULT 'mg/day'
+);
+
+-- Product & API Solubility
+CREATE TABLE cleaning_validation.solubility_details (
+    solubility_id SERIAL PRIMARY KEY,
+    product_id INT NOT NULL REFERENCES cleaning_validation.products(product_id) ON DELETE CASCADE,
+    api_name VARCHAR(150) NOT NULL,
+    solubility_in_water VARCHAR(50) NOT NULL CHECK (solubility_in_water IN (
+        'Very soluble', 'Freely soluble', 'Soluble', 'Sparingly soluble', 
+        'Slightly soluble', 'Very slightly soluble', 'Practically insoluble'
+    )),
+    ref_document_no VARCHAR(50) NOT NULL
+);
+
+-- Maximum Daily Dosage (MDD)
+CREATE TABLE cleaning_validation.mdd_registrations (
+    mdd_id SERIAL PRIMARY KEY,
+    product_id INT NOT NULL REFERENCES cleaning_validation.products(product_id) ON DELETE CASCADE,
+    product_mdd NUMERIC(10, 2) NOT NULL,
+    product_mdd_uom VARCHAR(20) NOT NULL, -- e.g., "No" / "Units"
+    ref_document_no VARCHAR(50) NOT NULL
+);
+
+CREATE TABLE cleaning_validation.mdd_api_details (
+    mdd_detail_id SERIAL PRIMARY KEY,
+    mdd_id INT NOT NULL REFERENCES cleaning_validation.mdd_registrations(mdd_id) ON DELETE CASCADE,
+    api_name VARCHAR(150) NOT NULL,
+    api_mdd NUMERIC(10, 2) NOT NULL,
+    uom VARCHAR(20) NOT NULL DEFAULT 'mg'
+);
+
+-- Analytical Test Method Details (LOD & LOQ Limits)
+CREATE TABLE cleaning_validation.test_methods (
+    method_id SERIAL PRIMARY KEY,
+    product_id INT NOT NULL REFERENCES cleaning_validation.products(product_id) ON DELETE CASCADE,
+    test_method_no VARCHAR(50) NOT NULL, -- e.g., "STP-001-00"
+    api_name VARCHAR(150) NOT NULL,
+    lod_value NUMERIC(10, 4) NOT NULL, -- Limit of Detection
+    loq_value NUMERIC(10, 4) NOT NULL, -- Limit of Quantitation
+    uom VARCHAR(20) NOT NULL DEFAULT 'ppm'
+);
+
+-- Batch Sizes & BMR Cross-Reference
+CREATE TABLE cleaning_validation.product_batch_sizes (
+    batch_size_id SERIAL PRIMARY KEY,
+    product_id INT NOT NULL REFERENCES cleaning_validation.products(product_id) ON DELETE CASCADE,
+    strength_value VARCHAR(100) NOT NULL,
+    stage_code VARCHAR(30) NOT NULL,
+    batch_size NUMERIC(12, 2) NOT NULL,
+    uom VARCHAR(20) NOT NULL, -- e.g., "Kg", "No"
+    ref_bmr_no VARCHAR(50) NOT NULL -- e.g., "BMR-001-00"
+);
+
+-------------------------------------------------------------------------------
+-- 3. MASTERS: EQUIPMENT, SURFACE AREA, & SAMPLING LOCATIONS
+-------------------------------------------------------------------------------
+
+-- Equipment Master Registration
+CREATE TABLE cleaning_validation.equipments (
+    equipment_id VARCHAR(50) PRIMARY KEY, -- e.g., "PD-E-0001", "PDE001"
+    equipment_name VARCHAR(150) NOT NULL, -- e.g., "Octagonal Blender", "Rapid Mixer Granulator"
+    make VARCHAR(100), -- e.g., "SAAN Engineers"
+    model VARCHAR(50), -- e.g., "GMP"
+    capacity NUMERIC(10, 2),
+    uom VARCHAR(20), -- e.g., "Litres"
+    location_building VARCHAR(100), -- e.g., "Building 1"
+    room_name VARCHAR(100), -- e.g., "Blending room-2"
+    room_number VARCHAR(30), -- e.g., "1109"
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- Equipment Surface Area
+CREATE TABLE cleaning_validation.equipment_surface_areas (
+    surface_area_id SERIAL PRIMARY KEY,
+    equipment_id VARCHAR(50) NOT NULL REFERENCES cleaning_validation.equipments(equipment_id) ON DELETE CASCADE,
+    product_contact_surface_area NUMERIC(12, 2) NOT NULL, -- e.g., 120500
+    uom VARCHAR(20) NOT NULL DEFAULT 'Sq.Cm'
+);
+
+-- Equipment Sampling Points
+CREATE TABLE cleaning_validation.equipment_sampling_locations (
+    sampling_loc_id SERIAL PRIMARY KEY,
+    equipment_id VARCHAR(50) NOT NULL REFERENCES cleaning_validation.equipments(equipment_id) ON DELETE CASCADE,
+    location_description VARCHAR(200) NOT NULL, -- e.g., "Sample from baffle", "Inner side of lid"
+    sample_type VARCHAR(30) CHECK (sample_type IN ('Swab', 'Rinse', 'Swab/Rinse')),
+    test_for VARCHAR(30) CHECK (test_for IN ('Chemical', 'Micro', 'Detergent')),
+    sample_identifier VARCHAR(30) NOT NULL -- e.g., "SC1", "SM1", "SD1"
+);
+
+-- Equipment Mapping to Product / Block / Module
+CREATE TABLE cleaning_validation.product_equipment_mapping (
+    mapping_id SERIAL PRIMARY KEY,
+    product_id INT NOT NULL REFERENCES cleaning_validation.products(product_id) ON DELETE CASCADE,
+    block_no VARCHAR(30) NOT NULL,
+    module_no VARCHAR(30) NOT NULL,
+    equipment_id VARCHAR(50) NOT NULL REFERENCES cleaning_validation.equipments(equipment_id) ON DELETE CASCADE,
+    CONSTRAINT idx_prod_block_equip UNIQUE (product_id, block_no, module_no, equipment_id)
+);
+
+-------------------------------------------------------------------------------
+-- 4. EXECUTION, PROTOCOLS, TRAINING & WORKFLOW
+-------------------------------------------------------------------------------
+
+-- Cleaning Validation Main Execution Instance
+CREATE TABLE cleaning_validation.validation_executions (
+    execution_id SERIAL PRIMARY KEY,
+    product_id INT NOT NULL REFERENCES cleaning_validation.products(product_id),
+    block_no VARCHAR(30) NOT NULL,
+    module_no VARCHAR(30) NOT NULL,
+    protocol_no VARCHAR(50) UNIQUE NOT NULL, -- e.g., "CVP001-00"
+    current_status VARCHAR(50) DEFAULT 'Training' CHECK (current_status IN (
+        'Training', 'CPR', 'Equipment Clearance', 'TRF', 'Sampling', 'Results Entry', 'Equipment Release', 'Completed'
+    )),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Training Module
+CREATE TABLE cleaning_validation.training_records (
+    training_id SERIAL PRIMARY KEY,
+    execution_id INT NOT NULL REFERENCES cleaning_validation.validation_executions(execution_id) ON DELETE CASCADE,
+    trainer_name VARCHAR(100) NOT NULL,
+    trainer_employee_id VARCHAR(50) NOT NULL,
+    is_submitted BOOLEAN DEFAULT FALSE,
+    submitted_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE TABLE cleaning_validation.training_attendees (
+    attendee_id SERIAL PRIMARY KEY,
+    training_id INT NOT NULL REFERENCES cleaning_validation.training_records(training_id) ON DELETE CASCADE,
+    employee_name VARCHAR(100) NOT NULL,
+    employee_id VARCHAR(50) NOT NULL
+);
+
+-- CPR: Cleaning Process Record Header
+CREATE TABLE cleaning_validation.cleaning_process_records (
+    cpr_id SERIAL PRIMARY KEY,
+    cpr_no VARCHAR(50) UNIQUE NOT NULL, -- e.g., "CPR001"
+    execution_id INT NOT NULL REFERENCES cleaning_validation.validation_executions(execution_id),
+    equipment_id VARCHAR(50) NOT NULL REFERENCES cleaning_validation.equipments(equipment_id),
+    batch_number VARCHAR(50),
+    sop_no VARCHAR(50) NOT NULL, -- e.g., "PD001"
+    status VARCHAR(30) DEFAULT 'In-Progress' CHECK (status IN ('In-Progress', 'Completed', 'Approved'))
+);
+
+-- CPR Execution Steps & Checklists
+CREATE TABLE cleaning_validation.cpr_execution_steps (
+    step_id SERIAL PRIMARY KEY,
+    cpr_id INT NOT NULL REFERENCES cleaning_validation.cleaning_process_records(cpr_id) ON DELETE CASCADE,
+    step_number VARCHAR(10) NOT NULL, -- e.g., "1", "2", "3.1"
+    instruction TEXT NOT NULL,
+    criteria TEXT NOT NULL,
+    observation_type VARCHAR(30) CHECK (observation_type IN ('Yes/No', 'Done', 'Text_Entry')),
+    is_done BOOLEAN DEFAULT FALSE,
+    vacuum_cleaner_id VARCHAR(50), -- Specific for dry cleaning steps
+    performed_by VARCHAR(50),
+    performed_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Equipment Clearance Checklist Header
+CREATE TABLE cleaning_validation.equipment_clearance_checklists (
+    clearance_id SERIAL PRIMARY KEY,
+    cpr_id INT NOT NULL REFERENCES cleaning_validation.cleaning_process_records(cpr_id),
+    status VARCHAR(30) DEFAULT 'Pending QA Inspection'
+);
+
+CREATE TABLE cleaning_validation.equipment_clearance_items (
+    item_id SERIAL PRIMARY KEY,
+    clearance_id INT NOT NULL REFERENCES cleaning_validation.equipment_clearance_checklists(clearance_id) ON DELETE CASCADE,
+    checkpoint_no INT NOT NULL,
+    checkpoint_description TEXT NOT NULL,
+    inspected_by_pd VARCHAR(30) CHECK (inspected_by_pd IN ('YES', 'NO', 'Satisfactory', 'Not satisfactory')),
+    inspected_by_qa VARCHAR(30) CHECK (inspected_by_qa IN ('YES', 'NO', 'Satisfactory', 'Not satisfactory')),
+    remarks TEXT
+);
+
+-------------------------------------------------------------------------------
+-- 5. SAMPLING, TESTING REQUEST (TRF), QC RESULTS & REPORTS
+-------------------------------------------------------------------------------
+
+-- Test Request Form (TRF)
+CREATE TABLE cleaning_validation.test_request_forms (
+    trf_id SERIAL PRIMARY KEY,
+    cpr_id INT NOT NULL REFERENCES cleaning_validation.cleaning_process_records(cpr_id),
+    equipment_id VARCHAR(50) NOT NULL REFERENCES cleaning_validation.equipments(equipment_id),
+    submitted_to_qa BOOLEAN DEFAULT FALSE,
+    submitted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- QA/QC Sampling Execution
+CREATE TABLE cleaning_validation.sampling_records (
+    sampling_record_id SERIAL PRIMARY KEY,
+    trf_id INT NOT NULL REFERENCES cleaning_validation.test_request_forms(trf_id),
+    is_sampling_done BOOLEAN DEFAULT FALSE,
+    sampling_done_at TIMESTAMP WITH TIME ZONE,
+    is_acknowledged_by_qc BOOLEAN DEFAULT FALSE,
+    qc_acknowledged_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Analytical Results Entry (Chemical, Micro, Detergent)
+CREATE TABLE cleaning_validation.test_results (
+    result_id SERIAL PRIMARY KEY,
+    sampling_record_id INT NOT NULL REFERENCES cleaning_validation.sampling_records(sampling_record_id),
+    sampling_loc_id INT NOT NULL REFERENCES cleaning_validation.equipment_sampling_locations(sampling_loc_id),
+    chemical_result NUMERIC(10, 4),
+    microbiological_result NUMERIC(10, 4),
+    detergent_result NUMERIC(10, 4),
+    result_status VARCHAR(20) DEFAULT 'Pass' CHECK (result_status IN ('Pass', 'Fail', 'OOS')),
+    qa_acknowledged BOOLEAN DEFAULT FALSE,
+    qa_acknowledged_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Final Cleaning Validation Reports
+CREATE TABLE cleaning_validation.validation_reports (
+    report_id SERIAL PRIMARY KEY,
+    execution_id INT NOT NULL REFERENCES cleaning_validation.validation_executions(execution_id),
+    report_no VARCHAR(50) UNIQUE NOT NULL,
+    generated_by VARCHAR(50) NOT NULL,
+    generated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    report_pdf_url VARCHAR(255)
+);
+
+-------------------------------------------------------------------------------
+-- 6. INDEXES FOR HIGH-PERFORMANCE QUERYING
+-------------------------------------------------------------------------------
+
+CREATE INDEX idx_pde_prod ON cleaning_validation.pde_registrations(product_id);
+CREATE INDEX idx_equip_map_prod ON cleaning_validation.product_equipment_mapping(product_id);
+CREATE INDEX idx_cpr_exec ON cleaning_validation.cleaning_process_records(execution_id);
+CREATE INDEX idx_trf_equip ON cleaning_validation.test_request_forms(equipment_id);
+CREATE INDEX idx_results_sample ON cleaning_validation.test_results(sampling_record_id);

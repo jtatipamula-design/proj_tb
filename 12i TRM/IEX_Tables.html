@@ -1,0 +1,307 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html lang="en-US">
+<head>
+<title>Oracle eTRM</title>
+<style type="text/css">
+<!-- hide from old browsers
+   body { font: 10pt Arial; 
+          background-color: #ffffff;}
+
+   div, p, li, dt, dd { font: 10pt Arial;}
+
+   img, td, tr { font: 10pt Arial;
+         border-width: 0;
+         vertical-align:top;}
+
+  ul.version {list-style-image: url("/images/workarea.gif") }
+
+th         {text-align: left;
+         vertical-align:top;}
+
+    td.bottom { font: 10pt Arial;
+         border-width: 0;
+         text-align: right;
+         vertical-align:bottom;}
+
+    td.x_repeat { font: 10pt Arial;
+         border-width: 0;
+         text-align: left;
+         background-repeat: repeat-x;
+         vertical-align:bottom;}
+
+    .rightAligned { font: 10pt Arial;
+         border-width: 0;
+         text-align: right;
+         vertical-align:top;}
+
+    .100_table {text-align:left; 
+           padding:0;
+           border-width: 0;
+           border-style: none;
+           border: none;
+           margin:none;
+           white-space: none;
+           width:100%;
+           vertical-align:top;}
+
+   .actTab  { background-color: #336699;
+              color: #99ccff; 
+                font-family:Arial, Helvetica, Geneva, sans-serif; 
+                color:#99ccff; 
+                font-size:11pt; 
+                font-weight: bold; 
+                vertical-align:bottom;}
+
+   .inactTab  { background-color: #cccc99;
+               color: #336699;
+               font-weight: bold;
+                font-size:10pt; 
+               cursor: hand;
+               vertical-align:bottom;}
+
+   .disabledTab  { background-color: #cccc99;
+              color: #99ccff; 
+                font-family:Arial, Helvetica, Geneva, sans-serif; 
+                color:#ffffcc; 
+                font-size:10pt; 
+                font-weight: normal; 
+                vertical-align:bottom;}
+
+   a             { color: #663300; }
+
+   a.actTab      {color: #99ccff; 
+              font-family:Arial, Helvetica, Geneva, sans-serif; 
+              font-size:11pt; 
+              text-decoration: none;  
+              font-weight: bold; }
+
+   a.inactTab      { font-family:Arial, Helvetica, Geneva, sans-serif; 
+              color:#003366; 
+              font-weight: normal; 
+              text-decoration: none; 
+              font-size:11pt; }
+
+  h1 {font-family:Arial, Helvetica, Geneva, sans-serif;
+                      color:#336699;
+                      font-size:16pt}
+
+  h2 {font-family:Arial, Helvetica, Geneva, sans-serif;
+                      color:#336699;
+                      font-size:15pt}
+
+      h3  {font-family:Arial, Helvetica, Geneva, sans-serif;
+                        font-weight:bold;
+                        color:#336699;
+                        font-size:14pt}
+
+  h4 {font-family:Arial, Helvetica, Geneva, sans-serif;
+                      color:#336699;
+                      font-size:12pt}
+
+     h5 {font-family:Arial, Helvetica, Geneva, sans-serif;
+                        font-weight:bold;
+                        color:#336699;
+                        font-size:11pt }
+
+     b {font-family:Arial, Helvetica, Geneva, sans-serif;
+                        font-weight:bold;
+                        color:#336699;
+                        font-size:10pt }
+
+     h5.errorText {font-family:Arial, Helvetica, Geneva, sans-serif;
+                        font-weight:bold;
+                        color:#ff0000;
+                        font-size:11pt }
+
+     b.errorText {font-family:Arial, Helvetica, Geneva, sans-serif;
+                        font-weight:bold;
+                        font-style:italic;
+                        color:#ff0000;
+                        font-size:10pt }
+    .TableColumnHeader   {background-color:#cccc99;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            font-weight:bold; 
+                            color:#336699;
+                            font-size:10pt; 
+                            text-align:left; 
+                            border:#336699;
+                            width:100;
+                            text-indent:1}
+    .TableCellText       {background-color:#f7f7e7;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            color:black;
+                            font-size:10pt;
+                            border:#336699;
+                            width:100;
+                            text-indent:1}
+<!-- The following styles can be removed and referenced from a central style sheet if required -->
+
+    .OraLightHeader        {font-family:Arial, Helvetica, Geneva, sans-serif; 
+                            font-size:16pt; 
+                            font-weight:normal; 
+                            color:#6699cc}
+
+    .OraPrivacy           {font-family:Arial, Helvetica, Geneva, sans-serif; 
+                           font-size:8pt; 
+                           font-weight:normal; 
+                           text-align:right; 
+                           color:#663300}
+
+    .OraCopyright         {font-family:Arial, Helvetica, Geneva, sans-serif; 
+                           font-size:8pt; 
+                           font-weight:normal; 
+                           text-align:left; 
+                           color:black}
+
+    .OraTableColumnHeader   {background-color:#cccc99;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            font-weight:bold; 
+                            color:#336699;
+                            font-size:10pt; 
+                            text-align:left; 
+                            text-indent:1}
+    .OraTableRowHeader            {background-color:#cccc99;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            font-weight:bold;
+                            color:#336699;
+                            font-size:10pt;
+                            text-align:right;
+                            text-indent:1}
+    .OraTableCellText       {background-color:#f7f7e7;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            color:black;
+                            font-size:10pt;
+                            text-indent:1}
+    .OraTableCellTextBand   {background-color:white;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            color:black;
+                            font-size:10pt;
+                            text-indent:1}
+    .OraTableCellNumber    {background-color:#f7f7e7;
+                           font-family:arial, helvetica, geneva, sans-serif; 
+                           color:black; font-size:10pt; 
+                           text-align:right; 
+                           text-indent:1}
+    .OraTableCellNumberBand {background-color:white; 
+                            font-family:arial, helvetica, geneva, sans-serif; 
+                            color:black; 
+                            font-size:10pt;
+                            text-align:right;
+                            text-indent:1}
+    .OraTableCellSelect     {background-color:#f7f7e7;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            color:black;
+                            font-size:10pt;
+                            text-align:center;
+                            text-indent:1}
+    .OraTableCellSelectBand {background-color:white;
+                            font-family:arial, helvetica, geneva, sans-serif;
+                            color:black;
+                            font-size:10pt;
+                            text-align:center;
+                            text-indent:1}
+-->
+</style>
+</head>
+<script type="text/javascript" language="JavaScript">
+  function etrm_window(the_url)
+  {
+      etrm_main_view = window.open(the_url, "etrm_main_view", "scrollbars,resizable,toolbar,status");
+  }
+</script>
+<noscript>
+<p>eTRM uses javascript that opens and focuses a separate window to display reports.
+Your browser does not appear to support javascript.  This should not prevent you from using
+eTRM but it does mean the window focus feature will not work.   Please check the contents of
+other windows on your desktop if you click on a link that does not appear to do anything.</p>
+</noscript>
+<h1>Oracle eBusiness Suite Technical Reference</h1>
+<h5>Release 11i - Copyright (c) 2001 - 2005 Oracle  </h5>
+
+<p class="OraCopyright">
+This Technical Reference Manual (TRM) in any form, software or printed matter, contains proprietary information of Oracle ; it is
+provided under an Oracle  agreement containing restrictions on use and disclosure and is also protected by copyright, patent, and
+other intellectual property law. Restrictions applicable to this TRM include, but are not limited to: (a) exercising either the same degree of care to
+safeguard the confidentiality of this TRM as you exercise to safeguard the confidentiality of your own most important Confidential Information or
+a reasonable degree of care, whichever is greater; (b) maintaining agreements with your employees and agents that protect the Confidential
+Information of third parties such as Oracle  and instructing such employees and agents of these requirements for this TRM; (c)
+restricting disclosure of this TRM to those of your employees who have a 'need to know' consistent with the purposes for which this TRM was
+disclosed to you; (d) maintaining this TRM at all times on your premises; (e) not removing or destroying any proprietary or confidential legends
+or markings placed upon this TRM in whatever form, software or printed matter; and (f) not reproducing or transmitting this TRM in any form or
+by any means, electronic or mechanical, for any purpose, without the express written permission of Oracle. You should not use this
+TRM in any form, software or printed matter, to create software that performs the same or similar functions as any Oracle  products.
+</p>
+<p class="OraCopyright">
+The information in this TRM is subject to change without notice. If you find any problems in the TRM in any form, software or printed matter,
+please report them to us in writing. Oracle  does not warrant that this TRM is error free. This TRM is provided to customer 'as is'
+with no warranty of any kind. This TRM does not constitute Documentation as that term is defined in Oracle's agreements.
+Reverse engineering of the Programs (software and documentation) associated with this TRM are prohibited. The Programs associated with this
+TRM are not intended for use in any nuclear, aviation, mass transit, medical, or other inherently dangerous applications. It shall be licensee's
+responsibility to take all appropriate fail safe, backup, redundancy and other measures to ensure the safe use of such applications if the
+Programs are used for such purposes, and Oracle disclaims liability for any damages caused by such use of the Programs.
+Program Documentation is licensed for use solely to support the deployment of the Programs and not for any other any other purpose.
+Restricted Rights Legend
+</p><p class="OraCopyright">
+This TRM and the Programs associated with this TRM delivered subject to the DOD FAR Supplement are 'commercial computer software' and
+use, duplication and disclosure of the TRM and the Programs associated with this TRM shall be subject to the licensing restrictions set forth in the
+applicable Oracle license agreement. Otherwise, this TRM and the Programs associated with this TRM delivered subject to the Federal
+Acquisition Regulations are 'restricted computer software' and use, duplication and disclosure of the TRM and the Programs associated with this
+TRM shall be subject to the restrictions in FAR 52.227-14, Rights in Data General, including Alternate III (June 1987). Oracle, 500
+Oracle Parkway, Redwood City, CA 94065.
+</p>
+<p class="OraCopyright">
+Oracle is a registered trademark. AIM Advantage&#153, Big Business. Small Business. All Business.&#153, CDM Advantage&#153,
+.comference&#153, ConText&#174, Des40&#174, Easy*Query&#153, Easy*SQL&#174, Education Objects&#153, EMM Advantage&#153, Enabling the Information Age&#174, ExpertDetectSM, Express&#174, FastForwardSM,
+GEMMS&#174, Gist&#153, Hyper*SQL&#153, instantOracle&#153, "Internet Business Intelligence - Insight for Everyone"&#153, iSQL*Plus&#153, JInitiator&#153,
+NLS*Workbench&#174, Object Marketplace&#153, ODP Pulse&#153, ODP Techwire&#153, OLA&#153,
+On Oracle&#153, Oracle&#174, Oracle Book&#174, Oracle Bookbatch&#174, Oracle BookBuilder&#174, Oracle<i>BRONZE</i>&#174, Oracle Business OnLine&#174,
+Oracle<i>DevConnect</i>SM, Oracle&#174 Discoverer&#153,
+Oracle&#174 Expert&#153, Oracle Financials&#174, Oracle<i>GOLD</i>SM,
+Oracle<i>Incident</i>SM, OracleJSP&#153,
+OracleLifeCycleSM, Oracle Media Objects&#174, Oracle<i>MERCURY</i>SM,
+Oracle<i>MetaLink</i>SM, Oracle<i>metals</i>SM, OracleMobile&#153, Oracle Names&#174,
+Oracle NetSolutions&#174, Oracle&#174 One&#153, Oracle Open Gateways&#174,
+Oracle OpenWorld&#174, Oracle<i>PLATINUM</i>SM,
+Oracle Power Objects&#174, Oracle Press&#174, Oracle Procedural Gateway&#174,
+Oracle Quality&#174, Oracle Secure Network Services&#174, Oracle<i>SILVER</i>SM,
+Oracle&#174 SQL/Services&#153, Oracle&#174 SQL*TutorSM,
+Oracle<i>STERLING</i>SM, Oracle Store&#174,
+Oracle Transparent Gateway&#174, OracleWare&#174, Oracle8i&#153, Oracle9i&#153,
+PC Express&#174, Personal Express&#174, PJM Advantage&#153, PL/SQL&#153, Pro*Ada&#174,
+Pro*C&#153, Pro*C/C++&#153, Pro*COBOL&#174, Pro*FORTRAN&#174, Pro*Pascal&#174,
+Pro*PL/1&#174, Pro*REXX&#174, Profit&#153, ProREXX&#153, Report Card&#153,
+Secure Access 2.0&#153, Secure Network Services&#174, Security Without Compromise&#153,
+SellingPoint&#174, SQL*Plus&#174, Tutor&#153 are trademarks or
+registered trademarks of Oracle. Other names may be trademarks of their respective owners.
+The absence of a product or service name, slogan, or logo from this list does not constitute a
+waiver of Oracle's trademark or other intellectual property rights concerning that name, slogan,
+or logo.</p>
+<a name="top-of-page"></a>
+<h1>eTRM - IEX Tables and Views</h1>
+<dl>
+</dl>
+      <table border="0" cellpadding=0 cellspacing=0 width=600 summary="">
+      <tr>
+        <td>
+          <hr size=1 noshade>
+        </td>
+        <td>
+          <hr size=1 noshade>
+        </td>
+      </tr>
+      <tr>
+        <td class="OraCopyright">
+ Copyright (c) 2001 - 2005, Oracle
+        </td>
+        <td class="OraPrivacy">
+ <a href="uiutil.copyright_notice">
+ Oracle Proprietary, Confidential Information - Use Restricted by Contract</a>
+        </td>
+      </tr>
+      </table>
+     </td>
+    </tr>
+   </table>
+ </td> <!-- end of right side -->
+</tr>
+</table>
