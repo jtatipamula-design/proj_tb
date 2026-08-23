@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>Brihas ERP - {% block head_title %}Command Center{% endblock %}</title>
     
     <!-- Google Fonts: Editorial Serif (Lora/Playfair) + Workhorse Sans (Inter) + Mono -->
@@ -469,6 +470,36 @@
                         {% block header_title %}Dashboard{% endblock %}
                     </h2>
                 </div>
+
+                <!-- Header Actions: Notification Center -->
+                <div class="flex items-center gap-3">
+                    <div class="relative" id="notificationDropdownWrap">
+                        <button onclick="toggleNotificationDropdown()" 
+                                type="button"
+                                id="notificationBellBtn"
+                                class="p-2 rounded-lg transition-all cursor-pointer relative"
+                                style="color: var(--color-slate); background: var(--color-bone); border: 1px solid var(--color-fog);"
+                                title="Notifications">
+                            <i data-lucide="bell" class="w-4 h-4"></i>
+                            <span id="notificationBadge" class="hidden absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white font-mono text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">0</span>
+                        </button>
+
+                        <!-- Notification Popover Drawer -->
+                        <div id="notificationPopover" class="hidden absolute right-0 mt-2 w-80 md:w-96 rounded-xl shadow-2xl border z-50 overflow-hidden"
+                             style="background: var(--surface-pure-white-cards); border-color: var(--color-fog);">
+                            <div class="p-3.5 border-b flex items-center justify-between" style="border-color: var(--color-fog);">
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="bell-ring" class="w-4 h-4 text-iris"></i>
+                                    <span class="font-semibold text-xs text-obsidian">Notifications</span>
+                                </div>
+                                <button onclick="fetchNotifications()" class="text-xs text-iris hover:underline font-mono" type="button">Refresh</button>
+                            </div>
+                            <div id="notificationList" class="max-h-72 overflow-y-auto divide-y" style="border-color: var(--color-fog);">
+                                <div class="p-4 text-center font-mono text-xs text-mist">Loading notifications...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </header>
 
             <!-- Dynamic Content Block -->
@@ -737,6 +768,241 @@
 
         document.addEventListener('htmx:afterSwap', function() {
             if (window.lucide) lucide.createIcons();
+        });
+
+        document.addEventListener('htmx:configRequest', function(event) {
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const token = csrfMeta ? csrfMeta.getAttribute('content') : '';
+            if (token) {
+                event.detail.headers['X-CSRF-Token'] = token;
+            }
+        });
+
+        // ======== NOTIFICATION CENTER ENGINE ========
+        async function fetchNotifications() {
+            try {
+                const res = await fetch('/api/notifications');
+                const data = await res.json();
+                const badge = document.getElementById('notificationBadge');
+                const list = document.getElementById('notificationList');
+                if (!badge || !list) return;
+
+                if (data.unread_count > 0) {
+                    badge.textContent = data.unread_count > 99 ? '99+' : data.unread_count;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+
+                if (data.notifications && data.notifications.length > 0) {
+                    let html = '';
+                    data.notifications.forEach(n => {
+                        html += `
+                            <div class="p-3 hover:bg-bone transition-colors flex items-start justify-between gap-2.5 ${n.is_read ? 'opacity-60' : 'bg-brand-50/40'}">
+                                <div class="flex-1">
+                                    <div class="flex items-center gap-1.5 mb-1">
+                                        <span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold ${n.category === 'WORKFLOW' ? 'badge-iris' : 'badge-cobalt'}">${n.category}</span>
+                                        <span class="text-xs font-semibold text-obsidian">${n.title}</span>
+                                    </div>
+                                    <p class="text-xs text-graphite mb-1.5 leading-snug">${n.message}</p>
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-[10.5px] font-mono text-mist">${n.timestamp}</span>
+                                        ${n.link_url && n.link_url !== '#' ? `<a href="${n.link_url}" class="text-[11px] font-semibold text-iris hover:underline">View Record &rarr;</a>` : ''}
+                                    </div>
+                                </div>
+                                ${!n.is_read ? `
+                                    <button onclick="markNotificationRead(${n.id}, event)" class="text-mist hover:text-obsidian p-1" title="Mark as read" type="button">
+                                        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        `;
+                    });
+                    list.innerHTML = html;
+                } else {
+                    list.innerHTML = '<div class="p-6 text-center font-mono text-xs text-mist">No new notifications</div>';
+                }
+                if (window.lucide) lucide.createIcons();
+            } catch(e) {}
+        }
+
+        function toggleNotificationDropdown() {
+            const popover = document.getElementById('notificationPopover');
+            if (!popover) return;
+            const isHidden = popover.classList.contains('hidden');
+            if (isHidden) {
+                popover.classList.remove('hidden');
+                fetchNotifications();
+            } else {
+                popover.classList.add('hidden');
+            }
+        }
+
+        async function markNotificationRead(notifId, evt) {
+            if (evt) evt.stopPropagation();
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const token = csrfMeta ? csrfMeta.getAttribute('content') : '';
+            try {
+                await fetch(`/api/notifications/${notifId}/read`, {
+                    method: 'POST',
+                    headers: { 'X-CSRF-Token': token }
+                });
+                fetchNotifications();
+            } catch(e) {}
+        }
+
+        document.addEventListener('click', function(e) {
+            const wrap = document.getElementById('notificationDropdownWrap');
+            const popover = document.getElementById('notificationPopover');
+            if (wrap && popover && !wrap.contains(e.target)) {
+                popover.classList.add('hidden');
+            }
+        });
+
+        // Initialize notifications poll on page load
+        document.addEventListener('DOMContentLoaded', fetchNotifications);
+    </script>
+
+    <!-- Command Palette Modal -->
+    <div id="cmdPaletteOverlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] hidden items-start justify-center pt-[15vh] p-4 transition-opacity opacity-0">
+        <div id="cmdPaletteModal" class="bg-surface-pure-white-cards dark:bg-bone w-full max-w-2xl rounded-2xl shadow-dropdown overflow-hidden transform scale-95 transition-transform" onclick="event.stopPropagation()">
+            <div class="p-4 border-b border-glass-border dark:border-graphite/20 flex items-center gap-3">
+                <i data-lucide="search" class="w-5 h-5 text-mist"></i>
+                <input type="text" id="cmdPaletteInput" class="w-full bg-transparent border-none outline-none text-obsidian dark:text-bone text-lg font-ui placeholder-mist" placeholder="Search modules and screens... (Ctrl+K or Cmd+K)">
+                <span class="text-[10px] font-mono text-mist border border-mist/30 px-1.5 py-0.5 rounded">ESC</span>
+            </div>
+            <div class="max-h-[50vh] overflow-y-auto p-2" id="cmdPaletteResults">
+                <!-- Results rendered by JS -->
+            </div>
+        </div>
+    </div>
+
+    <script id="modulesTreeData" type="application/json">
+        {{ modules_tree | default({}) | tojson }}
+    </script>
+    <script>
+        const rawModulesTree = JSON.parse(document.getElementById('modulesTreeData').textContent || '{}');
+        const cmdPaletteData = [];
+        for (const [moduleName, modInfo] of Object.entries(rawModulesTree)) {
+            if (modInfo.screens) {
+                for (const screen of modInfo.screens) {
+                    cmdPaletteData.push({
+                        module: moduleName,
+                        name: screen.name,
+                        url: "/table/" + screen.code,
+                        icon: modInfo.icon || 'circle'
+                    });
+                }
+            }
+        }
+
+        const cmdOverlay = document.getElementById('cmdPaletteOverlay');
+        const cmdModal = document.getElementById('cmdPaletteModal');
+        const cmdInput = document.getElementById('cmdPaletteInput');
+        const cmdResults = document.getElementById('cmdPaletteResults');
+        let cmdSelectedIndex = -1;
+        let currentFilteredResults = [];
+
+        function toggleCmdPalette() {
+            if (cmdOverlay.classList.contains('hidden')) {
+                cmdOverlay.classList.remove('hidden');
+                cmdOverlay.classList.add('flex');
+                setTimeout(() => {
+                    cmdOverlay.classList.remove('opacity-0');
+                    cmdModal.classList.remove('scale-95');
+                    cmdInput.value = '';
+                    renderCmdResults('');
+                    cmdInput.focus();
+                }, 10);
+            } else {
+                cmdOverlay.classList.add('opacity-0');
+                cmdModal.classList.add('scale-95');
+                setTimeout(() => {
+                    cmdOverlay.classList.add('hidden');
+                    cmdOverlay.classList.remove('flex');
+                }, 200);
+            }
+        }
+
+        function renderCmdResults(query) {
+            query = query.toLowerCase();
+            currentFilteredResults = cmdPaletteData.filter(item => 
+                item.name.toLowerCase().includes(query) || 
+                item.module.toLowerCase().includes(query)
+            );
+
+            if (currentFilteredResults.length === 0) {
+                cmdResults.innerHTML = '<div class="p-6 text-center text-sm text-mist font-ui">No results found</div>';
+                return;
+            }
+
+            cmdResults.innerHTML = currentFilteredResults.map((item, index) => `
+                <a href="${item.url}" class="cmd-result-item flex items-center gap-3 p-3 rounded-xl hover:bg-fog dark:hover:bg-graphite/20 transition-colors ${index === 0 ? 'bg-fog dark:bg-graphite/20' : ''}" data-index="${index}">
+                    <div class="w-8 h-8 rounded-lg bg-brand-50 text-iris flex items-center justify-center shrink-0">
+                        <i data-lucide="${item.icon}" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-semibold text-obsidian dark:text-bone">${item.name}</div>
+                        <div class="text-[11px] text-mist font-mono">${item.module}</div>
+                    </div>
+                    <div class="ml-auto text-mist opacity-0 transition-opacity">
+                        <i data-lucide="corner-down-left" class="w-4 h-4"></i>
+                    </div>
+                </a>
+            `).join('');
+            
+            cmdSelectedIndex = 0;
+            updateCmdSelection();
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function updateCmdSelection() {
+            const items = cmdResults.querySelectorAll('.cmd-result-item');
+            items.forEach((el, idx) => {
+                if (idx === cmdSelectedIndex) {
+                    el.classList.add('bg-fog', 'dark:bg-graphite/20');
+                    el.querySelector('.ml-auto').classList.remove('opacity-0');
+                    el.scrollIntoView({ block: 'nearest' });
+                } else {
+                    el.classList.remove('bg-fog', 'dark:bg-graphite/20');
+                    el.querySelector('.ml-auto').classList.add('opacity-0');
+                }
+            });
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                toggleCmdPalette();
+            }
+            if (!cmdOverlay.classList.contains('hidden')) {
+                if (e.key === 'Escape') {
+                    toggleCmdPalette();
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (cmdSelectedIndex < currentFilteredResults.length - 1) {
+                        cmdSelectedIndex++;
+                        updateCmdSelection();
+                    }
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (cmdSelectedIndex > 0) {
+                        cmdSelectedIndex--;
+                        updateCmdSelection();
+                    }
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (cmdSelectedIndex >= 0 && cmdSelectedIndex < currentFilteredResults.length) {
+                        window.location.href = currentFilteredResults[cmdSelectedIndex].url;
+                    }
+                }
+            }
+        });
+
+        cmdOverlay.addEventListener('click', toggleCmdPalette);
+        
+        cmdInput.addEventListener('input', (e) => {
+            renderCmdResults(e.target.value);
         });
     </script>
 </body>

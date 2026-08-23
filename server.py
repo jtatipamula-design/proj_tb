@@ -3,7 +3,11 @@ import re
 import uuid
 import urllib.parse
 import time
-from datetime import datetime
+import json
+import logging
+import hmac
+import hashlib
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 import bcrypt
 import jwt
@@ -12,8 +16,17 @@ from sanic.exceptions import NotFound
 import asyncpg
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-app = Sanic("ERP_System")
+# Initialize Structured Enterprise Logger
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] [%(name)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger("erp_server")
+SERVER_START_TIME = time.time()
 
+app = Sanic("ERP_System")
+app.config.OAS = False
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -22,19 +35,16 @@ except Exception:
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
-    print("\n" + "="*70)
-    print("CRITICAL NOTICE: DATABASE_URL environment variable is not set!")
-    print("Please add DATABASE_URL to your .env file:")
-    print('DATABASE_URL="postgresql://<user>:<password>@<neon-host>.neon.tech/<dbname>?sslmode=require"')
-    print("="*70 + "\n")
+    logger.critical("DATABASE_URL environment variable is not set! Please add DATABASE_URL to your .env file.")
 
 JWT_SECRET = os.environ.get("JWT_SECRET")
 if not JWT_SECRET:
     JWT_SECRET = "super-secret-key-change-in-prod"
     if os.environ.get("RENDER") or os.environ.get("ENV") == "production":
-        print("WARNING: JWT_SECRET environment variable is not set! Using default key.")
+        logger.warning("JWT_SECRET environment variable is not set! Using default key.")
 
 PORT = int(os.environ.get("PORT", 10000))
+WORKERS = int(os.environ.get("WORKERS", 1))
 
 env = Environment(
     loader=FileSystemLoader('templates'),
@@ -295,8 +305,162 @@ async def build_modules_tree(conn, all_tables, table_modules):
         })
     return dict(sorted(modules_tree.items()))
 
+def generate_csrf_token(session_id: str) -> str:
+    """Generates a stateless HMAC-SHA256 CSRF token tied to the user's session."""
+    if not session_id:
+        return ""
+    return hmac.new(JWT_SECRET.encode('utf-8'), session_id.encode('utf-8'), hashlib.sha256).hexdigest()
+
+def validate_csrf_token(provided_token: str, session_id: str) -> bool:
+    """Constant-time validation of CSRF token against active session ID."""
+    if not provided_token or not session_id:
+        return False
+    expected = generate_csrf_token(session_id)
+    return hmac.compare_digest(str(provided_token).strip(), expected)
+
+def validate_password_strength(password: str) -> tuple:
+    """Enforces enterprise password complexity requirements."""
+    if not password or len(password) < 8:
+        return False, "Password must be at least 8 characters long."
+    if not any(c.isupper() for c in password):
+        return False, "Password must contain at least one uppercase letter (A-Z)."
+    if not any(c.islower() for c in password):
+        return False, "Password must contain at least one lowercase letter (a-z)."
+    if not any(c.isdigit() for c in password):
+        return False, "Password must contain at least one numerical digit (0-9)."
+    return True, ""
+
+def _sanitize_for_audit(data_dict):
+    """Sanitizes sensitive fields and serializes dict to JSON for audit logs."""
+    if not data_dict:
+        return None
+    sanitized = {}
+    for k, v in data_dict.items():
+        if _is_password_column(k) or k in ('csrf_token', '_method', 'signature_password'):
+            continue
+        if isinstance(v, (datetime, )):
+            sanitized[k] = v.isoformat()
+        elif hasattr(v, 'isoformat'):
+            sanitized[k] = v.isoformat()
+        elif isinstance(v, (bytes, bytearray)):
+            sanitized[k] = "<binary data>"
+        else:
+            try:
+                json.dumps(v)
+                sanitized[k] = v
+            except Exception:
+                sanitized[k] = str(v)
+    return json.dumps(sanitized)
+
+async def log_audit_event(conn, table_name: str, record_id: str, action: str, user_id, username: str, client_ip: str, old_values=None, new_values=None):
+    """Atomically writes an audit log entry into phc_audit_log_t within the active transaction."""
+    old_json = _sanitize_for_audit(old_values)
+    new_json = _sanitize_for_audit(new_values)
+    await conn.execute("""
+        INSERT INTO phc_audit_log_t (
+            pal_table_name, pal_record_id, pal_action, pal_user_id, 
+            pal_username, pal_client_ip, pal_old_values, pal_new_values, pal_timestamp
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, CURRENT_TIMESTAMP)
+    """, table_name, str(record_id), action, user_id, username, client_ip, old_json, new_json)
+
+async def dispatch_notification(conn, recipient_user_id, recipient_role, title: str, message: str, link_url: str = None, category: str = "WORKFLOW"):
+    """Dispatches an in-app notification to a specific user or role."""
+    try:
+        await conn.execute("""
+            INSERT INTO phc_user_notifications_t (
+                pun_recipient_user_id, pun_recipient_role, pun_title, 
+                pun_message, pun_category, pun_link_url, pun_is_read, pun_created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, FALSE, CURRENT_TIMESTAMP)
+        """, recipient_user_id, recipient_role, title, message, category, link_url)
+    except Exception as e:
+        logger.warning(f"Notification dispatch notice: {e}")
+
+async def get_approval_workflow_info(conn, table_name: str, record_id: str, row_data: dict, user_id: int, user_role: str):
+    """
+    Dynamically inspects if a workflow rule is configured for the table.
+    Calculates current status, required role, eligibility to submit/approve/reject,
+    and fetches recent sign-off history.
+    """
+    if not table_name or not row_data:
+        return None
+    
+    try:
+        setup = await conn.fetchrow("""
+            SELECT s.*, t.pat_type_name, t.pat_type_code 
+            FROM phc_approval_setup_t s
+            LEFT JOIN phc_approval_types_t t ON s.pas_type_id = t.pat_type_id
+            WHERE LOWER(s.pas_table_name) = LOWER($1) AND (s.pas_status = 'ACT' OR s.pas_status IS NULL)
+        """, table_name)
+    except Exception:
+        setup = None
+    
+    if not setup:
+        return None
+    
+    # Detect record status column
+    status_col = None
+    for k in row_data.keys():
+        kl = k.lower()
+        if kl.endswith('_status') or kl == 'status' or kl.endswith('_state'):
+            status_col = k
+            break
+            
+    raw_status = str(row_data.get(status_col) or 'DFT').upper() if status_col else 'DFT'
+    
+    is_pending = raw_status in ('PND', 'PENDING', 'SUBMITTED', 'IN_REVIEW', 'P')
+    is_approved = raw_status in ('ACT', 'APPROVED', 'ACTIVE', 'A')
+    is_rejected = raw_status in ('REJ', 'REJECTED', 'R')
+    is_draft = not (is_pending or is_approved or is_rejected)
+    
+    req_role = setup['pas_required_role'] or 'ADM'
+    can_approve = (user_role == 'ADM' or user_role == req_role)
+    can_submit = is_draft or is_rejected or is_approved
+    is_locked = is_pending and setup['pas_auto_lock_on_submit'] and not can_approve
+
+    # Fetch last 5 events
+    events = await conn.fetch("""
+        SELECT pae_event_id, pae_action, pae_from_status, pae_to_status, 
+               pae_username, pae_user_role, pae_comments, pae_esig_hash, pae_timestamp
+        FROM phc_approval_events_t
+        WHERE LOWER(pae_table_name) = LOWER($1) AND pae_record_id = $2
+        ORDER BY pae_timestamp DESC
+        LIMIT 5
+    """, table_name, str(record_id))
+    
+    event_list = []
+    for ev in events:
+        event_list.append({
+            "action": ev['pae_action'],
+            "username": ev['pae_username'],
+            "role": ev['pae_user_role'],
+            "comments": ev['pae_comments'] or "",
+            "esig_hash": ev['pae_esig_hash'] or "",
+            "timestamp": ev['pae_timestamp'].strftime('%Y-%m-%d %H:%M:%S') if ev['pae_timestamp'] else ""
+        })
+
+    return {
+        "is_active": True,
+        "type_name": setup['pat_type_name'] or 'Standard Approval',
+        "status_col": status_col,
+        "current_status": raw_status,
+        "is_pending": is_pending,
+        "is_approved": is_approved,
+        "is_rejected": is_rejected,
+        "is_draft": is_draft,
+        "is_locked": is_locked,
+        "can_approve": can_approve,
+        "can_submit": can_submit,
+        "required_role": req_role,
+        "require_esig": bool(setup['pas_require_esig']),
+        "recent_events": event_list
+    }
+
 def render_template(template_name, request=None, **context):
+    session_id = getattr(request.ctx, "session_id", None) if request and hasattr(request, "ctx") else None
+    csrf_token = generate_csrf_token(session_id) if session_id else ""
+
     default_context = {
+        "request": request,
         "username": "",
         "user_id": None,
         "user_role": "STD",
@@ -305,6 +469,7 @@ def render_template(template_name, request=None, **context):
         "table_modules": {},
         "lookup_categories": [],
         "type_filter": "",
+        "csrf_token": csrf_token,
         "curated_icons": CURATED_ICON_LIST
     }
     if request and hasattr(request, 'ctx'):
@@ -393,33 +558,36 @@ async def setup_db(app, loop):
         )
         try:
             async with app.ctx.pool.acquire() as conn:
-                # 1. Ensure phc_module_t exists
-                await conn.execute("""
-                    CREATE TABLE IF NOT EXISTS phc_module_t (
-                        pmd_module_id SERIAL PRIMARY KEY,
-                        pmd_module_name VARCHAR(100) UNIQUE,
-                        pmd_module_icon VARCHAR(50),
-                        pmd_status VARCHAR(10) DEFAULT 'ACT',
-                        pmd_created_by VARCHAR(50) DEFAULT 'System',
-                        pmd_modified_by VARCHAR(50) DEFAULT 'System',
-                        pmd_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        pmd_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    );
-                """)
-                # 2. Ensure pmd_module_icon column exists
-                await conn.execute("ALTER TABLE phc_module_t ADD COLUMN IF NOT EXISTS pmd_module_icon VARCHAR(50);")
-
-                # 3. Ensure phc_module_t screen exists in phc_screens_t
-                has_mod_screen = await conn.fetchval("SELECT psn_screen_id FROM phc_screens_t WHERE psn_screen_code = 'phc_module_t'")
-                if not has_mod_screen:
-                    max_id = await conn.fetchval("SELECT MAX(psn_screen_id) FROM phc_screens_t")
-                    erp_mod_id = await conn.fetchval("SELECT pmd_module_id FROM phc_module_t WHERE pmd_module_name = 'ERPAdmin'")
+                lock_acquired = await conn.fetchval("SELECT pg_try_advisory_lock(742918)")
+                if not lock_acquired:
+                    return
+                try:
+                    # 1. Migration Tracking Table
                     await conn.execute("""
-                        INSERT INTO phc_screens_t (psn_screen_id, psn_company_id, psn_module_id, psn_screen_code, psn_screen_name, psn_status, psn_created_by, psn_modified_by)
-                        VALUES ($1, 1001, $2, 'phc_module_t', 'Module Management', 'ACT', 'System', 'System')
-                    """, (max_id or 0) + 1, erp_mod_id)
+                        CREATE TABLE IF NOT EXISTS phc_schema_migrations_t (
+                            version VARCHAR(255) PRIMARY KEY,
+                            applied_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                        );
+                    """)
+                    
+                    # 2. Find and execute missing migrations
+                    import glob
+                    import os
+                    migration_files = sorted(glob.glob("migrations/*.sql"))
+                    for mf in migration_files:
+                        version = os.path.basename(mf)
+                        is_applied = await conn.fetchval("SELECT 1 FROM phc_schema_migrations_t WHERE version = $1", version)
+                        if not is_applied:
+                            logger.info(f"Applying migration: {version}")
+                            with open(mf, 'r') as f:
+                                sql = f.read()
+                            async with conn.transaction():
+                                await conn.execute(sql)
+                                await conn.execute("INSERT INTO phc_schema_migrations_t (version) VALUES ($1)", version)
+                finally:
+                    await conn.execute("SELECT pg_advisory_unlock(742918)")
         except Exception as e:
-            print("DB init safeguard non-fatal notice:", e)
+            logger.warning(f"DB init safeguard non-fatal notice: {e}")
     else:
         app.ctx.pool = None
 
@@ -472,7 +640,7 @@ def check_auth(f):
         try:
             payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
         except Exception as e:
-            print(f"JWT Auth Error: {e}")
+            logger.warning(f"JWT Auth Error: {e}")
             return unauth_response(request)
 
         user_id = payload.get("user_id")
@@ -486,6 +654,7 @@ def check_auth(f):
                 return unauth_response(request)
             request.ctx.user_id = user_id
             request.ctx.username = payload.get("username")
+            request.ctx.session_id = session_id
             request.ctx.role = cached["role"]
             request.ctx.all_tables = cached.get("all_tables", {})
             request.ctx.table_modules = cached.get("table_modules", {})
@@ -515,27 +684,109 @@ def check_auth(f):
                     }
                     request.ctx.user_id = user_id
                     request.ctx.username = payload.get("username")
+                    request.ctx.session_id = session_id
                     request.ctx.role = role
                     request.ctx.all_tables = auth_tables
                     request.ctx.table_modules = table_modules
                     request.ctx.modules_tree = modules_tree
             except Exception as db_err:
-                print(f"Database Auth Check Error: {db_err}")
+                logger.error(f"Database Auth Check Error: {db_err}")
                 return add_security_headers(response.text(f"Database connection error: {db_err}", status=500))
 
         return await f(request, *args, **kwargs)
     return decorated_function
+
+# Enterprise Sliding-Window Rate Limiter
+LOGIN_ATTEMPTS = {}  # ip -> list of timestamp floats
+RATE_LIMIT_WINDOW = 900  # 15 minutes
+MAX_LOGIN_ATTEMPTS = 5  # max failed attempts per window
+
+ALLOWED_EXTENSIONS = {
+    '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', 
+    '.csv', '.xlsx', '.xls', '.doc', '.docx', '.txt', '.json'
+}
+BLOCKED_EXTENSIONS = {
+    '.py', '.sh', '.bat', '.cmd', '.exe', '.dll', '.php', '.phtml', 
+    '.js', '.vbs', '.ps1', '.jsp', '.cgi', '.jar', '.com', '.scr', '.msi'
+}
+MAX_UPLOAD_SIZE = 15 * 1024 * 1024  # 15 MB
+
+def get_client_ip(request) -> str:
+    """Extracts client IP reliably across proxies, load balancers, and direct connections."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    return getattr(request, "remote_addr", "") or getattr(request, "ip", "127.0.0.1")
+
+def check_login_rate_limit(ip: str):
+    """Returns (is_allowed, seconds_remaining)."""
+    now = time.time()
+    attempts = LOGIN_ATTEMPTS.get(ip, [])
+    attempts = [t for t in attempts if now - t < RATE_LIMIT_WINDOW]
+    LOGIN_ATTEMPTS[ip] = attempts
+    if len(attempts) >= MAX_LOGIN_ATTEMPTS:
+        oldest = attempts[0]
+        remaining = int(RATE_LIMIT_WINDOW - (now - oldest))
+        return False, max(1, remaining)
+    return True, 0
+
+def record_login_attempt(ip: str, success: bool = False):
+    """Records attempt timestamp or clears on successful authentication."""
+    if success:
+        LOGIN_ATTEMPTS.pop(ip, None)
+    else:
+        now = time.time()
+        attempts = LOGIN_ATTEMPTS.get(ip, [])
+        attempts.append(now)
+        LOGIN_ATTEMPTS[ip] = [t for t in attempts if now - t < RATE_LIMIT_WINDOW]
+
+def save_uploaded_file(file_obj, upload_dir: str) -> str:
+    """Validates file extension, size, and sanitizes filename against path traversal."""
+    if not file_obj or not hasattr(file_obj, 'body') or not file_obj.body:
+        raise ValueError("Empty or invalid file payload.")
+    
+    if len(file_obj.body) > MAX_UPLOAD_SIZE:
+        raise ValueError(f"File exceeds maximum allowed size of {MAX_UPLOAD_SIZE // (1024*1024)}MB.")
+    
+    raw_name = getattr(file_obj, 'name', 'file') or 'file'
+    base_name = os.path.basename(raw_name)
+    _, ext = os.path.splitext(base_name)
+    ext_low = ext.lower().strip()
+    
+    if ext_low in BLOCKED_EXTENSIONS or (ext_low and ext_low not in ALLOWED_EXTENSIONS):
+        raise ValueError(f"File extension '{ext_low}' is not permitted for security reasons.")
+    
+    safe_stem = re.sub(r'[^a-zA-Z0-9_-]', '_', os.path.splitext(base_name)[0])[:50]
+    final_name = f"{uuid.uuid4().hex}_{safe_stem}{ext_low}"
+    
+    os.makedirs(upload_dir, exist_ok=True)
+    fpath = os.path.join(upload_dir, final_name)
+    with open(fpath, 'wb') as f:
+        f.write(file_obj.body)
+    return f"uploads/{final_name}"
 
 @app.route('/login', methods=['GET', 'POST'])
 async def login(request):
     if request.method == 'GET':
         return render_template('login.html', request=request)
     
+    client_ip = get_client_ip(request)
+    allowed, wait_sec = check_login_rate_limit(client_ip)
+    if not allowed:
+        return add_security_headers(response.json({
+            "status": "error", 
+            "message": f"Too many failed login attempts. Please try again in {wait_sec // 60 + 1} minute(s)."
+        }, status=429))
+    
     data = request.json or {}
     username = str(data.get("username", "")).strip()
     password = str(data.get("password", ""))
     
     if not username or not password:
+        record_login_attempt(client_ip, success=False)
         return add_security_headers(response.json({"status": "error", "message": "Invalid credentials"}, status=401))
 
     if not hasattr(app.ctx, 'pool') or app.ctx.pool is None:
@@ -555,7 +806,20 @@ async def login(request):
         user = await conn.fetchrow(f"SELECT * FROM phc_users_t WHERE LOWER({q_user_col}) = LOWER($1)", username)
         
         if user:
+            # Check for persistent database account lockout
+            locked_until = user.get('pus_locked_until')
+            if locked_until:
+                now_dt = datetime.now(locked_until.tzinfo) if locked_until.tzinfo else datetime.now()
+                if locked_until > now_dt:
+                    secs_left = int((locked_until - now_dt).total_seconds())
+                    mins_left = max(1, secs_left // 60 + 1)
+                    return add_security_headers(response.json({
+                        "status": "error", 
+                        "message": f"Account is temporarily locked due to excessive failed attempts. Please try again in {mins_left} minute(s) or contact an administrator."
+                    }, status=403))
+
             if user.get('pus_status') and user['pus_status'] == 'INA':
+                record_login_attempt(client_ip, success=False)
                 return add_security_headers(response.json({"status": "error", "message": "Account is inactive. Please contact your administrator."}, status=403))
 
             stored_pwd = user.get('pus_pwd') or ""
@@ -568,27 +832,48 @@ async def login(request):
                     pass
                     
             if is_valid:
+                record_login_attempt(client_ip, success=True)
                 session_id = str(uuid.uuid4())
                 user_id_val = user.get('pus_user_id') or user.get('id')
                 user_name_val = user.get('pus_user_name') or user.get('pus_usr_name') or username
 
                 async with conn.transaction():
-                    await conn.execute("UPDATE phc_users_t SET pus_session_id = $1 WHERE pus_user_id = $2", session_id, user_id_val)
+                    await conn.execute("""
+                        UPDATE phc_users_t 
+                        SET pus_session_id = $1, pus_failed_attempts = 0, pus_locked_until = NULL 
+                        WHERE pus_user_id = $2
+                    """, session_id, user_id_val)
                 
                 token_payload = {
                     "user_id": user_id_val,
                     "username": user_name_val,
                     "session_id": session_id,
-                    "exp": time.time() + 86400
+                    "exp": int(time.time() + 86400)
                 }
                 token = jwt.encode(token_payload, JWT_SECRET, algorithm="HS256")
+                csrf_token = generate_csrf_token(session_id)
                 USER_AUTH_CACHE.pop(user_id_val, None)
                 
                 is_secure = request.scheme == 'https' or os.environ.get("ENV") == "production" or bool(os.environ.get("RENDER"))
                 res = response.json({"status": "success", "message": "Login successful"})
                 res.add_cookie("auth_token", token, httponly=True, samesite="Lax", path="/", secure=is_secure)
+                res.add_cookie("csrf_token", csrf_token, httponly=False, samesite="Lax", path="/", secure=is_secure)
                 return add_security_headers(res)
+            else:
+                # Increment failed attempts in PostgreSQL
+                failed_count = (user.get('pus_failed_attempts') or 0) + 1
+                user_id_val = user.get('pus_user_id') or user.get('id')
+                if failed_count >= 5:
+                    lock_time = datetime.now() + timedelta(minutes=15)
+                    await conn.execute("UPDATE phc_users_t SET pus_failed_attempts = $1, pus_locked_until = $2 WHERE pus_user_id = $3", failed_count, lock_time, user_id_val)
+                    return add_security_headers(response.json({
+                        "status": "error", 
+                        "message": "Account has been temporarily locked for 15 minutes due to 5 consecutive failed login attempts."
+                    }, status=403))
+                else:
+                    await conn.execute("UPDATE phc_users_t SET pus_failed_attempts = $1 WHERE pus_user_id = $2", failed_count, user_id_val)
         
+        record_login_attempt(client_ip, success=False)
         return add_security_headers(response.json({"status": "error", "message": "Invalid credentials"}, status=401))
 
 @app.route('/logout', methods=['GET'])
@@ -603,9 +888,10 @@ async def logout(request):
                     async with conn.transaction():
                         await conn.execute("UPDATE phc_users_t SET pus_session_id = NULL WHERE pus_user_id = $1", user_id)
             except Exception as e:
-                print(f"Logout session clear error: {e}")
+                logger.warning(f"Logout session clear error: {e}")
     res = response.redirect("/login")
     res.delete_cookie("auth_token", path="/")
+    res.delete_cookie("csrf_token", path="/")
     return add_security_headers(res)
 
 async def get_pk_column(conn, table_name):
@@ -932,6 +1218,45 @@ async def show_table(request, table_name):
     search_query = request.args.get("q", "").strip()
     type_filter = request.args.get("type_filter", "").strip()
 
+    # 1. Parse server-side sorting parameters
+    raw_sort_rules = request.args.get("sort_rules", "")
+    sort_col = request.args.get("sort_col", "").strip()
+    sort_dir = request.args.get("sort_dir", "desc").strip().lower()
+    if sort_dir not in ('asc', 'desc'):
+        sort_dir = 'desc'
+
+    active_sort_rules = []
+    if raw_sort_rules:
+        try:
+            import json
+            parsed_sort = json.loads(raw_sort_rules)
+            if isinstance(parsed_sort, list):
+                for s in parsed_sort:
+                    if isinstance(s, dict) and s.get("col") and s.get("dir") in ("asc", "desc"):
+                        active_sort_rules.append({"col": s["col"], "dir": s["dir"]})
+        except Exception:
+            pass
+    elif sort_col:
+        active_sort_rules = [{"col": sort_col, "dir": sort_dir}]
+
+    # 2. Parse server-side structured filter parameters
+    raw_filters = request.args.get("filters", "")
+    active_filter_rules = []
+    if raw_filters:
+        try:
+            import json
+            parsed_filters = json.loads(raw_filters)
+            if isinstance(parsed_filters, list):
+                for f in parsed_filters:
+                    if isinstance(f, dict) and f.get("col") and f.get("op"):
+                        active_filter_rules.append({
+                            "col": str(f["col"]).strip(),
+                            "op": str(f["op"]).strip().lower(),
+                            "val": str(f.get("val", "")).strip()
+                        })
+        except Exception:
+            pass
+
     auth_tables = getattr(request.ctx, 'all_tables', None)
     table_modules = getattr(request.ctx, 'table_modules', None)
 
@@ -967,27 +1292,27 @@ async def show_table(request, table_name):
             if is_company_col:
                 if role == 'ADM' and table_modules.get(table_name, '').lower() == 'erpadmin':
                     clean_label = cname.split('_', 1)[-1].replace('_', ' ').title()
-                    company_col_def = {"raw": cname, "column_name": cname, "label": clean_label}
+                    company_col_def = {"raw": cname, "column_name": cname, "label": clean_label, "data_type": c.get('data_type', 'varchar')}
                 continue
             
             # 1. Audit "By" columns (Created By / Modified By)
             if 'created' in cname_low and 'by' in cname_low:
-                audit_by_columns.append({"raw": cname, "column_name": cname, "label": "Created By"})
+                audit_by_columns.append({"raw": cname, "column_name": cname, "label": "Created By", "data_type": c.get('data_type', 'varchar')})
                 continue
             elif ('modified' in cname_low or 'edited' in cname_low or 'updated' in cname_low) and 'by' in cname_low:
-                audit_by_columns.append({"raw": cname, "column_name": cname, "label": "Modified By"})
+                audit_by_columns.append({"raw": cname, "column_name": cname, "label": "Modified By", "data_type": c.get('data_type', 'varchar')})
                 continue
             
             # 2. Audit "Date" columns (Created Date / Modified Date)
             elif 'created' in cname_low and ('date' in c['data_type'] or 'timestamp' in c['data_type'] or 'date' in cname_low):
-                audit_date_columns.append({"raw": cname, "column_name": cname, "label": "Created Date"})
+                audit_date_columns.append({"raw": cname, "column_name": cname, "label": "Created Date", "data_type": c.get('data_type', 'varchar')})
                 continue
             elif ('modified' in cname_low or 'edited' in cname_low or 'updated' in cname_low) and ('date' in c['data_type'] or 'timestamp' in c['data_type'] or 'date' in cname_low):
-                audit_date_columns.append({"raw": cname, "column_name": cname, "label": "Modified Date"})
+                audit_date_columns.append({"raw": cname, "column_name": cname, "label": "Modified Date", "data_type": c.get('data_type', 'varchar')})
                 continue
 
             clean_label = cname.split('_', 1)[-1].replace('_', ' ').title()
-            col_def = {"raw": cname, "column_name": cname, "label": clean_label}
+            col_def = {"raw": cname, "column_name": cname, "label": clean_label, "data_type": c.get('data_type', 'varchar')}
             
             # 3. Regular Date columns vs standard business columns
             if 'date' in c['data_type'] or 'timestamp' in c['data_type']:
@@ -1017,6 +1342,7 @@ async def show_table(request, table_name):
 
         q_table = quote_ident(table_name)
         q_pk = quote_ident(pk_column)
+        schema_cols = {c['column_name']: c for c in columns_data}
         
         base_query = f"SELECT * FROM {q_table}"
         count_query = f"SELECT COUNT(*) FROM {q_table}"
@@ -1027,6 +1353,7 @@ async def show_table(request, table_name):
             params.append(type_filter)
             where_clauses.append(f"{quote_ident('plv_lookup_type_code')} = ${len(params)}")
 
+        # 3. Server-side global search across all text-castable columns
         if search_query:
             params.append(f"%{search_query}%")
             param_idx = len(params)
@@ -1038,12 +1365,104 @@ async def show_table(request, table_name):
                 search_clauses = [f"CAST({quote_ident(col)} AS TEXT) ILIKE ${param_idx}" for col in searchable_cols]
                 where_clauses.append("(" + " OR ".join(search_clauses) + ")")
 
+        # 4. Server-side structured 10-operator filter execution
+        for f in active_filter_rules:
+            col_name = f['col']
+            op = f['op']
+            val = f['val']
+            if col_name not in schema_cols:
+                continue
+            
+            c_info = schema_cols[col_name]
+            target_type = c_info.get('data_type', '').lower()
+            q_col = quote_ident(col_name)
+
+            if op == 'is_empty':
+                where_clauses.append(f"({q_col} IS NULL OR CAST({q_col} AS TEXT) = '')")
+            elif op == 'is_not_empty':
+                where_clauses.append(f"({q_col} IS NOT NULL AND CAST({q_col} AS TEXT) != '')")
+            elif op == 'contains' and val:
+                params.append(f"%{val}%")
+                where_clauses.append(f"CAST({q_col} AS TEXT) ILIKE ${len(params)}")
+            elif op == 'not_contains' and val:
+                params.append(f"%{val}%")
+                where_clauses.append(f"(CAST({q_col} AS TEXT) NOT ILIKE ${len(params)} OR {q_col} IS NULL)")
+            elif op == 'starts_with' and val:
+                params.append(f"{val}%")
+                where_clauses.append(f"CAST({q_col} AS TEXT) ILIKE ${len(params)}")
+            elif op == 'ends_with' and val:
+                params.append(f"%{val}")
+                where_clauses.append(f"CAST({q_col} AS TEXT) ILIKE ${len(params)}")
+            elif op == 'equals' and val:
+                if target_type in ('integer', 'bigint', 'smallint', 'numeric'):
+                    try:
+                        num_val = float(val) if '.' in val else int(val)
+                        params.append(num_val)
+                        where_clauses.append(f"{q_col} = ${len(params)}")
+                    except (ValueError, TypeError):
+                        pass
+                elif target_type == 'boolean':
+                    b_val = val.lower() in ('true', '1', 'yes', 't', 'act')
+                    params.append(b_val)
+                    where_clauses.append(f"{q_col} = ${len(params)}")
+                else:
+                    params.append(val)
+                    where_clauses.append(f"LOWER(CAST({q_col} AS TEXT)) = LOWER(${len(params)})")
+            elif op == 'not_equals' and val:
+                if target_type in ('integer', 'bigint', 'smallint', 'numeric'):
+                    try:
+                        num_val = float(val) if '.' in val else int(val)
+                        params.append(num_val)
+                        where_clauses.append(f"({q_col} != ${len(params)} OR {q_col} IS NULL)")
+                    except (ValueError, TypeError):
+                        pass
+                elif target_type == 'boolean':
+                    b_val = val.lower() in ('true', '1', 'yes', 't', 'act')
+                    params.append(b_val)
+                    where_clauses.append(f"({q_col} != ${len(params)} OR {q_col} IS NULL)")
+                else:
+                    params.append(val)
+                    where_clauses.append(f"(LOWER(CAST({q_col} AS TEXT)) != LOWER(${len(params)}) OR {q_col} IS NULL)")
+            elif op == 'greater_than' and val:
+                if target_type in ('integer', 'bigint', 'smallint', 'numeric'):
+                    try:
+                        num_val = float(val) if '.' in val else int(val)
+                        params.append(num_val)
+                        where_clauses.append(f"{q_col} > ${len(params)}")
+                    except (ValueError, TypeError):
+                        pass
+                elif 'date' in target_type or 'timestamp' in target_type:
+                    params.append(val)
+                    where_clauses.append(f"{q_col} > ${len(params)}::timestamp")
+            elif op == 'less_than' and val:
+                if target_type in ('integer', 'bigint', 'smallint', 'numeric'):
+                    try:
+                        num_val = float(val) if '.' in val else int(val)
+                        params.append(num_val)
+                        where_clauses.append(f"{q_col} < ${len(params)}")
+                    except (ValueError, TypeError):
+                        pass
+                elif 'date' in target_type or 'timestamp' in target_type:
+                    params.append(val)
+                    where_clauses.append(f"{q_col} < ${len(params)}::timestamp")
+
         if where_clauses:
             where_str = " WHERE " + " AND ".join(where_clauses)
             base_query += where_str
             count_query += where_str
 
-        base_query += f" ORDER BY {q_pk} DESC LIMIT ${len(params)+1} OFFSET ${len(params)+2}"
+        # 5. Dynamic server-side ORDER BY generation
+        order_clauses = []
+        for s in active_sort_rules:
+            c_name = s['col']
+            d_str = 'ASC' if s['dir'] == 'asc' else 'DESC'
+            if c_name in schema_cols:
+                order_clauses.append(f"{quote_ident(c_name)} {d_str}")
+        
+        if not order_clauses or pk_column not in [s['col'] for s in active_sort_rules]:
+            order_clauses.append(f"{q_pk} DESC")
+        
+        base_query += f" ORDER BY {', '.join(order_clauses)} LIMIT ${len(params)+1} OFFSET ${len(params)+2}"
         
         try:
             total_count = await conn.fetchval(count_query, *params)
@@ -1112,7 +1531,11 @@ async def show_table(request, table_name):
         end_row=end_row,
         search_query=search_query,
         lookup_categories=lookup_categories,
-        type_filter=type_filter
+        type_filter=type_filter,
+        active_sort_rules=active_sort_rules,
+        active_filter_rules=active_filter_rules,
+        sort_col=sort_col,
+        sort_dir=sort_dir
     )
 
 @app.route('/new/<table_name>', methods=['GET'])
@@ -1207,6 +1630,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
             columns.append(company_form_def)
 
         audit_info = {}
+        workflow_info = None
         if is_update and row_data:
             created_by_col = next((c for c in row_data.keys() if 'created' in c.lower() and 'by' in c.lower()), None)
             created_at_col = next((c for c in row_data.keys() if 'created' in c.lower() and 'by' not in c.lower()), None)
@@ -1220,6 +1644,8 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
                 "modified_at": row_data.get(modified_at_col) if modified_at_col else None,
             }
 
+            workflow_info = await get_approval_workflow_info(conn, table_name, pk_val, dict(row_data), user_id, role)
+
     return render_template(
         'form_view.html',
         request=request,
@@ -1228,7 +1654,8 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         columns=columns,
         is_update=is_update,
         pk_val=pk_val,
-        audit_info=audit_info
+        audit_info=audit_info,
+        workflow_info=workflow_info
     )
 
 @app.route('/export/<table_name>')
@@ -1270,33 +1697,38 @@ async def export_table_csv(request, table_name):
         col_list = ", ".join(quote_ident(c) for c in export_cols)
         q_table = quote_ident(table_name)
         order_clause = f" ORDER BY {quote_ident(pk_column)} DESC" if pk_column else ""
-        rows = await conn.fetch(f"SELECT {col_list} FROM {q_table}{order_clause}")
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-
-    header = [col.split('_', 1)[-1].replace('_', ' ').title() for col in export_cols]
-    writer.writerow(header)
-
-    for row in rows:
-        csv_row = []
-        for col in export_cols:
-            val = row[col]
-            if val is None:
-                csv_row.append('')
-            elif isinstance(val, datetime):
-                csv_row.append(val.strftime('%Y-%m-%d'))
-            else:
-                csv_row.append(str(val))
-        writer.writerow(csv_row)
-
-    csv_content = output.getvalue()
-    output.close()
+        query = f"SELECT {col_list} FROM {q_table}{order_clause}"
 
     table_title = auth_tables.get(table_name, table_name)
     filename = f"{table_title.replace(' ', '_')}_Export.csv"
 
-    res = response.text(csv_content, content_type="text/csv")
+    async def streaming_fn(res):
+        header = [col.split('_', 1)[-1].replace('_', ' ').title() for col in export_cols]
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(header)
+        await res.write(output.getvalue())
+        output.seek(0)
+        output.truncate(0)
+
+        async with app.ctx.pool.acquire() as conn:
+            async with conn.transaction():
+                async for row in conn.cursor(query):
+                    csv_row = []
+                    for col in export_cols:
+                        val = row[col]
+                        if val is None:
+                            csv_row.append('')
+                        elif isinstance(val, datetime):
+                            csv_row.append(val.strftime('%Y-%m-%d'))
+                        else:
+                            csv_row.append(str(val))
+                    writer.writerow(csv_row)
+                    await res.write(output.getvalue())
+                    output.seek(0)
+                    output.truncate(0)
+
+    res = response.stream(streaming_fn, content_type="text/csv")
     res.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
     return add_security_headers(res)
 
@@ -1314,12 +1746,30 @@ async def process_api_action(request, table_name, pk_val):
     user_id = request.ctx.user_id
     role = request.ctx.role
     table_name = table_name.lower()
+    client_ip = get_client_ip(request)
+    session_username = getattr(request.ctx, 'username', None) or 'System'
+    session_id = getattr(request.ctx, 'session_id', None)
     
     method = request.method
     if request.form and request.form.get('_method'):
         method = request.form.get('_method')[0].upper()
     elif pk_val is not None and method != 'DELETE':
         method = 'PUT'
+
+    # 1. CSRF Token Verification for state-changing operations
+    client_csrf = request.headers.get("X-CSRF-Token") or request.headers.get("x-csrf-token")
+    if not client_csrf and request.form:
+        client_csrf = request.form.get('csrf_token')
+    if not client_csrf and isinstance(request.json, dict):
+        client_csrf = request.json.get('csrf_token')
+    if isinstance(client_csrf, list):
+        client_csrf = client_csrf[0]
+
+    if not validate_csrf_token(client_csrf, session_id):
+        logger.warning(f"CSRF rejection: user_id={user_id}, table={table_name}, method={method}")
+        return add_security_headers(response.json({
+            "error": "Invalid or expired security token (CSRF). Please refresh the page and try again."
+        }, status=403))
 
     async with app.ctx.pool.acquire() as conn:
         auth_tables, _ = await get_authorized_tables(conn, user_id, role)
@@ -1338,14 +1788,71 @@ async def process_api_action(request, table_name, pk_val):
         q_table = quote_ident(table_name)
         q_pk = quote_ident(pk_column)
 
+        # Pre-fetch existing record state for audit comparison
+        old_row = None
+        if method in ('PUT', 'DELETE') and cast_pk is not None:
+            try:
+                old_row = await conn.fetchrow(f"SELECT * FROM {q_table} WHERE {q_pk} = $1", cast_pk)
+            except Exception:
+                old_row = None
+
         if method == 'DELETE':
             try:
+                # Dynamically inspect schema for soft-delete / status columns
+                status_col = None
+                status_val = None
+                for c in schema_map.values():
+                    cname = c['column_name'].lower()
+                    dtype = c.get('data_type', '').lower()
+                    maxlen = c.get('character_maximum_length')
+                    
+                    if cname.endswith('_status') or cname == 'status':
+                        status_col = c['column_name']
+                        status_val = 'I' if maxlen == 1 else 'INA'
+                        break
+                    elif cname in ('is_active', 'active') or cname.endswith('_is_active') or cname.endswith('_active'):
+                        status_col = c['column_name']
+                        status_val = False if dtype == 'boolean' else ('0' if dtype in ('integer', 'smallint') else 'N')
+                        break
+                    elif cname in ('deleted_at', 'deleted_date') or cname.endswith('_deleted_at'):
+                        status_col = c['column_name']
+                        status_val = datetime.now()
+                        break
+
                 async with conn.transaction():
-                    res = await conn.execute(f"DELETE FROM {q_table} WHERE {q_pk} = $1", cast_pk)
+                    if status_col:
+                        set_parts = [f"{quote_ident(status_col)} = $1"]
+                        set_vals = [status_val]
+                        
+                        mod_by_col = next((c for c in schema_map if ('modified' in c.lower() or 'updated' in c.lower() or 'edited' in c.lower()) and 'by' in c.lower()), None)
+                        mod_at_col = next((c for c in schema_map if ('modified' in c.lower() or 'updated' in c.lower() or 'edited' in c.lower()) and 'by' not in c.lower()), None)
+                        
+                        if mod_by_col:
+                            max_len = schema_map[mod_by_col].get('character_maximum_length') or 50
+                            set_parts.append(f"{quote_ident(mod_by_col)} = ${len(set_vals)+1}")
+                            set_vals.append(str(session_username)[:max_len])
+                        if mod_at_col:
+                            set_parts.append(f"{quote_ident(mod_at_col)} = ${len(set_vals)+1}")
+                            set_vals.append(datetime.now())
+                        
+                        set_vals.append(cast_pk)
+                        q = f"UPDATE {q_table} SET {', '.join(set_parts)} WHERE {q_pk} = ${len(set_vals)}"
+                        res = await conn.execute(q, *set_vals)
+                    else:
+                        res = await conn.execute(f"DELETE FROM {q_table} WHERE {q_pk} = $1", cast_pk)
+
+                    # Atomically write audit event
+                    action_type = 'SOFT_DELETE' if status_col else 'DELETE'
+                    await log_audit_event(
+                        conn, table_name, str(cast_pk), action_type, 
+                        user_id, session_username, client_ip, 
+                        old_values=dict(old_row) if old_row else None, new_values=None
+                    )
+
                 if res.endswith(" 0"):
                     return add_security_headers(response.json({"error": "Record not found"}, status=404))
-                clear_schema_cache()
-                return add_security_headers(response.json({"status": "success"}))
+                invalidate_caches_for_table(table_name)
+                return add_security_headers(response.json({"status": "success", "soft_deleted": bool(status_col)}))
             except Exception as e:
                 return add_security_headers(response.json({"error": str(e)}, status=400))
 
@@ -1359,21 +1866,15 @@ async def process_api_action(request, table_name, pk_val):
 
         if request.files:
             upload_dir = os.path.join(os.getcwd(), 'uploads')
-            os.makedirs(upload_dir, exist_ok=True)
             for file_key, file_objs in request.files.items():
                 file_obj = file_objs[0] if isinstance(file_objs, list) else file_objs
-                if file_obj and hasattr(file_obj, 'body') and file_obj.body:
-                    raw_name = getattr(file_obj, 'name', 'file') or 'file'
-                    base_name = os.path.basename(raw_name)
-                    # Strip unsafe characters to prevent path traversal or script execution
-                    safe_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', base_name)
-                    fname = f"{uuid.uuid4().hex}_{safe_name}"
-                    fpath = os.path.join(upload_dir, fname)
-                    with open(fpath, 'wb') as f:
-                        f.write(file_obj.body)
-                    data_dict[file_key] = f"uploads/{fname}"
+                try:
+                    rel_path = save_uploaded_file(file_obj, upload_dir)
+                    data_dict[file_key] = rel_path
+                except ValueError as val_err:
+                    return add_security_headers(response.json({"error": str(val_err)}, status=400))
 
-        # 1. Enforce strict User Creation and Password Rules
+        # Enforce strict User Creation and Password Rules
         if table_name == 'phc_users_t':
             user_col = 'pus_user_name' if 'pus_user_name' in schema_map else ('pus_usr_name' if 'pus_usr_name' in schema_map else 'username')
             q_ucol = quote_ident(user_col)
@@ -1383,7 +1884,6 @@ async def process_api_action(request, table_name, pk_val):
                 if not username_val:
                     return add_security_headers(response.json({"error": "Username is required."}, status=400))
                 
-                # Check uniqueness (case-insensitive)
                 existing = await conn.fetchval(f"SELECT 1 FROM phc_users_t WHERE LOWER({q_ucol}) = LOWER($1)", username_val)
                 if existing:
                     return add_security_headers(response.json({"error": f"Username '{username_val}' is already taken. Please choose a unique username."}, status=400))
@@ -1391,10 +1891,9 @@ async def process_api_action(request, table_name, pk_val):
                 pwd_val = str(data_dict.get('pus_pwd') or data_dict.get('password') or '').strip()
                 if not pwd_val:
                     return add_security_headers(response.json({"error": "Password is required for new users."}, status=400))
-                if not any(c.isupper() for c in pwd_val):
-                    return add_security_headers(response.json({"error": "Password must contain at least one uppercase letter (A-Z)."}, status=400))
-                if len(pwd_val) < 6:
-                    return add_security_headers(response.json({"error": "Password must be at least 6 characters long."}, status=400))
+                is_valid, msg = validate_password_strength(pwd_val)
+                if not is_valid:
+                    return add_security_headers(response.json({"error": msg}, status=400))
                 
                 data_dict['pus_pwd'] = bcrypt.hashpw(pwd_val.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                 data_dict[user_col] = username_val
@@ -1412,17 +1911,16 @@ async def process_api_action(request, table_name, pk_val):
                 
                 pwd_val = str(data_dict.get('pus_pwd') or data_dict.get('password') or '').strip()
                 if pwd_val:
-                    if not any(c.isupper() for c in pwd_val):
-                        return add_security_headers(response.json({"error": "Password must contain at least one uppercase letter (A-Z)."}, status=400))
-                    if len(pwd_val) < 6:
-                        return add_security_headers(response.json({"error": "Password must be at least 6 characters long."}, status=400))
+                    is_valid, msg = validate_password_strength(pwd_val)
+                    if not is_valid:
+                        return add_security_headers(response.json({"error": msg}, status=400))
                     data_dict['pus_pwd'] = bcrypt.hashpw(pwd_val.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
                 else:
                     data_dict.pop('pus_pwd', None)
 
         clean_data = _sanitize_payload(data_dict, pk_column, schema_map, is_update=(method == 'PUT'))
 
-        # 2. Enforce Multi-tenant Company Segregation
+        # Multi-tenant Company Segregation
         if table_name != 'phc_companies_t':
             company_col = next((c for c in schema_map if (c.endswith('_company_id') or c == 'company_id') and c != pk_column), None)
             if company_col:
@@ -1431,8 +1929,7 @@ async def process_api_action(request, table_name, pk_val):
                     if user_company:
                         clean_data[company_col] = user_company
 
-        # 3. Mandatory Session Username and Audit Trail Binding
-        session_username = getattr(request.ctx, 'username', None) or 'System'
+        # Mandatory Session Username and Audit Trail Binding
         who_cols = [c for c in schema_map if 'created' in c.lower() or 'modified' in c.lower() or 'edited' in c.lower() or 'updated' in c.lower()]
         for wc in who_cols:
             max_len = schema_map.get(wc, {}).get('character_maximum_length') or 50
@@ -1451,7 +1948,6 @@ async def process_api_action(request, table_name, pk_val):
         try:
             async with conn.transaction():
                 if method == 'POST':
-                    # Auto-generate integer primary key only if column has no sequence/default
                     col_default = schema_map.get(pk_column, {}).get('column_default')
                     has_default = col_default is not None and str(col_default).strip() != ''
                     if pk_column and not has_default and (pk_column not in clean_data or clean_data[pk_column] is None or clean_data[pk_column] == ""):
@@ -1464,7 +1960,6 @@ async def process_api_action(request, table_name, pk_val):
                         scr_list = []
                         if isinstance(raw_scr, str) and raw_scr.startswith('['):
                             try:
-                                import json
                                 scr_list = json.loads(raw_scr)
                             except Exception:
                                 scr_list = [raw_scr]
@@ -1488,6 +1983,14 @@ async def process_api_action(request, table_name, pk_val):
                         q = f"INSERT INTO {q_table} ({', '.join(cols)}) VALUES ({placeholders})"
                         await conn.execute(q, *vals)
 
+                    # Log INSERT audit event
+                    created_id = str(clean_data.get(pk_column) or 'NEW')
+                    await log_audit_event(
+                        conn, table_name, created_id, 'INSERT', 
+                        user_id, session_username, client_ip, 
+                        old_values=None, new_values=clean_data
+                    )
+
                 elif method == 'PUT':
                     if not clean_data:
                         return add_security_headers(response.json({"error": "No update fields provided"}, status=400))
@@ -1499,7 +2002,14 @@ async def process_api_action(request, table_name, pk_val):
                     if res.endswith(" 0"):
                         return add_security_headers(response.json({"error": "Record not found"}, status=404))
 
-            # Targeted cache eviction for optimal performance
+                    # Log UPDATE audit event
+                    await log_audit_event(
+                        conn, table_name, str(cast_pk), 'UPDATE', 
+                        user_id, session_username, client_ip, 
+                        old_values=dict(old_row) if old_row else None, new_values=clean_data
+                    )
+
+            # Targeted cache eviction
             invalidate_caches_for_table(table_name)
 
             if request.headers.get("HX-Request"):
@@ -1512,198 +2022,392 @@ async def process_api_action(request, table_name, pk_val):
         except Exception as e:
             return add_security_headers(response.json({"error": str(e)}, status=400))
 
-@app.route('/fixdb', methods=['GET'])
+# -----------------------------------------------------------------------------
+# AUDIT TRAIL API ROUTE
+# -----------------------------------------------------------------------------
+@app.route('/api/audit/<table_name>/<record_id>', methods=['GET'])
 @check_auth
-async def fixdb_route(request):
-    """Temporary route to perfectly sync the database to UI Built Status.xlsx"""
-    if getattr(request.ctx, 'role', 'STD') != 'ADM':
-        return response.json({"error": "Forbidden: Admin access required"}, status=403)
-
-    EXCEL_MAPPINGS = {
-        "phc_companies_t": "ERPAdmin",
-        "phc_operating_orgs_t": "ERPAdmin",
-        "phc_dept_t": "Chart of Accounts",
-        "phc_services_t": "Chart of Accounts",
-        "phc_cost_center_t": "Chart of Accounts",
-        "phc_locations_t": "MasterData",
-        "phc_emp_t": "HR",
-        "phc_apps_t": "HR",
-        "phc_emp_apps_grant_t": "HR",
-        "phc_lookup_types": "ERPAdmin",
-        "phc_lookup_types_t": "ERPAdmin",
-        "phc_lookup_values_t": "MasterData",
-        "phc_users_t": "User Management",
-        "phc_screens_t": "User Management",
-        "phc_roles_t": "User Management",
-        "phc_role_screen_assignment_t": "User Management",
-        "phc_user_roles_assignment_t": "User Management",
-        "phc_user_group_t": "User Management",
-        "phc_user_log_t": "User Management",
-        "phc_error_log_t": "AppAdmin",
-        "phc_plant_master_t": "MasterData",
-        "phc_plant_compliance_t": "Compliance and Documenation",
-        "phc_certifications_t": "Compliance and Documenation",
-        "phc_plant_equipment_t": "Purchasing",
-        "phc_equipment_locations_t": "SupplyChain",
-        "phc_material_master_t": "Purchasing",
-        "phc_material_group_master_t": "Purchasing",
-        "phc_uom_master_t": "MasterData",
-        "phc_uom_conversion_t": "MasterData",
-        "phc_prod_master_t": "MasterData",
-        "phc_prod_lifecycle_history_t": "MasterData",
-        "phc_prod_alt_names_t": "MasterData",
-        "phc_approval_types_t": "WorkflowSetup",
-        "phc_approval_setup_t": "WorkflowSetup",
-        "phc_notifications_setup_t": "WorkflowSetup",
-        "phc_approval_events_t": "Compliance and Documenation",
-        "phc_number_range_master_t": "ERPAdmin",
-        "phc_storage_location_master_t": "MasterData",
-        "phc_partners_t": "MasterData",
-        "phc_customer_t": "CRM",
-        "phc_cust_site_t": "CRM",
-        "phc_cust_contact_points_t": "CRM",
-        "phc_cust_site_locations_t": "CRM",
-        "phc_vendors_t": "Purchasing",
-        "phc_vend_sites_t": "Purchasing",
-        "phc_vend_contact_points_t": "Purchasing",
-        "phc_vend_site_locations_t": "Purchasing",
-        "phc_prod_formulation": "Production",
-        "phc_prod_ingredients": "Production",
-        "phc_prod_pack_presentation": "Production",
-        "phc_prod_regulatory_status": "Production",
-        "phc_prod_regulatory_variations": "Production",
-        "phc_prod_ectd_documents": "Production",
-        "phc_product_indications": "Production",
-        "phc_prod_pharmacology": "Production",
-        "phc_prod_dosing_regimen": "Production",
-        "phc_prod_contraindications": "Production",
-        "phc_prod_warnings": "Production",
-        "phc_prod_drug_interactions": "Production",
-        "phc_prod_adverse_events": "Production",
-        "phc_prod_special_populations": "Production",
-        "phc_clinical_trials": "Production",
-        "phc_prod_immunogenicity_data": "Production",
-        "phc_prod_manufacturing_site": "Production",
-        "phc_prod_batch_specification": "Production",
-        "phc_prod_process_parameters": "Production",
-        "phc_prod_finished_specifications": "Production",
-        "phc_prod_reference_standards": "Production",
-        "phc_prod_stability_studies": "Production",
-        "phc_prod_container_closure": "Production",
-        "phc_prod_deviations_capa": "Production",
-        "phc_prod_gmp_certificates": "Production",
-        "phc_prod_site_inspections": "Production",
-        "phc_prod_packaging_spec": "Production",
-        "phc_prod_labeling": "Production",
-        "phc_prod_serialization": "Production",
-        "phc_prod_patents": "Production",
-        "phc_prod_exclusivity": "Production",
-        "phc_prod_loe": "Production",
-        "phc_prod_competitor_filings": "Production",
-        "phc_prod_licensing": "Production",
-        "phc_prod_launch": "Production",
-        "phc_prod_pricing": "CRM",
-        "phc_prod_reimbursement": "Production",
-        "phc_prod_sales_performance": "Production",
-        "phc_prod_safety_database_ref": "Production",
-        "phc_prod_signal_detection": "Production",
-        "phc_prod_psur_schedule": "Production",
-        "phc_prod_rems_elements": "Production",
-        "phc_prod_recalls": "CRM",
-        "phc_prod_special_monitoring": "Production",
-        "phc_prod_counterfeit_reports": "Production",
-        "phc_prod_api_suppliers": "Production",
-        "phc_prod_cmo": "Production",
-        "phc_prod_distribution_model": "Production",
-        "phc_prod_demand_forecast": "Production",
-        "phc_prod_supply_risk": "Production",
-        "phc_prod_heor_data": "Production",
-        "phc_prod_environmental_data": "Production",
-        "phc_prod_biologics_detail": "Production",
-        "phc_prod_device_component": "Production",
-        "phc_sop_master": "Production Compliance and Documenation",
-        "phc_sop_revision_history": "Production Compliance and Documenation",
-        "phc_sop_related_equipment": "Production Compliance and Documenation",
-        "phc_sop_procedure_steps": "Production Compliance and Documenation",
-        "phc_sop_training_records": "Production Compliance and Documenation",
-        "phc_sod_authorization_matrix": "Production Compliance and Documenation",
-        "phc_sod_conflict_rules": "Production Compliance and Documenation",
-        "phc_sod_employee_role_assignment": "Production Compliance and Documenation",
-        "phc_sod_event_actor_log": "Production Compliance and Documenation",
-        "phc_cleaning_batch": "Qualtiy - Cleaning Validation",
-        "phc_cleaning_request": "Qualtiy - Cleaning Validation",
-        "phc_cleaning_batch_step": "Qualtiy - Cleaning Validation",
-        "phc_cleaning_visual_inspection": "Qualtiy - Cleaning Validation",
-        "phc_cleaning_qa_approval": "Qualtiy - Cleaning Validation",
-        "phc_cleaning_release": "Qualtiy - Cleaning Validation",
-        "pcv_products_t": "Cleaning Validation",
-        "pcv_product_strengths_t": "Cleaning Validation",
-        "pcv_product_stages_t": "Cleaning Validation",
-        "pcv_product_pack_styles_t": "Cleaning Validation",
-        "pcv_pde_registrations_t": "Cleaning Validation",
-        "pcv_pde_api_details_t": "Cleaning Validation",
-        "pcv_solubility_details_t": "Cleaning Validation",
-        "pcv_mdd_registrations_t": "Cleaning Validation",
-        "pcv_mdd_api_details_t": "Cleaning Validation",
-        "pcv_test_methods_t": "Cleaning Validation",
-        "pcv_product_batch_sizes_t": "Cleaning Validation",
-        "pcv_equipments_t": "Cleaning Validation",
-        "pcv_equipment_surface_areas_t": "Cleaning Validation",
-        "pcv_equipment_sampling_locations_t": "Cleaning Validation",
-        "pcv_product_equipment_mapping_t": "Cleaning Validation",
-        "pcv_validation_executions_t": "Cleaning Validation",
-        "pcv_training_records_t": "Cleaning Validation",
-        "pcv_training_attendees_t": "Cleaning Validation",
-        "pcv_cleaning_process_records_t": "Cleaning Validation",
-        "pcv_cpr_execution_steps_t": "Cleaning Validation",
-        "pcv_equipment_clearance_checklists_t": "Cleaning Validation",
-        "pcv_equipment_clearance_items_t": "Cleaning Validation",
-        "pcv_test_request_forms_t": "Cleaning Validation",
-        "pcv_sampling_records_t": "Cleaning Validation",
-        "pcv_test_results_t": "Cleaning Validation",
-        "pcv_validation_reports_t": "Cleaning Validation",
-        "phc_module_t": "ERPAdmin",
-        "phc_screens_t": "ERPAdmin"
-    }
-
+async def get_record_audit_history(request, table_name, record_id):
+    table_name = table_name.lower()
+    record_id = urllib.parse.unquote(str(record_id)).strip()
+    
+    if not hasattr(app.ctx, 'pool') or app.ctx.pool is None:
+        return add_security_headers(response.json({"status": "success", "history": []}))
+    
     try:
         async with app.ctx.pool.acquire() as conn:
-            async with conn.transaction():
-                # 1. Nuke the ghost testing screens
-                await conn.execute("DELETE FROM phc_screens_t WHERE psn_screen_name = 'Updated Screen'")
-                
-                # 2. Get/Create all Modules from Excel
-                unique_modules = set(EXCEL_MAPPINGS.values())
-                for mod_name in unique_modules:
-                    exists = await conn.fetchval("SELECT pmd_module_id FROM phc_module_t WHERE pmd_module_name = $1", mod_name)
-                    if not exists:
-                        max_id = await conn.fetchval("SELECT MAX(pmd_module_id) FROM phc_module_t")
-                        await conn.execute("INSERT INTO phc_module_t (pmd_module_id, pmd_module_name, pmd_status, pmd_created_by, pmd_modified_by) VALUES ($1, $2, 'ACT', 'System', 'System')", (max_id or 0) + 1, mod_name)
-                        
-                # 3. Fetch module mapping dictionary
-                mod_rows = await conn.fetch("SELECT pmd_module_id, pmd_module_name FROM phc_module_t")
-                mod_dict = {row['pmd_module_name']: row['pmd_module_id'] for row in mod_rows}
-
-                # 4. Map screens to exact modules
-                for screen_code, module_name in EXCEL_MAPPINGS.items():
-                    target_mod_id = mod_dict.get(module_name)
-                    if target_mod_id:
-                        await conn.execute("UPDATE phc_screens_t SET psn_module_id = $1 WHERE psn_screen_code = $2", target_mod_id, screen_code)
-
-                # 5. Insert Manage Modules and Manage Screens if they don't exist yet
-                for screen_code, screen_name in [('phc_module_t', 'Manage Modules'), ('phc_screens_t', 'Manage Screens')]:
-                    exists = await conn.fetchval("SELECT psn_screen_id FROM phc_screens_t WHERE psn_screen_code = $1", screen_code)
-                    if not exists:
-                        max_scr = await conn.fetchval("SELECT MAX(psn_screen_id) FROM phc_screens_t")
-                        await conn.execute("""
-                            INSERT INTO phc_screens_t (psn_screen_id, psn_company_id, psn_module_id, psn_screen_code, psn_screen_name, psn_status, psn_created_by, psn_modified_by) 
-                            VALUES ($1, 1, $2, $3, $4, 'ACT', 'System', 'System')
-                        """, (max_scr or 0) + 1, mod_dict['ERPAdmin'], screen_code, screen_name)
-
-        clear_schema_cache()
-        return response.html("<h1>Database Fix Applied!</h1><p>Every screen has been perfectly mapped to the Excel spreadsheet layout. Go back to the <a href='/'>dashboard</a> and hit refresh.</p>")
+            rows = await conn.fetch("""
+                SELECT 
+                    pal_audit_id, pal_action, pal_username, pal_client_ip, 
+                    pal_old_values, pal_new_values, pal_timestamp
+                FROM phc_audit_log_t 
+                WHERE pal_table_name = $1 AND pal_record_id = $2
+                ORDER BY pal_timestamp DESC
+                LIMIT 50
+            """, table_name, record_id)
+            
+            events = []
+            for r in rows:
+                events.append({
+                    "audit_id": r["pal_audit_id"],
+                    "action": r["pal_action"],
+                    "username": r["pal_username"],
+                    "client_ip": r["pal_client_ip"] or "Unknown",
+                    "old_values": json.loads(r["pal_old_values"]) if r["pal_old_values"] else None,
+                    "new_values": json.loads(r["pal_new_values"]) if r["pal_new_values"] else None,
+                    "timestamp": r["pal_timestamp"].strftime("%Y-%m-%d %H:%M:%S") if r["pal_timestamp"] else ""
+                })
+            return add_security_headers(response.json({"status": "success", "history": events}))
     except Exception as e:
-        return response.html(f"<h1>Error</h1><p>{e}</p>")
+        logger.error(f"Audit fetch error: {e}")
+        return add_security_headers(response.json({"status": "error", "message": str(e)}, status=500))
+
+# -----------------------------------------------------------------------------
+# WORKFLOW ENGINE & 21 CFR PART 11 E-SIGNATURE ROUTES
+# -----------------------------------------------------------------------------
+@app.route('/api/workflow/transition', methods=['POST'])
+@check_auth
+async def api_workflow_transition(request):
+    user_id = request.ctx.user_id
+    username = request.ctx.username
+    user_role = request.ctx.role
+    session_id = request.ctx.session_id
+    client_ip = get_client_ip(request)
+    
+    data = request.json or {}
+    client_csrf = request.headers.get("X-CSRF-Token") or request.headers.get("x-csrf-token") or data.get('csrf_token')
+    if not validate_csrf_token(client_csrf, session_id):
+        return add_security_headers(response.json({"error": "Invalid or expired CSRF token."}, status=403))
+        
+    table_name = str(data.get("table_name", "")).strip().lower()
+    record_id = str(data.get("record_id", "")).strip()
+    transition = str(data.get("transition", "")).strip().upper()  # SUBMIT, APPROVE, REJECT, RECALL
+    comments = str(data.get("comments", "")).strip()
+    sig_pwd = str(data.get("signature_password", ""))
+    
+    if not table_name or not record_id or not transition:
+        return add_security_headers(response.json({"error": "Missing required transition parameters."}, status=400))
+        
+    if transition == 'REJECT' and not comments:
+        return add_security_headers(response.json({"error": "A rejection reason/comment is mandatory."}, status=400))
+
+    async with app.ctx.pool.acquire() as conn:
+        auth_tables, _ = await get_authorized_tables(conn, user_id, user_role)
+        if table_name not in auth_tables:
+            return add_security_headers(response.json({"error": "Unauthorized access to table."}, status=403))
+
+        setup = await conn.fetchrow("""
+            SELECT * FROM phc_approval_setup_t 
+            WHERE LOWER(pas_table_name) = LOWER($1) AND (pas_status = 'ACT' OR pas_status IS NULL)
+        """, table_name)
+        if not setup:
+            return add_security_headers(response.json({"error": "No active approval workflow configured for this table."}, status=400))
+            
+        req_role = setup['pas_required_role'] or 'ADM'
+        if transition in ('APPROVE', 'REJECT') and (user_role != 'ADM' and user_role != req_role):
+            return add_security_headers(response.json({"error": f"Role '{req_role}' or Administrator required to approve/reject."}, status=403))
+
+        # 21 CFR Part 11 Electronic Signature Password Verification
+        if setup['pas_require_esig'] or sig_pwd:
+            if not sig_pwd:
+                return add_security_headers(response.json({"error": "Electronic signature password is required for this action."}, status=400))
+            user_pwd = await conn.fetchval("SELECT pus_pwd FROM phc_users_t WHERE pus_user_id = $1", user_id)
+            if not user_pwd or not bcrypt.checkpw(sig_pwd.encode('utf-8'), user_pwd.encode('utf-8')):
+                return add_security_headers(response.json({"error": "Invalid signature password. Electronic signature verification failed."}, status=401))
+
+        pk_col = await get_pk_column(conn, table_name)
+        cols_data = await get_table_columns(conn, table_name)
+        schema_map = {c['column_name'].lower(): c for c in cols_data}
+        pk_type = schema_map.get(pk_col.lower(), {}).get('data_type', 'integer')
+        cast_pk = safe_cast_pk(record_id, pk_type)
+        
+        q_table = quote_ident(table_name)
+        q_pk = quote_ident(pk_col)
+        
+        current_row = await conn.fetchrow(f"SELECT * FROM {q_table} WHERE {q_pk} = $1", cast_pk)
+        if not current_row:
+            return add_security_headers(response.json({"error": "Record not found."}, status=404))
+
+        status_col = None
+        status_max_len = 10
+        for c in cols_data:
+            cname = c['column_name'].lower()
+            if cname.endswith('_status') or cname == 'status' or cname.endswith('_state'):
+                status_col = c['column_name']
+                status_max_len = c.get('character_maximum_length') or 10
+                break
+                
+        if not status_col:
+            return add_security_headers(response.json({"error": "Target table does not have a status column."}, status=400))
+
+        old_status = str(current_row.get(status_col) or 'DFT')
+        if transition == 'SUBMIT':
+            new_status = 'PND' if status_max_len >= 3 else 'P'
+        elif transition == 'APPROVE':
+            new_status = 'ACT' if status_max_len >= 3 else 'A'
+        elif transition == 'REJECT':
+            new_status = 'REJ' if status_max_len >= 3 else 'R'
+        elif transition == 'RECALL':
+            new_status = 'DFT' if status_max_len >= 3 else 'D'
+        else:
+            return add_security_headers(response.json({"error": f"Unknown transition '{transition}'."}, status=400))
+
+        # Generate 21 CFR Part 11 Cryptographic Signature Stamp
+        ts_now = datetime.now()
+        esig_payload = f"SIGNER={username}|UID={user_id}|ROLE={user_role}|TABLE={table_name}|REC={record_id}|ACT={transition}|REASON={comments}|TS={ts_now.isoformat()}|IP={client_ip}"
+        esig_hash = hashlib.sha256(esig_payload.encode('utf-8')).hexdigest()
+
+        async with conn.transaction():
+            set_parts = [f"{quote_ident(status_col)} = $1"]
+            set_vals = [new_status]
+            
+            mod_by_col = next((c['column_name'] for c in cols_data if ('modified' in c['column_name'].lower() or 'updated' in c['column_name'].lower()) and 'by' in c['column_name'].lower()), None)
+            mod_at_col = next((c['column_name'] for c in cols_data if ('modified' in c['column_name'].lower() or 'updated' in c['column_name'].lower()) and 'by' not in c['column_name'].lower()), None)
+            if mod_by_col:
+                set_parts.append(f"{quote_ident(mod_by_col)} = ${len(set_vals)+1}")
+                set_vals.append(str(username)[:50])
+            if mod_at_col:
+                set_parts.append(f"{quote_ident(mod_at_col)} = ${len(set_vals)+1}")
+                set_vals.append(ts_now)
+                
+            set_vals.append(cast_pk)
+            await conn.execute(f"UPDATE {q_table} SET {', '.join(set_parts)} WHERE {q_pk} = ${len(set_vals)}", *set_vals)
+            
+            await conn.execute("""
+                INSERT INTO phc_approval_events_t (
+                    pae_table_name, pae_record_id, pae_action, pae_from_status, 
+                    pae_to_status, pae_user_id, pae_username, pae_user_role, 
+                    pae_comments, pae_esig_hash, pae_client_ip, pae_timestamp
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            """, table_name, str(record_id), transition, old_status, new_status, user_id, username, user_role, comments, esig_hash, client_ip, ts_now)
+            
+            await log_audit_event(
+                conn, table_name, str(record_id), f"WORKFLOW_{transition}", 
+                user_id, username, client_ip, 
+                old_values={status_col: old_status}, 
+                new_values={status_col: new_status, "workflow_comments": comments, "esig_hash": esig_hash}
+            )
+
+            table_title = auth_tables.get(table_name, table_name)
+            link_url = f"/edit/{table_name}/{record_id}"
+            if transition == 'SUBMIT':
+                await dispatch_notification(
+                    conn, None, req_role, 
+                    f"Approval Required: {table_title}", 
+                    f"Record #{record_id} in {table_title} was submitted for review by {username}.", 
+                    link_url, "WORKFLOW"
+                )
+            elif transition in ('APPROVE', 'REJECT'):
+                created_by_col = next((c['column_name'] for c in cols_data if 'created' in c['column_name'].lower() and 'by' in c['column_name'].lower()), None)
+                created_by_user = current_row.get(created_by_col) if created_by_col else None
+                creator_id = None
+                if created_by_user:
+                    creator_id = await conn.fetchval("SELECT pus_user_id FROM phc_users_t WHERE LOWER(pus_user_name) = LOWER($1) OR LOWER(pus_usr_name) = LOWER($1)", str(created_by_user))
+                await dispatch_notification(
+                    conn, creator_id, None, 
+                    f"Record {transition.title()}d: {table_title}", 
+                    f"Record #{record_id} was {transition.lower()}d by {username}. Reason: {comments or 'Approved'}", 
+                    link_url, "WORKFLOW"
+                )
+
+        invalidate_caches_for_table(table_name)
+        return add_security_headers(response.json({
+            "status": "success", 
+            "transition": transition, 
+            "new_status": new_status,
+            "esig_hash": esig_hash,
+            "timestamp": ts_now.strftime("%Y-%m-%d %H:%M:%S")
+        }))
+
+@app.route('/api/workflow/history/<table_name>/<record_id>', methods=['GET'])
+@check_auth
+async def get_workflow_history(request, table_name, record_id):
+    table_name = table_name.lower()
+    record_id = urllib.parse.unquote(str(record_id)).strip()
+    
+    if not hasattr(app.ctx, 'pool') or app.ctx.pool is None:
+        return add_security_headers(response.json({"status": "success", "history": []}))
+        
+    try:
+        async with app.ctx.pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT pae_event_id, pae_action, pae_from_status, pae_to_status, 
+                       pae_username, pae_user_role, pae_comments, pae_esig_hash, 
+                       pae_client_ip, pae_timestamp
+                FROM phc_approval_events_t
+                WHERE LOWER(pae_table_name) = LOWER($1) AND pae_record_id = $2
+                ORDER BY pae_timestamp DESC
+                LIMIT 50
+            """, table_name, record_id)
+            
+            events = []
+            for r in rows:
+                events.append({
+                    "id": r['pae_event_id'],
+                    "action": r['pae_action'],
+                    "from_status": r['pae_from_status'],
+                    "to_status": r['pae_to_status'],
+                    "username": r['pae_username'],
+                    "role": r['pae_user_role'],
+                    "comments": r['pae_comments'] or "",
+                    "esig_hash": r['pae_esig_hash'] or "",
+                    "client_ip": r['pae_client_ip'] or "Unknown",
+                    "timestamp": r['pae_timestamp'].strftime('%Y-%m-%d %H:%M:%S') if r['pae_timestamp'] else ""
+                })
+            return add_security_headers(response.json({"status": "success", "history": events}))
+    except Exception as e:
+        logger.error(f"Error fetching workflow history: {e}")
+        return add_security_headers(response.json({"status": "error", "message": str(e)}, status=500))
+
+# -----------------------------------------------------------------------------
+# NOTIFICATIONS API ROUTES
+# -----------------------------------------------------------------------------
+@app.route('/api/notifications', methods=['GET'])
+@check_auth
+async def get_user_notifications(request):
+    user_id = request.ctx.user_id
+    role = request.ctx.role
+    
+    if not hasattr(app.ctx, 'pool') or app.ctx.pool is None:
+        return add_security_headers(response.json({"notifications": [], "unread_count": 0}))
+        
+    try:
+        async with app.ctx.pool.acquire() as conn:
+            rows = await conn.fetch("""
+                SELECT pun_notification_id, pun_title, pun_message, pun_category, 
+                       pun_link_url, pun_is_read, pun_created_at
+                FROM phc_user_notifications_t
+                WHERE (pun_recipient_user_id = $1 OR pun_recipient_role = $2 OR (pun_recipient_user_id IS NULL AND pun_recipient_role IS NULL))
+                ORDER BY pun_created_at DESC
+                LIMIT 30
+            """, user_id, role)
+            
+            notifs = []
+            unread_count = 0
+            for r in rows:
+                if not r['pun_is_read']:
+                    unread_count += 1
+                notifs.append({
+                    "id": r['pun_notification_id'],
+                    "title": r['pun_title'],
+                    "message": r['pun_message'],
+                    "category": r['pun_category'] or 'WORKFLOW',
+                    "link_url": r['pun_link_url'] or '#',
+                    "is_read": bool(r['pun_is_read']),
+                    "timestamp": r['pun_created_at'].strftime('%Y-%m-%d %H:%M') if r['pun_created_at'] else ""
+                })
+            return add_security_headers(response.json({"notifications": notifs, "unread_count": unread_count}))
+    except Exception as e:
+        logger.error(f"Error fetching notifications: {e}")
+        return add_security_headers(response.json({"notifications": [], "unread_count": 0}))
+
+@app.route('/api/notifications/<notif_id>/read', methods=['POST'])
+@check_auth
+async def mark_notification_read(request, notif_id):
+    client_csrf = request.headers.get("X-CSRF-Token") or request.headers.get("x-csrf-token")
+    if not validate_csrf_token(client_csrf, request.ctx.session_id):
+        return add_security_headers(response.json({"error": "Invalid CSRF token"}, status=403))
+        
+    try:
+        nid = int(notif_id)
+        async with app.ctx.pool.acquire() as conn:
+            await conn.execute("UPDATE phc_user_notifications_t SET pun_is_read = TRUE WHERE pun_notification_id = $1 AND (pun_recipient_user_id = $2 OR pun_recipient_role = $3)", nid, request.ctx.user_id, request.ctx.role)
+        return add_security_headers(response.json({"status": "success"}))
+    except Exception as e:
+        return add_security_headers(response.json({"error": str(e)}, status=400))
+
+# -----------------------------------------------------------------------------
+# OBSERVABILITY: HEALTH & READINESS PROBES
+# -----------------------------------------------------------------------------
+@app.route('/health', methods=['GET'])
+async def health_check(request):
+    uptime = round(time.time() - SERVER_START_TIME, 2)
+    return add_security_headers(response.json({
+        "status": "healthy",
+        "service": "Brihas ERP",
+        "uptime_seconds": uptime,
+        "timestamp": datetime.now().isoformat()
+    }))
+
+@app.route('/ready', methods=['GET'])
+async def readiness_check(request):
+    if not hasattr(app.ctx, 'pool') or app.ctx.pool is None:
+        return add_security_headers(response.json({"status": "unready", "error": "Database pool uninitialized"}, status=503))
+    try:
+        async with app.ctx.pool.acquire() as conn:
+            val = await conn.fetchval("SELECT 1")
+            if val == 1:
+                return add_security_headers(response.json({
+                    "status": "ready",
+                    "database": "connected",
+                    "timestamp": datetime.now().isoformat()
+                }))
+    except Exception as e:
+        logger.error(f"Readiness probe error: {e}")
+        return add_security_headers(response.json({"status": "unready", "error": str(e)}, status=503))
+    return add_security_headers(response.json({"status": "unready"}, status=503))
+
+# -----------------------------------------------------------------------------
+# OPENAPI 3.0 DYNAMIC DOCS
+# -----------------------------------------------------------------------------
+@app.route('/docs', methods=['GET'])
+@check_auth
+async def swagger_ui(request):
+    return await render_template(request, 'swagger.html', {})
+
+@app.route('/openapi.json', methods=['GET'])
+@check_auth
+async def openapi_spec(request):
+    user_id = request.ctx.user_id
+    role = request.ctx.role
+    
+    async with app.ctx.pool.acquire() as conn:
+        auth_tables, _ = await get_authorized_tables(conn, user_id, role)
+        
+        paths = {}
+        tags = []
+        for table_name in auth_tables.keys():
+            tags.append({"name": table_name})
+            
+            paths[f"/api/{table_name}"] = {
+                "get": {
+                    "tags": [table_name],
+                    "summary": f"List {table_name}",
+                    "responses": {"200": {"description": "Successful Response"}}
+                },
+                "post": {
+                    "tags": [table_name],
+                    "summary": f"Create {table_name}",
+                    "responses": {"200": {"description": "Successful Response"}}
+                }
+            }
+            paths[f"/api/{table_name}/{{id}}"] = {
+                "put": {
+                    "tags": [table_name],
+                    "summary": f"Update {table_name}",
+                    "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "Successful Response"}}
+                },
+                "delete": {
+                    "tags": [table_name],
+                    "summary": f"Delete {table_name}",
+                    "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "Successful Response"}}
+                }
+            }
+
+    openapi = {
+        "openapi": "3.0.0",
+        "info": {
+            "title": "Brihas ERP Dynamic API",
+            "version": "1.0.0",
+            "description": "Dynamically generated API based on authorized tables."
+        },
+        "tags": tags,
+        "paths": paths
+    }
+    return add_security_headers(response.json(openapi))
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=PORT, single_process=True)
+    logger.info(f"Starting Brihas ERP Server on port {PORT} with {WORKERS} worker(s)...")
+    app.run(host="0.0.0.0", port=PORT, workers=WORKERS)

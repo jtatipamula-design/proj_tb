@@ -267,7 +267,76 @@
                 {{ table_title }}
             </h1>
         </div>
+
+        {% if is_update %}
+        <div class="flex items-center gap-2">
+            {% if workflow_info and workflow_info.is_active %}
+            <button type="button" class="grid-tool-btn" onclick="openWorkflowHistoryModal()">
+                <i data-lucide="award" class="w-4 h-4 text-iris"></i>
+                <span>Sign-Off History</span>
+            </button>
+            {% endif %}
+            <button type="button" class="grid-tool-btn" onclick="openAuditHistoryModal()">
+                <i data-lucide="history" class="w-4 h-4 text-iris"></i>
+                <span>Audit Trail</span>
+            </button>
+        </div>
+        {% endif %}
     </div>
+
+    {% if is_update and workflow_info and workflow_info.is_active %}
+    <!-- Dynamic Workflow & Governance Banner -->
+    <div class="mt-4 p-4 rounded-xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all"
+         style="background: var(--surface-pure-white-cards); border-color: var(--color-fog); box-shadow: var(--shadow-card);">
+        <div class="flex items-center gap-3.5">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                 style="background: rgba(85, 93, 255, 0.1); color: var(--color-iris);">
+                <i data-lucide="shield-check" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-mono font-bold uppercase tracking-wider text-steel">{{ workflow_info.type_name }}</span>
+                    {% if workflow_info.is_pending %}
+                    <span class="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">PENDING APPROVAL</span>
+                    {% elif workflow_info.is_approved %}
+                    <span class="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">APPROVED / ACTIVE</span>
+                    {% elif workflow_info.is_rejected %}
+                    <span class="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300">REJECTED</span>
+                    {% else %}
+                    <span class="px-2 py-0.5 rounded text-[11px] font-bold font-mono bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300">DRAFT</span>
+                    {% endif %}
+                </div>
+                <p class="text-xs text-graphite mt-0.5">
+                    {% if workflow_info.is_pending %}
+                    Awaiting formal approval from <strong>{{ workflow_info.required_role }}</strong>.
+                    {% elif workflow_info.is_approved %}
+                    Record is certified and active in accordance with GMP release protocols.
+                    {% elif workflow_info.is_rejected %}
+                    Record was rejected. Please review rejection comments before resubmitting.
+                    {% else %}
+                    Draft status. Ready for submission to Quality Assurance.
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        <!-- Workflow Action Controls -->
+        <div class="flex items-center gap-2 flex-wrap">
+            {% if workflow_info.is_pending and workflow_info.can_approve %}
+            <button type="button" onclick="triggerEsign('APPROVE')" class="btn-cta text-xs py-1.5 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="check-circle-2" class="w-4 h-4"></i> Approve (E-Sign)
+            </button>
+            <button type="button" onclick="triggerEsign('REJECT')" class="btn-cta text-xs py-1.5 px-3.5 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="x-circle" class="w-4 h-4"></i> Reject
+            </button>
+            {% elif workflow_info.can_submit %}
+            <button type="button" onclick="triggerEsign('SUBMIT')" class="btn-cta text-xs py-1.5 px-3.5 bg-iris hover:bg-iris/90 text-white rounded-lg flex items-center gap-1.5 cursor-pointer">
+                <i data-lucide="send" class="w-4 h-4"></i> Submit for Review
+            </button>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 
     <div class="form-card">
         <!-- Form with Multipart Encoding -->
@@ -284,6 +353,7 @@
               hx-encoding="multipart/form-data"
               hx-swap="none">
               
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             {% if is_update %}
             <input type="hidden" name="_method" value="PUT">
             {% endif %}
@@ -617,11 +687,344 @@
                 }
             });
         });
-
         // Initialize auto-today dates
         document.querySelectorAll('input[data-auto-today="true"]').forEach(el => {
             if (!el.value) el.value = new Date().toISOString().split('T')[0];
         });
     })();
 </script>
+
+    <!-- Audit History Modal -->
+    <div class="grid-modal-overlay" id="auditModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+        <div class="grid-modal" style="background: var(--surface-pure-white-cards); border: 1px solid var(--color-fog); border-radius: var(--radius-cards); width: 92%; max-width: 780px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: var(--shadow-dropdown);">
+            <div class="grid-modal-header" style="padding: 16px 20px; border-bottom: 1px solid var(--color-fog); display: flex; align-items: center; justify-content: space-between;">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="history" class="w-4 h-4 text-iris"></i>
+                    <h3 class="font-semibold text-sm" style="color: var(--color-obsidian);">Record Change History (GMP Audit Trail)</h3>
+                </div>
+                <button type="button" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onclick="closeAuditHistoryModal()">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="grid-modal-body" id="auditHistoryContent" style="padding: 20px; overflow-y: auto; flex: 1;">
+                <div class="text-center py-8 font-mono text-xs text-mist">Loading audit trail...</div>
+            </div>
+            <div class="grid-modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--color-fog); display: flex; justify-content: flex-end;">
+                <button type="button" class="grid-tool-btn text-xs py-1.5 px-4" onclick="closeAuditHistoryModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.openAuditHistoryModal = async function() {
+            const modal = document.getElementById('auditModal');
+            const container = document.getElementById('auditHistoryContent');
+            if (!modal || !container) return;
+            modal.style.display = 'flex';
+            container.innerHTML = '<div class="text-center py-8 font-mono text-xs text-mist">Loading audit records...</div>';
+
+            try {
+                const res = await fetch(`/api/audit/{{ table_name }}/{{ pk_val }}`);
+                const json = await res.json();
+                if (json.status === 'success' && json.history && json.history.length > 0) {
+                    let html = '<div class="space-y-4">';
+                    json.history.forEach(evt => {
+                        let actionClass = 'badge-iris';
+                        if (evt.action === 'INSERT') actionClass = 'badge-lagoon';
+                        else if (evt.action === 'UPDATE') actionClass = 'badge-cobalt';
+                        else if (evt.action === 'SOFT_DELETE' || evt.action === 'DELETE') actionClass = 'text-red-500 bg-red-50 dark:bg-red-950/30';
+
+                        html += `
+                            <div class="p-3.5 rounded-xl border border-fog bg-bone/50 space-y-2">
+                                <div class="flex items-center justify-between text-xs font-mono">
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[11px] font-bold ${actionClass}">${evt.action}</span>
+                                        <span class="font-semibold text-obsidian">${evt.username}</span>
+                                        <span class="text-mist">(${evt.client_ip})</span>
+                                    </div>
+                                    <span class="text-steel">${evt.timestamp}</span>
+                                </div>
+                        `;
+
+                        if (evt.action === 'UPDATE' && evt.old_values && evt.new_values) {
+                            html += `
+                                <div class="mt-2 text-xs overflow-x-auto">
+                                    <table class="w-full text-left font-mono text-[11.5px]">
+                                        <thead>
+                                            <tr class="text-mist border-b border-fog/60">
+                                                <th class="py-1 pr-2">Field</th>
+                                                <th class="py-1 pr-2">Previous Value</th>
+                                                <th class="py-1">New Value</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                            `;
+                            const allKeys = Array.from(new Set([...Object.keys(evt.old_values), ...Object.keys(evt.new_values)]));
+                            let changeCount = 0;
+                            allKeys.forEach(k => {
+                                const oldV = evt.old_values[k];
+                                const newV = evt.new_values[k];
+                                if (String(oldV) !== String(newV)) {
+                                    changeCount++;
+                                    html += `
+                                        <tr class="border-b border-fog/30">
+                                            <td class="py-1 pr-2 font-semibold text-obsidian">${k}</td>
+                                            <td class="py-1 pr-2 text-red-500 line-through">${oldV !== null && oldV !== undefined ? oldV : '<em class="text-mist">empty</em>'}</td>
+                                            <td class="py-1 text-green-600 font-semibold">${newV !== null && newV !== undefined ? newV : '<em class="text-mist">empty</em>'}</td>
+                                        </tr>
+                                    `;
+                                }
+                            });
+                            if (changeCount === 0) {
+                                html += `<tr><td colspan="3" class="py-1 text-mist italic">No column values changed</td></tr>`;
+                            }
+                            html += `</tbody></table></div>`;
+                        } else if (evt.new_values) {
+                            html += `
+                                <div class="mt-1 text-[11px] font-mono text-steel bg-pure-white p-2 rounded border border-fog/60">
+                                    Snapshot: ${JSON.stringify(evt.new_values)}
+                                </div>
+                            `;
+                        }
+                        html += `</div>`;
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="text-center py-8 font-mono text-xs text-mist">No audit events recorded for this record yet.</div>';
+                }
+            } catch(e) {
+                container.innerHTML = `<div class="text-center py-8 font-mono text-xs text-red-500">Failed to load audit history: ${e.message}</div>`;
+            }
+            if (window.lucide) lucide.createIcons();
+        };
+
+        window.closeAuditHistoryModal = function() {
+            const modal = document.getElementById('auditModal');
+            if (modal) modal.style.display = 'none';
+        };
+
+        // ----------------------------------------------------
+        // 21 CFR PART 11 ELECTRONIC SIGNATURE ENGINE
+        // ----------------------------------------------------
+        let activeTransition = null;
+
+        window.triggerEsign = function(transitionType) {
+            activeTransition = transitionType;
+            const modal = document.getElementById('esignModal');
+            const titleEl = document.getElementById('esignModalTitle');
+            const actionBadge = document.getElementById('esignActionBadge');
+            const pwdInput = document.getElementById('esignPassword');
+            const reasonInput = document.getElementById('esignReason');
+
+            if (!modal) return;
+            if (pwdInput) pwdInput.value = '';
+            if (reasonInput) reasonInput.value = '';
+
+            if (transitionType === 'APPROVE') {
+                titleEl.textContent = 'Approve Record (21 CFR Part 11 Electronic Signature)';
+                actionBadge.textContent = 'APPROVAL';
+                actionBadge.className = 'px-2 py-0.5 rounded text-xs font-bold font-mono bg-emerald-100 text-emerald-800';
+            } else if (transitionType === 'REJECT') {
+                titleEl.textContent = 'Reject Record with Cause';
+                actionBadge.textContent = 'REJECTION';
+                actionBadge.className = 'px-2 py-0.5 rounded text-xs font-bold font-mono bg-red-100 text-red-800';
+            } else {
+                titleEl.textContent = 'Submit Record for Formal Review';
+                actionBadge.textContent = 'SUBMISSION';
+                actionBadge.className = 'px-2 py-0.5 rounded text-xs font-bold font-mono bg-iris/10 text-iris';
+            }
+
+            modal.style.display = 'flex';
+            if (window.lucide) lucide.createIcons();
+        };
+
+        window.closeEsignModal = function() {
+            const modal = document.getElementById('esignModal');
+            if (modal) modal.style.display = 'none';
+            activeTransition = null;
+        };
+
+        window.submitElectronicSignature = async function(e) {
+            if (e) e.preventDefault();
+            const pwd = document.getElementById('esignPassword')?.value || '';
+            const reason = document.getElementById('esignReason')?.value || '';
+            const meaning = document.getElementById('esignMeaning')?.value || '';
+            const errorDiv = document.getElementById('esignErrorNotice');
+
+            if (!activeTransition) return;
+            if (activeTransition === 'REJECT' && !reason.trim()) {
+                if (errorDiv) {
+                    errorDiv.textContent = 'Rejection reason is mandatory.';
+                    errorDiv.style.display = 'block';
+                }
+                return;
+            }
+
+            const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+            const token = csrfMeta ? csrfMeta.getAttribute('content') : '';
+
+            try {
+                const res = await fetch('/api/workflow/transition', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': token
+                    },
+                    body: JSON.stringify({
+                        table_name: '{{ table_name }}',
+                        record_id: '{{ pk_val }}',
+                        transition: activeTransition,
+                        comments: reason ? `${meaning}: ${reason}` : meaning,
+                        signature_password: pwd
+                    })
+                });
+
+                const data = await res.json();
+                if (res.ok && data.status === 'success') {
+                    sessionStorage.setItem('pendingToast', JSON.stringify({
+                        msg: `Workflow state updated to ${data.new_status} with digital signature stamp.`,
+                        type: 'success'
+                    }));
+                    window.location.reload();
+                } else {
+                    if (errorDiv) {
+                        errorDiv.textContent = data.error || 'Electronic signature failed.';
+                        errorDiv.style.display = 'block';
+                    }
+                }
+            } catch(err) {
+                if (errorDiv) {
+                    errorDiv.textContent = err.message;
+                    errorDiv.style.display = 'block';
+                }
+            }
+        };
+
+        // ----------------------------------------------------
+        // SIGN-OFF HISTORY TRAIL
+        // ----------------------------------------------------
+        window.openWorkflowHistoryModal = async function() {
+            const modal = document.getElementById('workflowHistoryModal');
+            const container = document.getElementById('workflowHistoryContent');
+            if (!modal || !container) return;
+            modal.style.display = 'flex';
+            container.innerHTML = '<div class="text-center py-8 font-mono text-xs text-mist">Loading sign-off trail...</div>';
+
+            try {
+                const res = await fetch(`/api/workflow/history/{{ table_name }}/{{ pk_val }}`);
+                const json = await res.json();
+                if (json.status === 'success' && json.history && json.history.length > 0) {
+                    let html = '<div class="space-y-4">';
+                    json.history.forEach(evt => {
+                        let badgeClass = 'bg-iris/10 text-iris';
+                        if (evt.action === 'APPROVE') badgeClass = 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300';
+                        else if (evt.action === 'REJECT') badgeClass = 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300';
+
+                        html += `
+                            <div class="p-3.5 rounded-xl border border-fog bg-bone/50 space-y-2">
+                                <div class="flex items-center justify-between text-xs font-mono">
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-2 py-0.5 rounded text-[11px] font-bold ${badgeClass}">${evt.action}</span>
+                                        <span class="font-semibold text-obsidian">${evt.username}</span>
+                                        <span class="text-mist">(${evt.role})</span>
+                                    </div>
+                                    <span class="text-steel">${evt.timestamp}</span>
+                                </div>
+                                <p class="text-xs text-graphite font-sans">${evt.comments || 'No comments recorded'}</p>
+                                ${evt.esig_hash ? `
+                                    <div class="text-[10.5px] font-mono text-mist bg-pure-white p-1.5 rounded border border-fog/60 break-all">
+                                        <span class="text-iris font-semibold">21 CFR Part 11 Hash:</span> ${evt.esig_hash}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="text-center py-8 font-mono text-xs text-mist">No workflow approval events recorded for this record yet.</div>';
+                }
+            } catch(e) {
+                container.innerHTML = `<div class="text-center py-8 font-mono text-xs text-red-500">${e.message}</div>`;
+            }
+            if (window.lucide) lucide.createIcons();
+        };
+
+        window.closeWorkflowHistoryModal = function() {
+            const modal = document.getElementById('workflowHistoryModal');
+            if (modal) modal.style.display = 'none';
+        };
+    </script>
+
+    <!-- 21 CFR Part 11 Electronic Signature Modal -->
+    <div class="grid-modal-overlay" id="esignModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+        <div class="grid-modal" style="background: var(--surface-pure-white-cards); border: 1px solid var(--color-fog); border-radius: var(--radius-cards); width: 92%; max-width: 580px; box-shadow: var(--shadow-dropdown);">
+            <div class="grid-modal-header" style="padding: 16px 20px; border-bottom: 1px solid var(--color-fog); display: flex; align-items: center; justify-content: space-between;">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="shield-alert" class="w-4 h-4 text-iris"></i>
+                    <h3 class="font-semibold text-sm" id="esignModalTitle" style="color: var(--color-obsidian);">21 CFR Part 11 Electronic Signature</h3>
+                </div>
+                <button type="button" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onclick="closeEsignModal()">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <form onsubmit="submitElectronicSignature(event)" style="padding: 20px;" class="space-y-4">
+                <div id="esignErrorNotice" class="p-2.5 rounded-lg bg-red-50 text-red-700 text-xs font-mono hidden"></div>
+
+                <div class="flex items-center justify-between p-3 rounded-lg border border-fog bg-bone/60">
+                    <div class="text-xs">
+                        <span class="text-mist font-mono">Signer:</span>
+                        <strong class="text-obsidian ml-1">{{ username }} ({{ user_role }})</strong>
+                    </div>
+                    <span id="esignActionBadge" class="px-2 py-0.5 rounded text-xs font-bold font-mono bg-iris/10 text-iris">APPROVAL</span>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-graphite mb-1">Signature Meaning / Capacity</label>
+                    <select id="esignMeaning" class="w-full rounded-lg px-3 py-2 text-xs border border-fog bg-pure-white text-obsidian focus:outline-none">
+                        <option value="I approve this record in compliance with GMP guidelines">I approve this record in compliance with GMP guidelines (Approval)</option>
+                        <option value="I have reviewed and verified the data integrity of this document">I have reviewed and verified the data integrity of this document (Review)</option>
+                        <option value="I author and submit this revision for Quality Assurance review">I author and submit this revision for Quality Assurance review (Authorship)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-graphite mb-1">Reason / Justification Comment</label>
+                    <textarea id="esignReason" rows="2" placeholder="Provide reason or justification for this change..." class="w-full rounded-lg p-2.5 text-xs border border-fog bg-pure-white text-obsidian focus:outline-none"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-graphite mb-1">Confirm Identity (Enter Password) <span class="text-red-500">*</span></label>
+                    <input type="password" id="esignPassword" required placeholder="Enter your password to execute signature" class="w-full rounded-lg px-3 py-2 text-xs border border-fog bg-pure-white text-obsidian focus:outline-none">
+                </div>
+
+                <div class="pt-2 flex items-center justify-end gap-2">
+                    <button type="button" onclick="closeEsignModal()" class="grid-tool-btn text-xs py-1.5 px-3">Cancel</button>
+                    <button type="submit" class="btn-cta text-xs py-1.5 px-4 bg-iris hover:bg-iris/90 text-white rounded-lg cursor-pointer">Digitally Sign & Confirm</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sign-Off History Modal -->
+    <div class="grid-modal-overlay" id="workflowHistoryModal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+        <div class="grid-modal" style="background: var(--surface-pure-white-cards); border: 1px solid var(--color-fog); border-radius: var(--radius-cards); width: 92%; max-width: 680px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: var(--shadow-dropdown);">
+            <div class="grid-modal-header" style="padding: 16px 20px; border-bottom: 1px solid var(--color-fog); display: flex; align-items: center; justify-content: space-between;">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="award" class="w-4 h-4 text-iris"></i>
+                    <h3 class="font-semibold text-sm" style="color: var(--color-obsidian);">Governance Sign-Off History (21 CFR Part 11)</h3>
+                </div>
+                <button type="button" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" onclick="closeWorkflowHistoryModal()">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="grid-modal-body" id="workflowHistoryContent" style="padding: 20px; overflow-y: auto; flex: 1;">
+                <div class="text-center py-8 font-mono text-xs text-mist">Loading sign-off trail...</div>
+            </div>
+            <div class="grid-modal-footer" style="padding: 12px 20px; border-top: 1px solid var(--color-fog); display: flex; justify-content: flex-end;">
+                <button type="button" class="grid-tool-btn text-xs py-1.5 px-4" onclick="closeWorkflowHistoryModal()">Close</button>
+            </div>
+        </div>
+    </div>
 {% endblock %}
