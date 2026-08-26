@@ -932,27 +932,7 @@ async def get_pk_column(conn, table_name):
     return None
 
 # --- SMART FOREIGN KEY RESOLUTION ---
-FK_HEURISTICS = {
-    'company_id': 'phc_companies_t',
-    'dept_id': 'phc_dept_t',
-    'services_id': 'phc_services_t',
-    'cost_center_id': 'phc_cost_center_t',
-    'module_id': 'phc_module_t',
-    'screen_id': 'phc_screens_t',
-    'role_id': 'phc_roles_t',
-    'user_id': 'phc_users_t',
-    'product_id': 'pcv_products_t',
-    'equipment_id': 'pcv_equipments_t',
-    'execution_id': 'pcv_validation_executions_t',
-    'cpr_id': 'pcv_cleaning_process_records_t',
-    'trf_id': 'pcv_test_request_forms_t',
-    'sampling_record_id': 'pcv_sampling_records_t',
-    'pde_id': 'pcv_pde_registrations_t',
-    'mdd_id': 'pcv_mdd_registrations_t',
-    'training_id': 'pcv_training_records_t',
-    'clearance_id': 'pcv_equipment_clearance_checklists_t',
-    'sampling_loc_id': 'pcv_equipment_sampling_locations_t'
-}
+
 
 async def get_fk_map(conn, table_name):
     if "fks" not in SCHEMA_CACHE: SCHEMA_CACHE["fks"] = {}
@@ -971,13 +951,49 @@ async def get_fk_map(conn, table_name):
         return fk_map
     except Exception: return {}
 
+async def preload_all_pks(conn):
+    if getattr(app.ctx, 'pks_loaded', False): return
+    query = """
+        SELECT c.relname as table_name, a.attname as column_name
+        FROM pg_index i
+        JOIN pg_class c ON c.oid = i.indrelid
+        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE i.indisprimary AND n.nspname NOT IN ('information_schema', 'pg_catalog')
+    """
+    try:
+        rows = await conn.fetch(query)
+        for r in rows:
+            SCHEMA_CACHE["pks"][r['table_name']] = r['column_name']
+        app.ctx.pks_loaded = True
+    except Exception as e:
+        logger.error(f"Error preloading PKs: {e}")
+
 async def resolve_fk_details(conn, table_name, column_name):
     fk_map = await get_fk_map(conn, table_name)
     if column_name in fk_map: return fk_map[column_name]['table'], fk_map[column_name]['pk']
-    for suffix, target_table in FK_HEURISTICS.items():
-        if column_name.endswith(suffix):
-            target_pk = await get_pk_column(conn, target_table)
-            if target_pk: return target_table, target_pk
+    
+    await preload_all_pks(conn)
+    if not column_name.endswith('_id'):
+        return None, None
+        
+    col_stripped = column_name
+    if '_' in column_name:
+        parts = column_name.split('_', 1)
+        if len(parts[0]) <= 4:
+            col_stripped = parts[1]
+            
+    for t_name, pk_col in SCHEMA_CACHE["pks"].items():
+        if pk_col == column_name:
+            return t_name, pk_col
+        pk_stripped = pk_col
+        if '_' in pk_col:
+            parts = pk_col.split('_', 1)
+            if len(parts[0]) <= 4:
+                pk_stripped = parts[1]
+        if col_stripped == pk_stripped and col_stripped.endswith('_id'):
+            return t_name, pk_col
+            
     return None, None
 
 async def get_fk_display_dict(conn, f_table, f_pk, specific_ids=None):
@@ -1073,7 +1089,7 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
                 continue
             if v == "" or v is None:
                 continue 
-        if 'created' in k.lower() or 'modified' in k.lower() or 'edited' in k.lower() or 'updated' in k.lower():
+        if 'created' in k.lower() or 'modified' in k.lower() or 'edited' in k.lower() or 'update' in k.lower():
             continue
 
         if is_update and (v == "" or v is None):
@@ -1930,14 +1946,14 @@ async def process_api_action(request, table_name, pk_val):
                         clean_data[company_col] = user_company
 
         # Mandatory Session Username and Audit Trail Binding
-        who_cols = [c for c in schema_map if 'created' in c.lower() or 'modified' in c.lower() or 'edited' in c.lower() or 'updated' in c.lower()]
+        who_cols = [c for c in schema_map if 'created' in c.lower() or 'modified' in c.lower() or 'edited' in c.lower() or 'update' in c.lower()]
         for wc in who_cols:
             max_len = schema_map.get(wc, {}).get('character_maximum_length') or 50
             user_str = str(session_username)[:max_len]
             
-            if ('modified' in wc.lower() or 'edited' in wc.lower() or 'updated' in wc.lower()) and 'by' not in wc.lower():
+            if ('modified' in wc.lower() or 'edited' in wc.lower() or 'update' in wc.lower()) and 'by' not in wc.lower():
                 clean_data[wc] = datetime.now()
-            elif ('modified' in wc.lower() or 'edited' in wc.lower() or 'updated' in wc.lower()) and 'by' in wc.lower():
+            elif ('modified' in wc.lower() or 'edited' in wc.lower() or 'update' in wc.lower()) and 'by' in wc.lower():
                 clean_data[wc] = user_str
             elif method == 'POST':
                 if 'created' in wc.lower() and 'by' not in wc.lower():
@@ -1948,6 +1964,10 @@ async def process_api_action(request, table_name, pk_val):
         try:
             async with conn.transaction():
                 if method == 'POST':
+                    for cname in schema_map:
+                        if 'start_date' in cname.lower() and (cname not in clean_data or not clean_data[cname]):
+                            clean_data[cname] = datetime.now()
+                            
                     col_default = schema_map.get(pk_column, {}).get('column_default')
                     has_default = col_default is not None and str(col_default).strip() != ''
                     if pk_column and not has_default and (pk_column not in clean_data or clean_data[pk_column] is None or clean_data[pk_column] == ""):
