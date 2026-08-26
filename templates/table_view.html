@@ -283,10 +283,28 @@
         border: 1px solid rgba(3, 203, 188, 0.25);
     }
 
-    .status-ina {
-        background: rgba(239, 68, 68, 0.1);
+    .status-pnd {
+        background: rgba(245, 158, 11, 0.12);
+        color: #d97706;
+        border: 1px solid rgba(245, 158, 11, 0.25);
+    }
+
+    .status-rej {
+        background: rgba(239, 68, 68, 0.12);
         color: #ef4444;
         border: 1px solid rgba(239, 68, 68, 0.25);
+    }
+
+    .status-ina {
+        background: rgba(107, 114, 128, 0.12);
+        color: #6b7280;
+        border: 1px solid rgba(107, 114, 128, 0.25);
+    }
+
+    .status-dft {
+        background: var(--color-bone);
+        color: var(--color-steel);
+        border: 1px solid var(--color-fog);
     }
 
     .status-def {
@@ -493,7 +511,8 @@
             <!-- Search Bar -->
             <div class="relative inline-flex items-center">
                 <i data-lucide="search" class="w-4 h-4 absolute left-3" style="color: var(--color-mist);"></i>
-                <input type="text" class="table-search-input pl-9 pr-8" id="gridSearchInput" placeholder="Quick filter in view..." 
+                <input type="text" class="table-search-input pl-9 pr-8" id="gridSearchInput" placeholder="Quick search table..." 
+                       value="{{ search_query }}"
                        oninput="handleQuickFilter(this.value)" autocomplete="off">
             </div>
         </div>
@@ -612,10 +631,16 @@
                         {% for col in columns %}
                         <td class="grid-td" data-col="{{ col.raw }}">
                             {% set val = row[col.raw] %}
-                            {% if val == 'ACT' %} 
+                            {% if val in ('ACT', 'A', 'ACTIVE', 'APPROVED') %} 
                                 <span class="status-pill status-act">Active</span>
-                            {% elif val == 'INA' %} 
+                            {% elif val in ('PND', 'P', 'PENDING', 'SUBMITTED') %} 
+                                <span class="status-pill status-pnd">Pending Review</span>
+                            {% elif val in ('REJ', 'R', 'REJECTED') %} 
+                                <span class="status-pill status-rej">Rejected</span>
+                            {% elif val in ('INA', 'I', 'INACTIVE') %} 
                                 <span class="status-pill status-ina">Inactive</span>
+                            {% elif val in ('DFT', 'D', 'DRAFT') %} 
+                                <span class="status-pill status-dft">Draft</span>
                             {% elif val == 'None' or val == None or val == '' %} 
                                 <span class="status-pill status-def">Empty</span>
                             {% elif val.strftime is defined %} 
@@ -639,20 +664,22 @@
                 <span id="clientFilterCountNotice" class="ml-2 font-mono text-[11px] text-iris font-semibold" style="display: none;"></span>
             </div>
             
-            <div class="flex items-center gap-2">
-                <a href="/table/{{ table_name }}?page={{ page - 1 }}" 
-                   class="grid-tool-btn {% if page <= 1 %}pointer-events-none opacity-40{% endif %}">
+            <div class="flex items-center gap-2" id="gridPaginationControls" data-current-page="{{ page }}" data-total-pages="{{ total_pages }}">
+                <button onclick="goToPrevPage()" 
+                        class="grid-tool-btn {% if page <= 1 %}pointer-events-none opacity-40{% endif %}"
+                        type="button">
                     <i data-lucide="chevron-left" class="w-4 h-4"></i> Prev
-                </a>
+                </button>
                 
                 <span class="px-3 py-1 font-mono text-xs font-semibold" style="color: var(--color-obsidian);">
                     Page {{ page }} of {{ total_pages }}
                 </span>
                 
-                <a href="/table/{{ table_name }}?page={{ page + 1 }}" 
-                   class="grid-tool-btn {% if page >= total_pages %}pointer-events-none opacity-40{% endif %}">
+                <button onclick="goToNextPage()" 
+                        class="grid-tool-btn {% if page >= total_pages %}pointer-events-none opacity-40{% endif %}"
+                        type="button">
                     Next <i data-lucide="chevron-right" class="w-4 h-4"></i>
-                </a>
+                </button>
             </div>
         </div>
     </div>
@@ -773,6 +800,20 @@
     let selectedRowPks = new Set();
     let currentDensity = localStorage.getItem(`gridDensity_${TABLE_NAME}`) || 'standard';
 
+    const urlParams = new URLSearchParams(window.location.search);
+    try {
+        const urlFilters = urlParams.get('filters');
+        if (urlFilters) activeFilterRules = JSON.parse(urlFilters);
+    } catch(e) {}
+
+    try {
+        const urlSorts = urlParams.get('sort_rules');
+        if (urlSorts) activeSortRules = JSON.parse(urlSorts);
+        else if (urlParams.get('sort_col')) {
+            activeSortRules = [{ col: urlParams.get('sort_col'), dir: urlParams.get('sort_dir') || 'desc' }];
+        }
+    } catch(e) {}
+
     const ALL_COLUMNS = Array.from(document.querySelectorAll('th.draggable-col')).map(th => ({
         raw: th.getAttribute('data-col'),
         label: th.getAttribute('data-label') || th.querySelector('.col-title-text')?.textContent.trim() || th.getAttribute('data-col'),
@@ -783,6 +824,8 @@
         if (window.lucide) lucide.createIcons();
         initDragAndDropReorder();
         applyDensity(currentDensity);
+        updateSortBadges();
+        updateFilterBadges();
         loadSavedViewPreset();
     });
 
@@ -905,8 +948,63 @@
         document.addEventListener('mouseup', onMouseUp);
     }
 
+    function buildQueryUrl(overrides = {}) {
+        const url = new URL(window.location.href);
+        const params = url.searchParams;
+
+        if (overrides.page !== undefined) {
+            params.set('page', overrides.page);
+        }
+        if (overrides.q !== undefined) {
+            if (overrides.q) params.set('q', overrides.q);
+            else params.delete('q');
+        }
+        if (overrides.sort_rules !== undefined) {
+            if (overrides.sort_rules && overrides.sort_rules.length > 0) {
+                params.set('sort_rules', JSON.stringify(overrides.sort_rules));
+                params.delete('sort_col');
+                params.delete('sort_dir');
+            } else {
+                params.delete('sort_rules');
+                params.delete('sort_col');
+                params.delete('sort_dir');
+            }
+        }
+        if (overrides.filters !== undefined) {
+            if (overrides.filters && overrides.filters.length > 0) {
+                params.set('filters', JSON.stringify(overrides.filters));
+            } else {
+                params.delete('filters');
+            }
+        }
+        return `${url.pathname}?${params.toString()}`;
+    }
+
+    function getPaginationState() {
+        const wrap = document.getElementById('gridPaginationControls');
+        const cur = parseInt(wrap?.getAttribute('data-current-page') || '1', 10);
+        const total = parseInt(wrap?.getAttribute('data-total-pages') || '1', 10);
+        return { cur, total };
+    }
+
+    function goToPage(pageNum) {
+        const state = getPaginationState();
+        if (pageNum < 1 || pageNum > state.total) return;
+        window.location.href = buildQueryUrl({ page: pageNum });
+    }
+
+    function goToPrevPage() {
+        const state = getPaginationState();
+        goToPage(state.cur - 1);
+    }
+
+    function goToNextPage() {
+        const state = getPaginationState();
+        goToPage(state.cur + 1);
+    }
+
     // -------------------------------------------------------------------------
-    // 4. MULTI-COLUMN SORTING (Shift+Click)
+    // 4. MULTI-COLUMN SORTING (Shift+Click) — Server-Side Query Execution
     // -------------------------------------------------------------------------
     function handleColumnSort(colName, event) {
         const isMulti = event.shiftKey;
@@ -933,8 +1031,7 @@
             }
         }
 
-        updateSortBadges();
-        executeClientSortAndFilter();
+        window.location.href = buildQueryUrl({ page: 1, sort_rules: activeSortRules });
     }
 
     function updateSortBadges() {
@@ -950,7 +1047,7 @@
     }
 
     // -------------------------------------------------------------------------
-    // 5. COMPLEX FILTER BUILDER & CLIENT-SIDE ENGINE
+    // 5. COMPLEX FILTER BUILDER — Server-Side Query Execution
     // -------------------------------------------------------------------------
     function openFilterModal() {
         renderFilterRulesUI();
@@ -1022,17 +1119,12 @@
 
     function applyFilterBuilder() {
         activeFilterRules = activeFilterRules.filter(r => r.op === 'is_empty' || r.op === 'is_not_empty' || (r.val && r.val.trim() !== ''));
-        closeFilterModal();
-        updateFilterBadges();
-        executeClientSortAndFilter();
+        window.location.href = buildQueryUrl({ page: 1, filters: activeFilterRules });
     }
 
     function clearAllFilters() {
         activeFilterRules = [];
-        const search = document.getElementById('gridSearchInput');
-        if (search) search.value = '';
-        updateFilterBadges();
-        executeClientSortAndFilter();
+        window.location.href = buildQueryUrl({ page: 1, filters: [], q: '' });
     }
 
     function updateFilterBadges() {
@@ -1054,8 +1146,12 @@
         }
     }
 
-    function handleQuickFilter(query) {
-        executeClientSortAndFilter(query);
+    let searchTimer = null;
+    function handleQuickFilter(val) {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            window.location.href = buildQueryUrl({ page: 1, q: val.trim() });
+        }, 450);
     }
 
     // -------------------------------------------------------------------------
