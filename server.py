@@ -1766,7 +1766,11 @@ async def process_api_action(request, table_name, pk_val):
     
     method = request.method
     if request.form and request.form.get('_method'):
-        method = request.form.get('_method').upper()
+        _m = request.form.getlist('_method') if hasattr(request.form, 'getlist') else request.form.get('_method')
+        if isinstance(_m, str):
+            method = _m.upper()
+        else:
+            method = _m[0].upper() if _m else ''
     elif pk_val is not None and method != 'DELETE':
         method = 'PUT'
 
