@@ -2030,7 +2030,7 @@ async def process_api_action(request, table_name, pk_val):
             # Targeted cache eviction
             invalidate_caches_for_table(table_name)
 
-            if request.headers.get("HX-Request"):
+            if request.headers.get("hx-request") or request.headers.get("HX-Request"):
                 res = response.json({"status": "success"})
                 res.headers["HX-Redirect"] = f"/table/{table_name}"
                 return add_security_headers(res)
@@ -2038,6 +2038,7 @@ async def process_api_action(request, table_name, pk_val):
                 return add_security_headers(response.redirect(f"/table/{table_name}"))
             
         except Exception as e:
+            logger.error(f"Action Error: {e}", exc_info=True)
             return add_security_headers(response.json({"error": str(e)}, status=400))
 
 # -----------------------------------------------------------------------------
