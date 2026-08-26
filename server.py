@@ -1080,6 +1080,8 @@ def _is_password_column(col_name: str) -> bool:
 def _sanitize_payload(data, pk_column, schema_map, is_update=False):
     clean_data = {}
     for k, v in data.items():
+        if k in ('csrf_token', '_method', 'signature_password'):
+            continue
         if k == pk_column:
             if is_update:
                 continue
