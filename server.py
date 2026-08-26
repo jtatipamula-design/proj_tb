@@ -975,21 +975,19 @@ async def resolve_fk_details(conn, table_name, column_name):
     if not column_name.endswith('_id'):
         return None, None
         
-    col_stripped = column_name
-    if '_' in column_name:
-        parts = column_name.split('_', 1)
-        if len(parts[0]) <= 4:
-            col_stripped = parts[1]
+    def get_base_name(name):
+        parts = name.split('_', 1)
+        if len(parts) == 2 and len(parts[0]) <= 4 and len(parts[1]) >= 3:
+            return parts[1]
+        return name
+
+    col_stripped = get_base_name(column_name)
             
     for t_name, pk_col in SCHEMA_CACHE["pks"].items():
         if pk_col == column_name:
             return t_name, pk_col
-        pk_stripped = pk_col
-        if '_' in pk_col:
-            parts = pk_col.split('_', 1)
-            if len(parts[0]) <= 4:
-                pk_stripped = parts[1]
-        if col_stripped == pk_stripped and col_stripped.endswith('_id'):
+        pk_stripped = get_base_name(pk_col)
+        if col_stripped == pk_stripped:
             return t_name, pk_col
             
     return None, None
