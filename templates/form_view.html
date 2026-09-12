@@ -345,6 +345,7 @@
               data-table-name="{{ table_name }}"
               action="/api/{{ table_name }}{{ '/' ~ pk_val if is_update else '' }}"
               method="POST"
+              enctype="multipart/form-data"
               {% if is_update %}
               hx-put="/api/{{ table_name }}/{{ pk_val }}"
               {% else %}
@@ -364,7 +365,7 @@
                     {% set is_company_col = (col.column_name.lower() == 'company_id' or col.column_name.lower().endswith('_company_id')) and not (table_name == 'phc_screens_t' and user_role == 'ADM') %}
                     {% set is_icon_col = 'icon' in col.column_name.lower() or (table_name == 'phc_module_t' and col.column_name.lower() in ('pmd_module_icon', 'icon', 'module_icon')) %}
                     {% set is_large_text = col.data_type in ('text', 'json', 'jsonb') or 'desc' in col.column_name.lower() or 'note' in col.column_name.lower() or 'message' in col.column_name.lower() or 'address' in col.column_name.lower() %}
-                    {% set is_file_col = 'image' in col.column_name.lower() or 'file' in col.column_name.lower() or 'document' in col.column_name.lower() or col.data_type == 'bytea' %}
+                    {% set is_file_col = col.is_file or col.data_type in ('bytea', 'blob', 'oid', 'binary', 'varbinary') %}
 
                     {% if not is_who_col and not is_company_col %}
                         <div class="form-group {% if is_large_text or is_file_col or is_icon_col %}full-width{% endif %}">
@@ -429,12 +430,19 @@
                                     </div>
                                 </div>
 
-                            {# 4. FILE UPLOAD (Restricted Types) #}
+                            {# 4. FILE UPLOAD (Restricted to Database Object / Binary Types) #}
                             {% elif is_file_col %}
-                                <input type="file" id="{{ col.column_name }}" name="{{ col.column_name }}" class="sketch-input" multiple accept=".docx,.ppt,.pptx,.jpg,.jpeg,.png,.txt" {% if col.required and not is_update %}required{% endif %}>
+                                <input type="file" id="{{ col.column_name }}" name="{{ col.column_name }}" class="sketch-input" accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png,.txt,.xlsx,.xls" {% if col.required and not is_update %}required{% endif %}>
                                 <span class="text-[11px] flex items-center gap-1.5 mt-1" style="color: var(--color-slate);">
-                                    <i data-lucide="shield-check" class="w-3.5 h-3.5 text-lagoon"></i> Files will be validated and encrypted into a secure archive.
+                                    <i data-lucide="shield-check" class="w-3.5 h-3.5 text-lagoon"></i> Binary object payload validated and securely archived.
                                 </span>
+                                {% if is_update and col.value %}
+                                    <div class="mt-2 flex items-center gap-2 text-xs font-mono" style="color: var(--color-iris);">
+                                        <i data-lucide="file-check" class="w-4 h-4 text-emerald-500"></i>
+                                        <span>File currently stored in database. Upload a new file only if you wish to replace it.</span>
+                                        <a href="/api/file/{{ table_name }}/{{ pk_val }}/{{ col.column_name }}" target="_blank" class="underline ml-2 hover:text-indigo-600">Download Existing</a>
+                                    </div>
+                                {% endif %}
 
                             {# 5. DROPDOWNS #}
                             {% elif col.options %}
