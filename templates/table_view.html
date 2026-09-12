@@ -643,6 +643,14 @@
                                 <span class="status-pill status-dft">Draft</span>
                             {% elif val == 'None' or val == None or val == '' %} 
                                 <span class="status-pill status-def">Empty</span>
+                            {% elif val is string and val.startswith('uploads/') %}
+                                <a href="/{{ val }}" target="_blank" class="inline-flex items-center gap-1 text-iris hover:underline font-mono text-xs">
+                                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i> View File
+                                </a>
+                            {% elif val is string and val.startswith('[Binary Object') %}
+                                <a href="/api/file/{{ table_name }}/{{ row[pk_column] }}/{{ col.raw }}" target="_blank" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono hover:bg-iris/10 transition-colors" style="background: rgba(85, 93, 255, 0.08); color: var(--color-iris); border: 1px solid rgba(85, 93, 255, 0.2);" title="Download or view stored file">
+                                    <i data-lucide="file-down" class="w-3.5 h-3.5"></i> {{ val }}
+                                </a>
                             {% elif val.strftime is defined %} 
                                 <span class="font-mono text-xs">{{ val.strftime('%Y-%m-%d %H:%M') }}</span>
                             {% else %} 

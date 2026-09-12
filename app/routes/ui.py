@@ -373,6 +373,16 @@ async def show_table(request, table_name):
                     val_str = str(r[cname]) if r[cname] is not None else None
                     if val_str and val_str in col_lookup:
                         r[cname] = col_lookup[val_str]
+
+            # 3. Format Database Binary Object Columns (Bytea/Blob)
+            if c.get('data_type', '').lower() in ('bytea', 'blob', 'oid', 'binary', 'varbinary'):
+                for r in resolved_rows:
+                    val = r.get(cname)
+                    if val is not None:
+                        if isinstance(val, (bytes, bytearray, memoryview)):
+                            r[cname] = f"[Binary Object ({len(val)} bytes)]"
+                        elif not isinstance(val, str):
+                            r[cname] = "[Binary Object]"
                         
         rows = resolved_rows
 
@@ -467,7 +477,13 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
             
             clean_label = cname.split('_', 1)[-1].replace('_', ' ').title()
             
-            val = row_data.get(cname, '') if is_update else ''
+            raw_val = row_data.get(cname, '') if is_update else ''
+            is_file = c['data_type'].lower() in ('bytea', 'blob', 'oid', 'binary', 'varbinary')
+            if is_file and is_update:
+                val = "[Stored Binary Object]" if raw_val not in (None, '') else ''
+            else:
+                val = raw_val
+
             options = await get_dropdown_options(conn, table_name, cname, preloaded_lookups=lookup_map)
 
             json_options = None
@@ -483,7 +499,8 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
                 "is_pk": cname == pk_column,
                 "value": val,
                 "options": options,
-                "json_options": json_options
+                "json_options": json_options,
+                "is_file": is_file
             }
             if is_company_col:
                 company_form_def = col_def
@@ -583,6 +600,8 @@ async def export_table_csv(request, table_name):
                         val = row[col]
                         if val is None:
                             csv_row.append('')
+                        elif isinstance(val, (bytes, bytearray, memoryview)):
+                            csv_row.append(f"[Binary Object ({len(val)} bytes)]")
                         elif isinstance(val, datetime):
                             csv_row.append(val.strftime('%Y-%m-%d'))
                         else:

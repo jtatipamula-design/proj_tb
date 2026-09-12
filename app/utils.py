@@ -128,8 +128,8 @@ def _sanitize_for_audit(data_dict):
             sanitized[k] = v.isoformat()
         elif hasattr(v, 'isoformat'):
             sanitized[k] = v.isoformat()
-        elif isinstance(v, (bytes, bytearray)):
-            sanitized[k] = "<binary data>"
+        elif isinstance(v, (bytes, bytearray, memoryview)):
+            sanitized[k] = f"<binary data ({len(v)} bytes)>"
         else:
             try:
                 json.dumps(v)
@@ -215,6 +215,20 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
                 continue 
         if 'created' in k.lower() or 'modified' in k.lower() or 'edited' in k.lower() or 'update' in k.lower():
             continue
+
+        col_info = schema_map.get(k, {})
+        target_type = col_info.get('data_type', '').lower()
+
+        # Database Binary Object Columns (bytea, blob, oid, binary, varbinary)
+        if target_type in ('bytea', 'blob', 'oid', 'binary', 'varbinary'):
+            if is_update and (v == "" or v is None or v == "[Stored Binary Object]"):
+                # Preserve existing binary data in database on update
+                continue
+            if isinstance(v, (bytes, bytearray, memoryview)):
+                clean_data[k] = bytes(v)
+                continue
+            elif isinstance(v, str) and not v:
+                continue
 
         if is_update and (v == "" or v is None):
             if _is_password_column(k):

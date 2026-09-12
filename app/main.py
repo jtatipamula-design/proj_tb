@@ -13,9 +13,11 @@ def create_app() -> Sanic:
     app = Sanic("ERP_System")
     app.config.OAS = False
     
-    # Static files if they exist
+    # Static files and Uploads
     if os.path.isdir("static"):
         app.static("/static", "./static")
+    os.makedirs("uploads", exist_ok=True)
+    app.static("/uploads", "./uploads")
 
     # DB Hooks
     app.before_server_start(setup_db)

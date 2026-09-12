@@ -155,9 +155,18 @@ async def process_api_action(request, table_name, pk_val):
             upload_dir = os.path.join(os.getcwd(), 'uploads')
             for file_key, file_objs in request.files.items():
                 file_obj = file_objs[0] if isinstance(file_objs, list) else file_objs
+                if not file_obj or not getattr(file_obj, 'name', '') or not getattr(file_obj, 'body', None):
+                    continue
+
+                col_info = schema_map.get(file_key, {})
+                col_dt = col_info.get('data_type', '').lower()
+
                 try:
                     rel_path = save_uploaded_file(file_obj, upload_dir)
-                    data_dict[file_key] = rel_path
+                    if col_dt in ('bytea', 'blob', 'oid', 'binary', 'varbinary'):
+                        data_dict[file_key] = bytes(file_obj.body)
+                    else:
+                        data_dict[file_key] = rel_path
                 except ValueError as val_err:
                     return add_security_headers(response.json({"error": str(val_err)}, status=400))
 
@@ -609,4 +618,55 @@ async def mark_notification_read(request, notif_id):
         return add_security_headers(response.json({"error": str(e)}, status=400))
 
 # -----------------------------------------------------------------------------
-# OBSERVABILITY: HEALTH & READINESS PROBES
+# FILE SERVING & DOWNLOAD ROUTE
+# -----------------------------------------------------------------------------
+@api_bp.route('/api/file/<table_name>/<pk_val>/<col_name>', methods=['GET'])
+@check_auth
+async def download_file_column(request, table_name, pk_val, col_name):
+    user_id = request.ctx.user_id
+    role = request.ctx.role
+    table_name = table_name.lower()
+    col_name = col_name.lower()
+    
+    async with request.app.ctx.pool.acquire() as conn:
+        auth_tables, _ = await get_authorized_tables(conn, user_id, role)
+        if table_name not in auth_tables:
+            raise NotFound("Table not found or unauthorized")
+        
+        pk_col = await get_pk_column(conn, table_name)
+        cols_data = await get_table_columns(conn, table_name)
+        schema_map = {c['column_name'].lower(): c for c in cols_data}
+        if col_name not in schema_map:
+            raise NotFound(f"Column '{col_name}' not found")
+            
+        pk_type = schema_map.get(pk_col.lower(), {}).get('data_type', 'integer')
+        cast_pk = safe_cast_pk(pk_val, pk_type)
+        q_table = quote_ident(table_name)
+        q_col = quote_ident(col_name)
+        q_pk = quote_ident(pk_col)
+        
+        val = await conn.fetchval(f"SELECT {q_col} FROM {q_table} WHERE {q_pk} = $1", cast_pk)
+        if val is None:
+            raise NotFound("No file found for this record")
+        
+        if isinstance(val, (bytes, bytearray, memoryview)):
+            b_data = bytes(val)
+            mime = "application/octet-stream"
+            if b_data.startswith(b'\x89PNG\r\n\x1a\n'):
+                mime = "image/png"
+            elif b_data.startswith(b'\xff\xd8\xff'):
+                mime = "image/jpeg"
+            elif b_data.startswith(b'%PDF'):
+                mime = "application/pdf"
+            elif b_data.startswith(b'GIF87a') or b_data.startswith(b'GIF89a'):
+                mime = "image/gif"
+            elif b_data.startswith(b'RIFF') and b_data[8:12] == b'WEBP':
+                mime = "image/webp"
+            
+            res = response.raw(b_data, content_type=mime)
+            res.headers["Content-Disposition"] = f'inline; filename="{col_name}_{pk_val}"'
+            return add_security_headers(res)
+        elif isinstance(val, str) and val.startswith("uploads/"):
+            return response.redirect(f"/{val}")
+        else:
+            return response.text(str(val))
