@@ -12,3 +12,4 @@ Thumbs.db
 venv/
 .pytest_cache/
 docs/12i TRM/
+tailwindcss*.exe

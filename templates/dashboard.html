@@ -391,46 +391,6 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         if (window.lucide) lucide.createIcons();
-
-        // Animate counter values on page load if Anime.js is present
-        if (window.anime) {
-            // 1. Entrance stagger for stats cards and module cards
-            anime({
-                targets: '.stat-card',
-                opacity: [0, 1],
-                translateY: [12, 0],
-                duration: 600,
-                delay: anime.stagger(60),
-                easing: 'easeOutCubic'
-            });
-
-            anime({
-                targets: '.module-card',
-                opacity: [0, 1],
-                translateY: [16, 0],
-                duration: 700,
-                delay: anime.stagger(40, {start: 200}),
-                easing: 'easeOutCubic'
-            });
-
-            // 2. Animated Counter Numbers
-            document.querySelectorAll('.counter-value').forEach(function(el) {
-                const target = parseInt(el.getAttribute('data-target') || '0', 10);
-                if (target > 0) {
-                    const obj = { val: 0 };
-                    anime({
-                        targets: obj,
-                        val: target,
-                        round: 1,
-                        duration: 900,
-                        easing: 'easeOutExpo',
-                        update: function() {
-                            el.textContent = obj.val;
-                        }
-                    });
-                }
-            });
-        }
     });
 </script>
 {% endblock %}
