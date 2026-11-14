@@ -685,11 +685,11 @@
                             <div class="p-3.5 rounded-xl border border-fog bg-bone/50 space-y-2">
                                 <div class="flex items-center justify-between text-xs font-mono">
                                     <div class="flex items-center gap-2">
-                                        <span class="px-2 py-0.5 rounded text-[11px] font-bold ${actionClass}">${evt.action}</span>
-                                        <span class="font-semibold text-obsidian">${evt.username}</span>
-                                        <span class="text-mist">(${evt.client_ip})</span>
+                                        <span class="px-2 py-0.5 rounded text-[11px] font-bold ${actionClass}">${esc(evt.action)}</span>
+                                        <span class="font-semibold text-obsidian">${esc(evt.username)}</span>
+                                        <span class="text-mist">(${esc(evt.client_ip)})</span>
                                     </div>
-                                    <span class="text-steel">${evt.timestamp}</span>
+                                    <span class="text-steel">${esc(evt.timestamp)}</span>
                                 </div>
                         `;
 
@@ -715,9 +715,9 @@
                                     changeCount++;
                                     html += `
                                         <tr class="border-b border-fog/30">
-                                            <td class="py-1 pr-2 font-semibold text-obsidian">${k}</td>
-                                            <td class="py-1 pr-2 text-red-500 line-through">${oldV !== null && oldV !== undefined ? oldV : '<em class="text-mist">empty</em>'}</td>
-                                            <td class="py-1 text-green-600 font-semibold">${newV !== null && newV !== undefined ? newV : '<em class="text-mist">empty</em>'}</td>
+                                            <td class="py-1 pr-2 font-semibold text-obsidian">${esc(k)}</td>
+                                            <td class="py-1 pr-2 text-red-500 line-through">${oldV !== null && oldV !== undefined ? esc(oldV) : '<em class="text-mist">empty</em>'}</td>
+                                            <td class="py-1 text-green-600 font-semibold">${newV !== null && newV !== undefined ? esc(newV) : '<em class="text-mist">empty</em>'}</td>
                                         </tr>
                                     `;
                                 }
@@ -729,7 +729,7 @@
                         } else if (evt.new_values) {
                             html += `
                                 <div class="mt-1 text-[11px] font-mono text-steel bg-pure-white p-2 rounded border border-fog/60">
-                                    Snapshot: ${JSON.stringify(evt.new_values)}
+                                    Snapshot: ${esc(JSON.stringify(evt.new_values))}
                                 </div>
                             `;
                         }
@@ -741,7 +741,7 @@
                     container.innerHTML = '<div class="text-center py-8 font-mono text-xs text-mist">No audit events recorded for this record yet.</div>';
                 }
             } catch(e) {
-                container.innerHTML = `<div class="text-center py-8 font-mono text-xs text-red-500">Failed to load audit history: ${e.message}</div>`;
+                container.innerHTML = `<div class="text-center py-8 font-mono text-xs text-red-500">Failed to load audit history: ${esc(e.message)}</div>`;
             }
             if (window.lucide) lucide.createIcons();
         };
@@ -872,16 +872,16 @@
                             <div class="p-3.5 rounded-xl border border-fog bg-bone/50 space-y-2">
                                 <div class="flex items-center justify-between text-xs font-mono">
                                     <div class="flex items-center gap-2">
-                                        <span class="px-2 py-0.5 rounded text-[11px] font-bold ${badgeClass}">${evt.action}</span>
-                                        <span class="font-semibold text-obsidian">${evt.username}</span>
-                                        <span class="text-mist">(${evt.role})</span>
+                                        <span class="px-2 py-0.5 rounded text-[11px] font-bold ${badgeClass}">${esc(evt.action)}</span>
+                                        <span class="font-semibold text-obsidian">${esc(evt.username)}</span>
+                                        <span class="text-mist">(${esc(evt.role)})</span>
                                     </div>
-                                    <span class="text-steel">${evt.timestamp}</span>
+                                    <span class="text-steel">${esc(evt.timestamp)}</span>
                                 </div>
-                                <p class="text-xs text-graphite font-sans">${evt.comments || 'No comments recorded'}</p>
+                                <p class="text-xs text-graphite font-sans">${esc(evt.comments || 'No comments recorded')}</p>
                                 ${evt.esig_hash ? `
                                     <div class="text-[10.5px] font-mono text-mist bg-pure-white p-1.5 rounded border border-fog/60 break-all">
-                                        <span class="text-iris font-semibold">21 CFR Part 11 Hash:</span> ${evt.esig_hash}
+                                        <span class="text-iris font-semibold">21 CFR Part 11 Hash:</span> ${esc(evt.esig_hash)}
                                     </div>
                                 ` : ''}
                             </div>
@@ -893,7 +893,7 @@
                     container.innerHTML = '<div class="text-center py-8 font-mono text-xs text-mist">No workflow approval events recorded for this record yet.</div>';
                 }
             } catch(e) {
-                container.innerHTML = `<div class="text-center py-8 font-mono text-xs text-red-500">${e.message}</div>`;
+                container.innerHTML = `<div class="text-center py-8 font-mono text-xs text-red-500">${esc(e.message)}</div>`;
             }
             if (window.lucide) lucide.createIcons();
         };

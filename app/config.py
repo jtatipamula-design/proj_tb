@@ -23,9 +23,7 @@ if not DATABASE_URL:
 
 JWT_SECRET = os.environ.get("JWT_SECRET")
 if not JWT_SECRET:
-    JWT_SECRET = "super-secret-key-change-in-prod"
-    if os.environ.get("RENDER") or os.environ.get("ENV") == "production":
-        logger.warning("JWT_SECRET environment variable is not set! Using default key.")
+    raise SystemExit("JWT_SECRET environment variable is not set. Add a long random value to .env (or Render env vars).")
 
 PORT = int(os.environ.get("PORT", 10000))
 WORKERS = int(os.environ.get("WORKERS", 1))
