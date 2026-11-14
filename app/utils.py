@@ -308,12 +308,14 @@ async def log_audit_event(conn, table_name: str, record_id: str, action: str, us
 async def dispatch_notification(conn, recipient_user_id, recipient_role, title: str, message: str, link_url: str = None, category: str = "WORKFLOW"):
     """Dispatches an in-app notification to a specific user or role."""
     try:
-        await conn.execute("""
-            INSERT INTO phc_user_notifications_t (
-                pun_recipient_user_id, pun_recipient_role, pun_title, 
-                pun_message, pun_category, pun_link_url, pun_is_read, pun_created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, FALSE, CURRENT_TIMESTAMP)
-        """, recipient_user_id, recipient_role, title, message, category, link_url)
+        # Savepoint: a failed insert rolls back only the notification, not the caller's transaction.
+        async with conn.transaction():
+            await conn.execute("""
+                INSERT INTO phc_user_notifications_t (
+                    pun_recipient_user_id, pun_recipient_role, pun_title,
+                    pun_message, pun_category, pun_link_url, pun_is_read, pun_created_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, FALSE, CURRENT_TIMESTAMP)
+            """, recipient_user_id, recipient_role, title, message, category, link_url)
     except Exception as e:
         logger.warning(f"Notification dispatch notice: {e}")
 

@@ -32,6 +32,22 @@ def company_clause(scope, param_idx):
         return "", []
     return f" AND {quote_ident(col)} = ${param_idx}", [val]
 
+async def record_visible(conn, table_name, record_id, user_id):
+    """True if the record exists and belongs to the user's company (or the table has no company column)."""
+    pk_col = await get_pk_column(conn, table_name)
+    if not pk_col:
+        return False
+    cols = await get_table_columns(conn, table_name)
+    scope = await get_company_scope(conn, table_name, [c['column_name'] for c in cols], pk_col, user_id)
+    if not scope[0]:
+        return True
+    pk_type = next((c.get('data_type', 'integer') for c in cols if c['column_name'] == pk_col), 'integer')
+    cast_pk = safe_cast_pk(record_id, pk_type)
+    if cast_pk is None:
+        return False
+    sc_sql, sc_vals = company_clause(scope, 2)
+    return bool(await conn.fetchval(f"SELECT 1 FROM {quote_ident(table_name)} WHERE {quote_ident(pk_col)} = $1{sc_sql}", cast_pk, *sc_vals))
+
 @api_bp.route('/api/<table_name>', methods=['POST'], name="api_create")
 @check_auth
 async def api_create_record(request, table_name):
@@ -295,8 +311,9 @@ async def process_api_action(request, table_name, pk_val):
                         cols = [quote_ident(c) for c in clean_data.keys()]
                         vals = list(clean_data.values())
                         placeholders = ", ".join([f"${i+1}" for i in range(len(vals))])
-                        q = f"INSERT INTO {q_table} ({', '.join(cols)}) VALUES ({placeholders})"
-                        await conn.execute(q, *vals)
+                        q = f"INSERT INTO {q_table} ({', '.join(cols)}) VALUES ({placeholders}) RETURNING {q_pk}"
+                        new_pk = await conn.fetchval(q, *vals)
+                        clean_data[pk_column] = new_pk
 
                     # Log INSERT audit event
                     created_id = str(clean_data.get(pk_column) or 'NEW')
@@ -356,6 +373,8 @@ async def get_record_audit_history(request, table_name, record_id):
             auth_tables, _ = await get_authorized_tables(conn, request.ctx.user_id, request.ctx.role)
             if table_name not in auth_tables:
                 return add_security_headers(response.json({"error": "Unauthorized"}, status=403))
+            if not await record_visible(conn, table_name, record_id, request.ctx.user_id):
+                return add_security_headers(response.json({"error": "Record not found"}, status=404))
             rows = await conn.fetch("""
                 SELECT
                     pal_audit_id, pal_action, pal_username, pal_client_ip, 
@@ -476,6 +495,24 @@ async def api_workflow_transition(request):
         else:
             return add_security_headers(response.json({"error": f"Unknown transition '{transition}'."}, status=400))
 
+        # Allowed moves (same status groups as get_approval_workflow_info): only a pending record
+        # can be approved, rejected or recalled; a pending record cannot be submitted again.
+        is_pending = old_status.upper() in ('PND', 'PENDING', 'SUBMITTED', 'IN_REVIEW', 'P')
+        if transition in ('APPROVE', 'REJECT', 'RECALL') and not is_pending:
+            return add_security_headers(response.json({"error": f"Only a pending record can be {transition.lower()}ed. Current status: {old_status}."}, status=400))
+        if transition == 'SUBMIT' and is_pending:
+            return add_security_headers(response.json({"error": "This record is already pending approval."}, status=400))
+
+        # Segregation of duties: the person who submitted a record cannot approve it.
+        if transition == 'APPROVE':
+            submitter_id = await conn.fetchval("""
+                SELECT pae_user_id FROM phc_approval_events_t
+                WHERE LOWER(pae_table_name) = LOWER($1) AND pae_record_id = $2 AND pae_action = 'SUBMIT'
+                ORDER BY pae_timestamp DESC LIMIT 1
+            """, table_name, str(record_id))
+            if submitter_id is not None and submitter_id == user_id:
+                return add_security_headers(response.json({"error": "You submitted this record, so another approver must approve it."}, status=403))
+
         # Generate 21 CFR Part 11 Cryptographic Signature Stamp
         ts_now = datetime.now()
         esig_payload = f"SIGNER={username}|UID={user_id}|ROLE={user_role}|TABLE={table_name}|REC={record_id}|ACT={transition}|REASON={comments}|TS={ts_now.isoformat()}|IP={client_ip}"
@@ -527,7 +564,7 @@ async def api_workflow_transition(request):
                 created_by_user = current_row.get(created_by_col) if created_by_col else None
                 creator_id = None
                 if created_by_user:
-                    creator_id = await conn.fetchval("SELECT pus_user_id FROM phc_users_t WHERE LOWER(pus_user_name) = LOWER($1) OR LOWER(pus_usr_name) = LOWER($1)", str(created_by_user))
+                    creator_id = await conn.fetchval("SELECT pus_user_id FROM phc_users_t WHERE LOWER(pus_user_name) = LOWER($1)", str(created_by_user))
                 await dispatch_notification(
                     conn, creator_id, None, 
                     f"Record {transition.title()}d: {table_title}", 
@@ -558,6 +595,8 @@ async def get_workflow_history(request, table_name, record_id):
             auth_tables, _ = await get_authorized_tables(conn, request.ctx.user_id, request.ctx.role)
             if table_name not in auth_tables:
                 return add_security_headers(response.json({"error": "Unauthorized"}, status=403))
+            if not await record_visible(conn, table_name, record_id, request.ctx.user_id):
+                return add_security_headers(response.json({"error": "Record not found"}, status=404))
             rows = await conn.fetch("""
                 SELECT pae_event_id, pae_action, pae_from_status, pae_to_status, 
                        pae_username, pae_user_role, pae_comments, pae_esig_hash, 
