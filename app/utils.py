@@ -5,6 +5,7 @@ import json
 import hmac
 import hashlib
 import bcrypt
+from decimal import Decimal, InvalidOperation
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sanic import response
@@ -149,14 +150,8 @@ def add_security_headers(res):
     return res
 
 def get_client_ip(request) -> str:
-    """Extracts client IP reliably across proxies, load balancers, and direct connections."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
-    return getattr(request, "remote_addr", "") or getattr(request, "ip", "127.0.0.1")
+    """Client IP. Forwarded headers are spoofable; Sanic's remote_addr only trusts them per PROXIES_COUNT."""
+    return getattr(request, "remote_addr", "") or getattr(request, "ip", "") or "unknown"
 
 def save_uploaded_file(file_obj, upload_dir: str) -> str:
     """Validates file extension, size, and sanitizes filename against path traversal."""
@@ -244,8 +239,6 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
                 salt = bcrypt.gensalt()
                 v = bcrypt.hashpw(v.encode('utf-8'), salt).decode('utf-8')
 
-        col_info = schema_map.get(k, {})
-        target_type = col_info.get('data_type', '').lower()
         max_len = col_info.get('character_maximum_length')
         
         # 1. Boolean normalization (convert HTML form 'on', 'true', '1', etc. to Python bool)
@@ -261,7 +254,7 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
             continue
 
         # 2. Date & Timestamp parsing
-        if 'date' in target_type or 'timestamp' in target_type or (isinstance(v, str) and len(v) == 10 and v[4] == '-' and v[7] == '-'):
+        if 'date' in target_type or 'timestamp' in target_type:
             if isinstance(v, str) and v:
                 try:
                     parsed_dt = datetime.strptime(v, '%Y-%m-%d')
@@ -287,13 +280,13 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
                 clean_data[k] = int(v)
             else:
                 try:
-                    clean_data[k] = int(float(v))
-                except (ValueError, TypeError, OverflowError):
+                    clean_data[k] = int(Decimal(str(v).strip()))
+                except (InvalidOperation, ValueError, TypeError, OverflowError):
                     clean_data[k] = None
         elif target_type == 'numeric' and isinstance(v, str):
             try:
-                clean_data[k] = float(v) if '.' in v else int(v)
-            except (ValueError, TypeError):
+                clean_data[k] = Decimal(v.strip())
+            except InvalidOperation:
                 clean_data[k] = None
         else:
             clean_data[k] = v

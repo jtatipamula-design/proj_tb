@@ -292,13 +292,13 @@
                 </div>
             </div>
             <div>
-                <div class="stat-value counter-value" data-target="{{ stats.total_users | default(1) }}">
-                    {{ stats.total_users | default(1) }}
+                <div class="stat-value counter-value" data-target="{{ stats.total_users if stats.total_users is not none else 0 }}">
+                    {{ stats.total_users if stats.total_users is not none else '—' }}
                 </div>
                 <div class="stat-sub">
                     <span class="inline-flex items-center gap-1 text-[11px] font-mono" style="color: var(--color-lagoon);">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        {{ stats.active_sessions | default(1) }} Active Session{{ 's' if (stats.active_sessions|default(1)) != 1 else '' }}
+                        {{ stats.active_sessions if stats.active_sessions is not none else '—' }} Active Session{{ 's' if stats.active_sessions != 1 else '' }}
                     </span>
                 </div>
             </div>
@@ -333,10 +333,9 @@
             </div>
             <div>
                 <div class="stat-value" style="color: #10b981;">
-                    {{ stats.db_latency_ms | default(3.8) }}<span class="text-sm font-mono font-normal ml-0.5 text-gray-500">ms</span>
+                    {{ stats.db_latency_ms if stats.db_latency_ms is not none else '—' }}<span class="text-sm font-mono font-normal ml-0.5 text-gray-500">ms</span>
                 </div>
                 <div class="stat-sub">
-                    <span class="text-[10.5px] font-mono px-1.5 py-0 rounded text-emerald-600 dark:text-emerald-400 bg-emerald-500/10">99.9% Uptime</span>
                     <span>Neon Async</span>
                 </div>
             </div>

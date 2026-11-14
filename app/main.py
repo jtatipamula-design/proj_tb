@@ -12,12 +12,12 @@ from app.routes.system import system_bp
 def create_app() -> Sanic:
     app = Sanic("ERP_System")
     app.config.OAS = False
+    app.config.PROXIES_COUNT = 1  # behind one Render proxy; makes request.remote_addr trustworthy
     
     # Static files and Uploads
     if os.path.isdir("static"):
         app.static("/static", "./static")
     os.makedirs("uploads", exist_ok=True)
-    app.static("/uploads", "./uploads")
 
     # DB Hooks
     app.before_server_start(setup_db)

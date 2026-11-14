@@ -98,11 +98,11 @@ MAX_LOGIN_ATTEMPTS = 5   # max failed attempts per window
 
 # File Upload Settings
 ALLOWED_EXTENSIONS = {
-    '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.gif', 
+    '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', 
     '.csv', '.xlsx', '.xls', '.doc', '.docx', '.txt', '.json'
 }
 BLOCKED_EXTENSIONS = {
     '.py', '.sh', '.bat', '.cmd', '.exe', '.dll', '.php', '.phtml', 
-    '.js', '.vbs', '.ps1', '.jsp', '.cgi', '.jar', '.com', '.scr', '.msi'
+    '.js', '.vbs', '.ps1', '.jsp', '.cgi', '.jar', '.com', '.scr', '.msi', '.svg'
 }
 MAX_UPLOAD_SIZE = 15 * 1024 * 1024  # 15 MB

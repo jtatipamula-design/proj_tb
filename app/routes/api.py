@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 from sanic import Blueprint, response
 from sanic.exceptions import NotFound
-from app.config import logger
+from app.config import logger, SCHEMA_MUTATING_TABLES
 from app.utils import quote_ident, add_security_headers, _sanitize_for_audit, _sanitize_payload, _is_password_column, get_client_ip, save_uploaded_file, generate_csrf_token, log_audit_event, dispatch_notification, get_approval_workflow_info, validate_csrf_token, safe_cast_pk, validate_password_strength
 from app.auth import check_auth, get_authorized_tables
 from app.database import get_pk_column, get_table_columns, invalidate_caches_for_table, get_fk_map, SCHEMA_CACHE
@@ -14,6 +14,23 @@ import urllib.parse
 import hashlib
 
 api_bp = Blueprint("api_routes")
+
+async def get_company_scope(conn, table_name, column_names, pk_column, user_id):
+    """Return (company_col, company_id) to tenant-filter this table, or (None, None)."""
+    if table_name == 'phc_companies_t':
+        return None, None
+    col = next((c for c in column_names if (c.endswith('_company_id') or c == 'company_id') and c != pk_column), None)
+    if not col:
+        return None, None
+    company = await conn.fetchval("SELECT pus_company_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
+    return (col, company) if company is not None else (None, None)
+
+def company_clause(scope, param_idx):
+    """SQL fragment ' AND <col> = $n' plus its params for a scope from get_company_scope."""
+    col, val = scope
+    if not col:
+        return "", []
+    return f" AND {quote_ident(col)} = ${param_idx}", [val]
 
 @api_bp.route('/api/<table_name>', methods=['POST'], name="api_create")
 @check_auth
@@ -62,8 +79,12 @@ async def process_api_action(request, table_name, pk_val):
         auth_tables, _ = await get_authorized_tables(conn, user_id, role)
         if table_name not in auth_tables:
             return response.json({"error": "Unauthorized"}, status=403)
-        
+        if role != 'ADM' and table_name in SCHEMA_MUTATING_TABLES:
+            return add_security_headers(response.json({"error": "Administrator role required to modify this table."}, status=403))
+
         pk_column = await get_pk_column(conn, table_name)
+        if not pk_column:
+            return add_security_headers(response.json({"error": "This table has no primary key and cannot be edited"}, status=400))
         columns_info = await get_table_columns(conn, table_name)
         schema_map = SCHEMA_CACHE["schema_maps"].get(table_name, {c['column_name']: c for c in columns_info})
         pk_type = schema_map.get(pk_column, {}).get('data_type', 'integer')
@@ -74,12 +95,14 @@ async def process_api_action(request, table_name, pk_val):
 
         q_table = quote_ident(table_name)
         q_pk = quote_ident(pk_column)
+        scope = await get_company_scope(conn, table_name, list(schema_map), pk_column, user_id)
 
         # Pre-fetch existing record state for audit comparison
         old_row = None
         if method in ('PUT', 'DELETE') and cast_pk is not None:
             try:
-                old_row = await conn.fetchrow(f"SELECT * FROM {q_table} WHERE {q_pk} = $1", cast_pk)
+                sc_sql, sc_vals = company_clause(scope, 2)
+                old_row = await conn.fetchrow(f"SELECT * FROM {q_table} WHERE {q_pk} = $1{sc_sql}", cast_pk, *sc_vals)
             except Exception:
                 old_row = None
 
@@ -123,10 +146,12 @@ async def process_api_action(request, table_name, pk_val):
                             set_vals.append(datetime.now())
                         
                         set_vals.append(cast_pk)
-                        q = f"UPDATE {q_table} SET {', '.join(set_parts)} WHERE {q_pk} = ${len(set_vals)}"
-                        res = await conn.execute(q, *set_vals)
+                        sc_sql, sc_vals = company_clause(scope, len(set_vals) + 1)
+                        q = f"UPDATE {q_table} SET {', '.join(set_parts)} WHERE {q_pk} = ${len(set_vals)}{sc_sql}"
+                        res = await conn.execute(q, *set_vals, *sc_vals)
                     else:
-                        res = await conn.execute(f"DELETE FROM {q_table} WHERE {q_pk} = $1", cast_pk)
+                        sc_sql, sc_vals = company_clause(scope, 2)
+                        res = await conn.execute(f"DELETE FROM {q_table} WHERE {q_pk} = $1{sc_sql}", cast_pk, *sc_vals)
 
                     # Atomically write audit event
                     action_type = 'SOFT_DELETE' if status_col else 'DELETE'
@@ -140,8 +165,9 @@ async def process_api_action(request, table_name, pk_val):
                     return add_security_headers(response.json({"error": "Record not found"}, status=404))
                 invalidate_caches_for_table(table_name)
                 return add_security_headers(response.json({"status": "success", "soft_deleted": bool(status_col)}))
-            except Exception as e:
-                return add_security_headers(response.json({"error": str(e)}, status=400))
+            except Exception:
+                logger.error(f"Delete error on {table_name}", exc_info=True)
+                return add_security_headers(response.json({"error": "Could not delete the record."}, status=400))
 
         try:
             data = request.form if request.form else request.json
@@ -217,13 +243,9 @@ async def process_api_action(request, table_name, pk_val):
         clean_data = _sanitize_payload(data_dict, pk_column, schema_map, is_update=(method == 'PUT'))
 
         # Multi-tenant Company Segregation
-        if table_name != 'phc_companies_t':
-            company_col = next((c for c in schema_map if (c.endswith('_company_id') or c == 'company_id') and c != pk_column), None)
-            if company_col:
-                if not (table_name == 'phc_screens_t' and role == 'ADM') or company_col not in clean_data or not clean_data[company_col]:
-                    user_company = await conn.fetchval("SELECT pus_company_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
-                    if user_company:
-                        clean_data[company_col] = user_company
+        company_col, user_company = scope
+        if company_col and not (table_name == 'phc_screens_t' and role == 'ADM' and clean_data.get(company_col)):
+            clean_data[company_col] = user_company
 
         # Mandatory Session Username and Audit Trail Binding
         who_cols = [c for c in schema_map if 'created' in c.lower() or 'modified' in c.lower() or 'edited' in c.lower() or 'update' in c.lower()]
@@ -247,13 +269,6 @@ async def process_api_action(request, table_name, pk_val):
                     for cname in schema_map:
                         if 'start_date' in cname.lower() and (cname not in clean_data or not clean_data[cname]):
                             clean_data[cname] = datetime.now()
-                            
-                    col_default = schema_map.get(pk_column, {}).get('column_default')
-                    has_default = col_default is not None and str(col_default).strip() != ''
-                    if pk_column and not has_default and (pk_column not in clean_data or clean_data[pk_column] is None or clean_data[pk_column] == ""):
-                        if pk_type in ('integer', 'bigint', 'smallint'):
-                            max_val = await conn.fetchval(f"SELECT MAX({q_pk}) FROM {q_table}")
-                            clean_data[pk_column] = (max_val or 0) + 1
 
                     if table_name == 'phc_role_screen_assignment_t' and 'prs_screen_id' in data_dict:
                         raw_scr = data_dict['prs_screen_id']
@@ -297,8 +312,9 @@ async def process_api_action(request, table_name, pk_val):
                     cols = list(clean_data.keys())
                     vals = list(clean_data.values())
                     set_clause = ", ".join([f"{quote_ident(c)} = ${i+1}" for i, c in enumerate(cols)])
-                    q = f"UPDATE {q_table} SET {set_clause} WHERE {q_pk} = ${len(vals)+1}"
-                    res = await conn.execute(q, *(vals + [cast_pk]))
+                    sc_sql, sc_vals = company_clause(scope, len(vals) + 2)
+                    q = f"UPDATE {q_table} SET {set_clause} WHERE {q_pk} = ${len(vals)+1}{sc_sql}"
+                    res = await conn.execute(q, *(vals + [cast_pk] + sc_vals))
                     if res.endswith(" 0"):
                         return add_security_headers(response.json({"error": "Record not found"}, status=404))
 
@@ -321,7 +337,7 @@ async def process_api_action(request, table_name, pk_val):
             
         except Exception as e:
             logger.error(f"Action Error: {e}", exc_info=True)
-            return add_security_headers(response.json({"error": str(e)}, status=400))
+            return add_security_headers(response.json({"error": "Could not save the record. Please check the values and try again."}, status=400))
 
 # -----------------------------------------------------------------------------
 # AUDIT TRAIL API ROUTE
@@ -363,8 +379,8 @@ async def get_record_audit_history(request, table_name, record_id):
                 })
             return add_security_headers(response.json({"status": "success", "history": events}))
     except Exception as e:
-        logger.error(f"Audit fetch error: {e}")
-        return add_security_headers(response.json({"status": "error", "message": str(e)}, status=500))
+        logger.error(f"Audit fetch error: {e}", exc_info=True)
+        return add_security_headers(response.json({"status": "error", "message": "Could not load audit history."}, status=500))
 
 # -----------------------------------------------------------------------------
 # WORKFLOW ENGINE & 21 CFR PART 11 E-SIGNATURE ROUTES
@@ -420,15 +436,19 @@ async def api_workflow_transition(request):
                 return add_security_headers(response.json({"error": "Invalid signature password. Electronic signature verification failed."}, status=401))
 
         pk_col = await get_pk_column(conn, table_name)
+        if not pk_col:
+            return add_security_headers(response.json({"error": "This table has no primary key and cannot be edited"}, status=400))
         cols_data = await get_table_columns(conn, table_name)
         schema_map = {c['column_name'].lower(): c for c in cols_data}
         pk_type = schema_map.get(pk_col.lower(), {}).get('data_type', 'integer')
         cast_pk = safe_cast_pk(record_id, pk_type)
-        
+
         q_table = quote_ident(table_name)
         q_pk = quote_ident(pk_col)
-        
-        current_row = await conn.fetchrow(f"SELECT * FROM {q_table} WHERE {q_pk} = $1", cast_pk)
+        scope = await get_company_scope(conn, table_name, [c['column_name'] for c in cols_data], pk_col, user_id)
+        sc_sql, sc_vals = company_clause(scope, 2)
+
+        current_row = await conn.fetchrow(f"SELECT * FROM {q_table} WHERE {q_pk} = $1{sc_sql}", cast_pk, *sc_vals)
         if not current_row:
             return add_security_headers(response.json({"error": "Record not found."}, status=404))
 
@@ -475,7 +495,8 @@ async def api_workflow_transition(request):
                 set_vals.append(ts_now)
                 
             set_vals.append(cast_pk)
-            await conn.execute(f"UPDATE {q_table} SET {', '.join(set_parts)} WHERE {q_pk} = ${len(set_vals)}", *set_vals)
+            sc_sql, sc_vals = company_clause(scope, len(set_vals) + 1)
+            await conn.execute(f"UPDATE {q_table} SET {', '.join(set_parts)} WHERE {q_pk} = ${len(set_vals)}{sc_sql}", *set_vals, *sc_vals)
             
             await conn.execute("""
                 INSERT INTO phc_approval_events_t (
@@ -563,8 +584,8 @@ async def get_workflow_history(request, table_name, record_id):
                 })
             return add_security_headers(response.json({"status": "success", "history": events}))
     except Exception as e:
-        logger.error(f"Error fetching workflow history: {e}")
-        return add_security_headers(response.json({"status": "error", "message": str(e)}, status=500))
+        logger.error(f"Error fetching workflow history: {e}", exc_info=True)
+        return add_security_headers(response.json({"status": "error", "message": "Could not load workflow history."}, status=500))
 
 # -----------------------------------------------------------------------------
 # NOTIFICATIONS API ROUTES
@@ -620,8 +641,11 @@ async def mark_notification_read(request, notif_id):
         async with request.app.ctx.pool.acquire() as conn:
             await conn.execute("UPDATE phc_user_notifications_t SET pun_is_read = TRUE WHERE pun_notification_id = $1 AND (pun_recipient_user_id = $2 OR pun_recipient_role = $3)", nid, request.ctx.user_id, request.ctx.role)
         return add_security_headers(response.json({"status": "success"}))
-    except Exception as e:
-        return add_security_headers(response.json({"error": str(e)}, status=400))
+    except ValueError:
+        return add_security_headers(response.json({"error": "Invalid notification id"}, status=400))
+    except Exception:
+        logger.error("Error marking notification read", exc_info=True)
+        return add_security_headers(response.json({"error": "Could not update notification."}, status=400))
 
 # -----------------------------------------------------------------------------
 # FILE SERVING & DOWNLOAD ROUTE
@@ -640,18 +664,22 @@ async def download_file_column(request, table_name, pk_val, col_name):
             raise NotFound("Table not found or unauthorized")
         
         pk_col = await get_pk_column(conn, table_name)
+        if not pk_col:
+            raise NotFound("This table has no primary key")
         cols_data = await get_table_columns(conn, table_name)
         schema_map = {c['column_name'].lower(): c for c in cols_data}
         if col_name not in schema_map:
             raise NotFound(f"Column '{col_name}' not found")
-            
+
         pk_type = schema_map.get(pk_col.lower(), {}).get('data_type', 'integer')
         cast_pk = safe_cast_pk(pk_val, pk_type)
         q_table = quote_ident(table_name)
         q_col = quote_ident(col_name)
         q_pk = quote_ident(pk_col)
-        
-        val = await conn.fetchval(f"SELECT {q_col} FROM {q_table} WHERE {q_pk} = $1", cast_pk)
+        scope = await get_company_scope(conn, table_name, [c['column_name'] for c in cols_data], pk_col, user_id)
+        sc_sql, sc_vals = company_clause(scope, 2)
+
+        val = await conn.fetchval(f"SELECT {q_col} FROM {q_table} WHERE {q_pk} = $1{sc_sql}", cast_pk, *sc_vals)
         if val is None:
             raise NotFound("No file found for this record")
         
@@ -673,6 +701,13 @@ async def download_file_column(request, table_name, pk_val, col_name):
             res.headers["Content-Disposition"] = f'inline; filename="{col_name}_{pk_val}"'
             return add_security_headers(res)
         elif isinstance(val, str) and val.startswith("uploads/"):
-            return response.redirect(f"/{val}")
+            upload_root = os.path.realpath(os.path.join(os.getcwd(), 'uploads'))
+            file_path = os.path.realpath(os.path.join(os.getcwd(), val))
+            if os.path.commonpath([upload_root, file_path]) != upload_root or not os.path.isfile(file_path):
+                raise NotFound("File not found")
+            res = await response.file(file_path, headers={
+                "Content-Disposition": f'attachment; filename="{os.path.basename(file_path)}"'
+            })
+            return add_security_headers(res)
         else:
             return response.text(str(val))

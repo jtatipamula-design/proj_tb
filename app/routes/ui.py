@@ -5,6 +5,7 @@ from app.config import logger
 from app.utils import render_template, quote_ident, add_security_headers, resolve_lookup_type, safe_cast_pk, get_approval_workflow_info
 from app.auth import check_auth, get_authorized_tables
 from app.database import get_pk_column, get_table_columns, get_dropdown_options, SCHEMA_CACHE, clear_schema_cache, get_all_lookups, get_fk_map, resolve_fk_details, get_fk_display_dict
+from app.routes.api import get_company_scope, company_clause
 import urllib.parse
 from datetime import datetime
 
@@ -19,12 +20,11 @@ async def dashboard(request):
     stats = {
         "total_modules": len(modules_tree),
         "total_screens": len(all_tables),
-        "total_users": 1,
-        "active_sessions": 1,
+        "total_users": 0,
+        "active_sessions": 0,
         "validation_records": 0,
         "total_roles": 0,
-        "uptime_percent": 99.9,
-        "db_latency_ms": 3.8
+        "db_latency_ms": None
     }
     
     if hasattr(request.app.ctx, 'pool') and request.app.ctx.pool:
@@ -39,8 +39,8 @@ async def dashboard(request):
                         FROM phc_users_t
                     """)
                     if u_row:
-                        stats["total_users"] = u_row["total_users"] or 1
-                        stats["active_sessions"] = u_row["active_sessions"] or 1
+                        stats["total_users"] = u_row["total_users"] or 0
+                        stats["active_sessions"] = u_row["active_sessions"] or 0
                 except Exception:
                     pass
 
@@ -50,14 +50,14 @@ async def dashboard(request):
                     pass
 
                 try:
-                    p_count = await conn.fetchval("SELECT COUNT(*) FROM pcv_products_t") or 0
+                    p_count = await conn.fetchval("SELECT COUNT(*) FROM pcv_production_products_t") or 0
                     v_count = await conn.fetchval("SELECT COUNT(*) FROM pcv_validation_executions_t") or 0
                     stats["validation_records"] = p_count + v_count
                 except Exception:
                     pass
 
                 t1 = time.perf_counter()
-                stats["db_latency_ms"] = max(1.2, round((t1 - t0) * 1000, 1))
+                stats["db_latency_ms"] = round((t1 - t0) * 1000, 1)
         except Exception:
             pass
 
@@ -212,6 +212,11 @@ async def show_table(request, table_name):
         count_query = f"SELECT COUNT(*) FROM {q_table}"
         params = []
         where_clauses = []
+
+        company_col, company_val = await get_company_scope(conn, table_name, list(schema_cols), pk_column, user_id)
+        if company_col:
+            params.append(company_val)
+            where_clauses.append(f"{quote_ident(company_col)} = ${len(params)}")
 
         if table_name == 'phc_lookup_values_t' and type_filter:
             params.append(type_filter)
@@ -444,6 +449,8 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         
         table_title = auth_tables[table_name]
         pk_column = await get_pk_column(conn, table_name)
+        if not pk_column:
+            raise NotFound("This table has no primary key and cannot be edited")
         columns_data = await get_table_columns(conn, table_name)
         schema_map = SCHEMA_CACHE["schema_maps"].get(table_name, {c['column_name']: c for c in columns_data})
         pk_type = schema_map.get(pk_column, {}).get('data_type', 'integer')
@@ -457,9 +464,11 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
             cast_pk = safe_cast_pk(pk_val, pk_type)
             if cast_pk is None:
                 raise NotFound(f"Invalid primary key format. pk_val='{pk_val}', pk_type='{pk_type}'")
-            row_data = await conn.fetchrow(f"SELECT * FROM {q_table} WHERE {q_pk} = $1", cast_pk)
+            scope = await get_company_scope(conn, table_name, list(schema_map), pk_column, user_id)
+            sc_sql, sc_vals = company_clause(scope, 2)
+            row_data = await conn.fetchrow(f"SELECT * FROM {q_table} WHERE {q_pk} = $1{sc_sql}", cast_pk, *sc_vals)
             if not row_data:
-                raise NotFound(f"Record not found. Table: {q_table}, PK: {q_pk}, Value: '{cast_pk}', Type: {type(cast_pk).__name__}")
+                raise NotFound("Record not found")
 
         lookup_map = await get_all_lookups(conn)
 
@@ -539,6 +548,17 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         workflow_info=workflow_info
     )
 
+def _csv_cell(val):
+    """Render one CSV cell; prefix formula-like text with ' to block spreadsheet formula injection."""
+    if val is None:
+        return ''
+    if isinstance(val, (bytes, bytearray, memoryview)):
+        return f"[Binary Object ({len(val)} bytes)]"
+    if isinstance(val, datetime):
+        return val.strftime('%Y-%m-%d')
+    s = str(val)
+    return "'" + s if isinstance(val, str) and s[:1] in ('=', '+', '-', '@') else s
+
 @ui_bp.route('/export/<table_name>')
 @check_auth
 async def export_table_csv(request, table_name):
@@ -577,41 +597,32 @@ async def export_table_csv(request, table_name):
 
         col_list = ", ".join(quote_ident(c) for c in export_cols)
         q_table = quote_ident(table_name)
+        company_col, company_val = await get_company_scope(conn, table_name, [c['column_name'] for c in columns_data], pk_column, user_id)
+        where_clause, query_params = (f" WHERE {quote_ident(company_col)} = $1", [company_val]) if company_col else ("", [])
         order_clause = f" ORDER BY {quote_ident(pk_column)} DESC" if pk_column else ""
-        query = f"SELECT {col_list} FROM {q_table}{order_clause}"
+        query = f"SELECT {col_list} FROM {q_table}{where_clause}{order_clause}"
 
     table_title = auth_tables.get(table_name, table_name)
-    filename = f"{table_title.replace(' ', '_')}_Export.csv"
+    safe_title = table_title.replace(' ', '_').replace('"', '')
+    filename = f"{safe_title}_Export.csv"
 
-    async def streaming_fn(res):
-        header = [col.split('_', 1)[-1].replace('_', ' ').title() for col in export_cols]
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(header)
-        await res.write(output.getvalue())
-        output.seek(0)
-        output.truncate(0)
+    headers = dict(add_security_headers(response.empty()).headers)
+    headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    res = await request.respond(content_type="text/csv", headers=headers)
 
-        async with request.app.ctx.pool.acquire() as conn:
-            async with conn.transaction():
-                async for row in conn.cursor(query):
-                    csv_row = []
-                    for col in export_cols:
-                        val = row[col]
-                        if val is None:
-                            csv_row.append('')
-                        elif isinstance(val, (bytes, bytearray, memoryview)):
-                            csv_row.append(f"[Binary Object ({len(val)} bytes)]")
-                        elif isinstance(val, datetime):
-                            csv_row.append(val.strftime('%Y-%m-%d'))
-                        else:
-                            csv_row.append(str(val))
-                    writer.writerow(csv_row)
-                    await res.write(output.getvalue())
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([col.split('_', 1)[-1].replace('_', ' ').title() for col in export_cols])
+
+    async with request.app.ctx.pool.acquire() as conn:
+        async with conn.transaction():
+            n = 0
+            async for row in conn.cursor(query, *query_params):
+                writer.writerow([_csv_cell(row[col]) for col in export_cols])
+                n += 1
+                if n % 500 == 0:
+                    await res.send(output.getvalue())
                     output.seek(0)
                     output.truncate(0)
-
-    res = response.stream(streaming_fn, content_type="text/csv")
-    res.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
-    return add_security_headers(res)
-
+    await res.send(output.getvalue())
+    await res.eof()

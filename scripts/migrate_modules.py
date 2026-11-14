@@ -142,7 +142,7 @@ EXCEL_MAPPINGS = {
     "phc_cleaning_visual_inspection": "Qualtiy - Cleaning Validation",
     "phc_cleaning_qa_approval": "Qualtiy - Cleaning Validation",
     "phc_cleaning_release": "Qualtiy - Cleaning Validation",
-    "pcv_products_t": "Cleaning Validation",
+    "pcv_production_products_t": "Cleaning Validation",
     "pcv_product_strengths_t": "Cleaning Validation",
     "pcv_product_stages_t": "Cleaning Validation",
     "pcv_product_pack_styles_t": "Cleaning Validation",
