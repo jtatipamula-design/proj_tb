@@ -130,7 +130,7 @@
 
     /* Virtualized Table Styles */
     #enterpriseGrid {
-        width: 100%;
+        width: 100%; /* min-width is set by JS to the sum of column widths, so wide tables scroll sideways */
         border-collapse: separate;
         border-spacing: 0;
         text-align: left;
@@ -153,9 +153,35 @@
         border-bottom: 1px solid var(--color-fog);
         user-select: none;
         white-space: nowrap;
-        position: relative;
-        transition: background-color 0.15s ease, color 0.15s ease;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        /* No position: relative here: it would cancel position: sticky (sticky is already a containing block for the resizer). */
+        transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
     }
+
+    /* Header shadow once the body scrolls under it */
+    .grid-scroll-wrap.is-scrolled-y .grid-th {
+        box-shadow: inset 0 -1px 0 var(--color-fog), 0 6px 10px -6px rgba(0, 0, 0, 0.18);
+    }
+    /* Stronger edge on pinned columns once the grid scrolls sideways */
+    .grid-scroll-wrap.is-scrolled-x .col-pinned-left.pin-last {
+        box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.14) !important;
+    }
+
+    /* Filler column absorbs leftover width so sized columns keep their exact widths */
+    .grid-filler { padding: 0 !important; border-left: none; }
+
+    /* Numbers right-aligned with equal-width digits, like a spreadsheet */
+    .grid-td.num-cell { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* While dragging a column edge */
+    body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none !important; }
+
+    /* Rows open on double-click */
+    tr.grid-row { cursor: default; }
+
+    /* Keyboard focus ring for grid controls */
+    .grid-th:focus-visible, .grid-row:focus-visible { outline: 2px solid var(--color-iris); outline-offset: -2px; }
 
     .grid-th:hover {
         background: var(--color-fog);
@@ -163,18 +189,33 @@
     }
 
     /* Column Resize Handle */
+    /* Wide invisible hit area with a thin visible line in the middle */
     .col-resizer {
         position: absolute;
         top: 0;
-        right: 0;
-        width: 5px;
+        right: -4px;
+        width: 9px;
         height: 100%;
         cursor: col-resize;
         user-select: none;
+        touch-action: none;
         z-index: 25;
-        transition: background-color 0.15s ease;
     }
-    .col-resizer:hover, .col-resizer.resizing {
+    .col-resizer::after {
+        content: '';
+        position: absolute;
+        top: 20%;
+        bottom: 20%;
+        left: 4px;
+        width: 1px;
+        background-color: var(--color-fog);
+        transition: background-color 0.15s ease, top 0.15s ease, bottom 0.15s ease, width 0.15s ease;
+    }
+    .grid-th:hover .col-resizer::after { background-color: var(--color-ash); }
+    .col-resizer:hover::after, .col-resizer.resizing::after {
+        top: 0;
+        bottom: 0;
+        width: 2px;
         background-color: var(--color-iris);
     }
 
@@ -204,6 +245,10 @@
         background-color: var(--surface-pure-white-cards) !important;
         box-shadow: 2px 0 6px rgba(0, 0, 0, 0.04);
     }
+    /* Second pinned column (Actions) sits right after the 44px checkbox column instead of on top of it */
+    .col-pinned-left.pin-after-select { left: 44px; }
+    tr:hover td.col-pinned-left { background-color: var(--color-bone) !important; }
+    tr.row-selected td.col-pinned-left { background-color: color-mix(in srgb, var(--color-iris) 8%, var(--surface-pure-white-cards)) !important; }
 
     .col-pinned-right {
         position: sticky !important;
@@ -511,7 +556,7 @@
             <!-- Search Bar -->
             <div class="relative inline-flex items-center">
                 <i data-lucide="search" class="w-4 h-4 absolute left-3" style="color: var(--color-mist);"></i>
-                <input type="text" class="table-search-input pl-9 pr-8" id="gridSearchInput" placeholder="Quick search table..." 
+                <input type="text" class="table-search-input pl-9 pr-8" id="gridSearchInput" placeholder="Quick search table...  ( / )"
                        value="{{ search_query }}"
                        oninput="handleQuickFilter(this.value)" autocomplete="off">
             </div>
@@ -534,6 +579,16 @@
                 <button class="grid-tool-btn" onclick="openColumnsModal()">
                     <i data-lucide="columns-3" class="w-3.5 h-3.5"></i>
                     <span>Columns (<span id="visibleColCount">{{ columns|length }}</span>/{{ columns|length }})</span>
+                </button>
+
+                <!-- Column sizing -->
+                <button class="grid-tool-btn" onclick="autoFitAllColumns()" title="Size every column to its longest value">
+                    <i data-lucide="move-horizontal" class="w-3.5 h-3.5"></i>
+                    <span>Fit Columns</span>
+                </button>
+                <button class="grid-tool-btn" onclick="resetGridLayout()" title="Forget column widths, order and hidden columns for this table">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                    <span>Reset Layout</span>
                 </button>
 
                 <!-- Clear Active Filters -->
@@ -571,7 +626,7 @@
                         </th>
 
                         <!-- Row Action Column (Pinned Left by default) -->
-                        <th class="grid-th col-pinned-left" style="width: 60px; text-align: center;" data-col="actions" data-fixed="true">
+                        <th class="grid-th col-pinned-left pin-after-select pin-last" style="width: 80px; text-align: center;" data-col="actions" data-fixed="true">
                             Actions
                         </th>
 
@@ -592,16 +647,19 @@
                                     <span class="sort-badge font-mono text-[10px] text-iris" id="sort_{{ col.raw }}"></span>
                                 </span>
 
-                                <div class="col-resizer" onmousedown="initColResize(event, '{{ col.raw }}')"></div>
+                                <div class="col-resizer" onmousedown="initColResize(event, '{{ col.raw }}')"
+                                     ondblclick="autoFitColumn('{{ col.raw }}')"
+                                     title="Drag to resize · Double-click to fit content"></div>
                             </div>
                         </th>
                         {% endfor %}
+                        <th class="grid-th grid-filler" data-col="_filler" aria-hidden="true"></th>
                     </tr>
                 </thead>
                 <tbody id="gridTbody">
                     {% if not rows %}
                     <tr>
-                        <td colspan="{{ columns|length + 2 }}" class="text-center py-16">
+                        <td colspan="{{ columns|length + 3 }}" class="text-center py-16">
                             <div class="flex flex-col items-center justify-center gap-2">
                                 <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background: var(--color-bone); color: var(--color-mist);">
                                     <i data-lucide="search-x" class="w-5 h-5"></i>
@@ -621,7 +679,7 @@
                         </td>
 
                         <!-- Row Action Column -->
-                        <td class="grid-td col-pinned-left" style="text-align: center;" data-col="actions">
+                        <td class="grid-td col-pinned-left pin-after-select pin-last" style="text-align: center;" data-col="actions">
                             <a href="/edit/{{ table_name }}/{{ row[pk_column] }}" class="row-action-btn" title="Edit Record">
                                 <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
                             </a>
@@ -629,7 +687,7 @@
 
                         <!-- Column Values -->
                         {% for col in columns %}
-                        <td class="grid-td" data-col="{{ col.raw }}">
+                        <td class="grid-td{% if row[col.raw] is number and row[col.raw] is not boolean %} num-cell{% endif %}" data-col="{{ col.raw }}">
                             {% set val = row[col.raw] %}
                             {% if val in ('ACT', 'A', 'ACTIVE', 'APPROVED') %} 
                                 <span class="status-pill status-act">Active</span>
@@ -658,6 +716,7 @@
                             {% endif %}
                         </td>
                         {% endfor %}
+                        <td class="grid-td grid-filler" data-col="_filler" aria-hidden="true"></td>
                     </tr>
                     {% endfor %}
                     {% endif %}
@@ -806,7 +865,8 @@
     let activeFilterRules = []; // Array of { col: 'raw_col', op: 'contains', val: 'xyz' }
     let hiddenColumns = new Set();
     let selectedRowPks = new Set();
-    let currentDensity = localStorage.getItem(`gridDensity_${TABLE_NAME}`) || 'standard';
+    let currentDensity = 'standard';
+    try { currentDensity = localStorage.getItem(`gridDensity_${TABLE_NAME}`) || 'standard'; } catch (e) {}
 
     const urlParams = new URLSearchParams(window.location.search);
     try {
@@ -832,9 +892,15 @@
         if (window.lucide) lucide.createIcons();
         initDragAndDropReorder();
         applyDensity(currentDensity);
+        initGridLayout();
+        initGridInteractions();
         updateSortBadges();
         updateFilterBadges();
         loadSavedViewPreset();
+        // Web fonts change text widths; re-fit columns the user hasn't sized by hand once they load.
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(() => refitAutoColumns());
+        }
     });
 
     // -------------------------------------------------------------------------
@@ -842,8 +908,9 @@
     // -------------------------------------------------------------------------
     function setDensity(density) {
         currentDensity = density;
-        localStorage.setItem(`gridDensity_${TABLE_NAME}`, density);
+        try { localStorage.setItem(`gridDensity_${TABLE_NAME}`, density); } catch (e) {}
         applyDensity(density);
+        refitAutoColumns(); // padding changed, so content-sized columns need re-measuring
     }
 
     function applyDensity(density) {
@@ -867,6 +934,7 @@
         const headers = document.querySelectorAll('.draggable-col');
         headers.forEach(th => {
             th.addEventListener('dragstart', e => {
+                if (isResizingColumn) { e.preventDefault(); return; }
                 draggedColHeader = th;
                 th.classList.add('dragging');
                 e.dataTransfer.effectAllowed = 'move';
@@ -907,6 +975,8 @@
                 reorderTableDataCells(fromColName, toColName, insertBefore);
 
                 th.classList.remove('drag-over-left', 'drag-over-right');
+                gridLayout.order = currentColumnOrder();
+                saveGridLayout();
             });
         });
     }
@@ -927,33 +997,249 @@
     }
 
     // -------------------------------------------------------------------------
-    // 3. COLUMN RESIZING
+    // 3. COLUMN LAYOUT: auto-fit, resize, order & visibility, remembered per table
     // -------------------------------------------------------------------------
+    // Saved in this browser only (localStorage), one entry per table:
+    //   widths: { col: px }  -> columns the user sized by hand; others auto-fit to content
+    //   order:  [col, ...]   -> drag-and-drop column order
+    //   hidden: [col, ...]   -> columns turned off in the Columns dialog
+    const LAYOUT_KEY = `gridLayout_v1_${TABLE_NAME}`;
+    const AUTO_FIT_MIN = 64;   // px, narrowest a column gets
+    const AUTO_FIT_MAX = 480;  // px, auto-fit cap so one long text value can't make a column screen-wide (drag to go wider)
+    const RESIZE_MAX = 1600;   // px, widest a column can be dragged
+    let isResizingColumn = false;
+    const gridLayout = loadGridLayout();
+
+    function loadGridLayout() {
+        try {
+            const d = JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}');
+            return {
+                widths: (d.widths && typeof d.widths === 'object') ? d.widths : {},
+                order: Array.isArray(d.order) ? d.order : [],
+                hidden: Array.isArray(d.hidden) ? d.hidden : []
+            };
+        } catch (e) {
+            return { widths: {}, order: [], hidden: [] };
+        }
+    }
+
+    function saveGridLayout() {
+        try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(gridLayout)); } catch (e) { /* private mode / storage full: layout just isn't remembered */ }
+    }
+
+    const colSel = col => `[data-col="${CSS.escape(col)}"]`;
+    const headerCell = col => document.querySelector(`#gridHeaderRow th${colSel(col)}`);
+    const bodyCells = col => document.querySelectorAll(`#gridTbody td${colSel(col)}`);
+    const knownColumn = col => ALL_COLUMNS.some(c => c.raw === col);
+
+    function initGridLayout() {
+        applySavedColumnOrder();
+        gridLayout.hidden.filter(knownColumn).forEach(col => {
+            const chk = document.querySelector(`.col-vis-toggle[value="${CSS.escape(col)}"]`);
+            if (chk) chk.checked = false;
+            toggleColumnVisibility(col, false, false);
+        });
+        ALL_COLUMNS.forEach(c => {
+            if (hiddenColumns.has(c.raw)) return;
+            const saved = parseInt(gridLayout.widths[c.raw], 10);
+            setColumnWidth(c.raw, saved > 0 ? saved : measureColumn(c.raw), false);
+        });
+        syncTableWidth();
+    }
+
+    // Natural width of a column = widest of its header label and every visible cell's content (+ padding).
+    function measureColumn(col) {
+        const th = headerCell(col);
+        if (!th) return AUTO_FIT_MIN;
+        const range = document.createRange();
+        const thStyle = getComputedStyle(th);
+        const label = th.querySelector('.inline-flex') || th;
+        let width = label.getBoundingClientRect().width
+            + parseFloat(thStyle.paddingLeft) + parseFloat(thStyle.paddingRight) + 10; // + room for the resize handle
+
+        let cellPad = null;
+        bodyCells(col).forEach(td => {
+            if (td.offsetParent === null) return; // row hidden by a filter
+            if (cellPad === null) {
+                const s = getComputedStyle(td);
+                cellPad = parseFloat(s.paddingLeft) + parseFloat(s.paddingRight);
+            }
+            range.selectNodeContents(td);
+            width = Math.max(width, range.getBoundingClientRect().width + cellPad + 2);
+        });
+        return Math.round(Math.min(AUTO_FIT_MAX, Math.max(AUTO_FIT_MIN, width)));
+    }
+
+    function setColumnWidth(col, px, sync = true) {
+        const th = headerCell(col);
+        if (!th) return;
+        th.style.width = `${px}px`;
+        if (sync) syncTableWidth();
+    }
+
+    // Fixed table layout takes column widths from the header row. The table is at least as wide
+    // as all columns together (so it scrolls sideways) and the empty filler column takes any spare room.
+    function syncTableWidth() {
+        const table = document.getElementById('enterpriseGrid');
+        let total = 0;
+        document.querySelectorAll('#gridHeaderRow > th').forEach(th => {
+            if (th.dataset.col === '_filler' || th.style.display === 'none') return;
+            total += parseFloat(th.style.width) || th.getBoundingClientRect().width;
+        });
+        table.style.minWidth = `${Math.ceil(total)}px`;
+    }
+
     function initColResize(e, colName) {
+        if (e.button !== 0) return;
         e.stopPropagation();
-        e.preventDefault();
-        const th = document.querySelector(`th[data-col="${colName}"]`);
+        e.preventDefault(); // also stops the header from starting a column drag
+        const th = headerCell(colName);
         if (!th) return;
 
-        const startX = e.pageX;
-        const startWidth = th.offsetWidth;
-        const resizer = e.target;
+        isResizingColumn = true;
+        const startX = e.clientX;
+        const startWidth = th.getBoundingClientRect().width;
+        const resizer = e.currentTarget;
         resizer.classList.add('resizing');
+        document.body.classList.add('col-resizing');
 
-        const onMouseMove = moveEvent => {
-            const currentWidth = Math.max(50, startWidth + (moveEvent.pageX - startX));
-            th.style.width = `${currentWidth}px`;
-            th.style.minWidth = `${currentWidth}px`;
+        let frame = null;
+        const onMove = ev => {
+            const next = Math.round(Math.min(RESIZE_MAX, Math.max(AUTO_FIT_MIN, startWidth + ev.clientX - startX)));
+            if (frame) cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(() => setColumnWidth(colName, next));
         };
-
-        const onMouseUp = () => {
+        const onUp = () => {
+            isResizingColumn = false;
             resizer.classList.remove('resizing');
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
+            document.body.classList.remove('col-resizing');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            gridLayout.widths[colName] = Math.round(parseFloat(th.style.width));
+            saveGridLayout();
         };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    }
 
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
+    // Double-click a column edge: fit that column to its content and go back to auto-sizing it.
+    function autoFitColumn(col) {
+        delete gridLayout.widths[col];
+        setColumnWidth(col, measureColumn(col));
+        saveGridLayout();
+    }
+
+    function autoFitAllColumns() {
+        gridLayout.widths = {};
+        refitAutoColumns();
+        saveGridLayout();
+        showToast('Columns fitted to their content');
+    }
+
+    // Re-measure only columns the user hasn't sized by hand.
+    function refitAutoColumns() {
+        ALL_COLUMNS.forEach(c => {
+            if (hiddenColumns.has(c.raw) || gridLayout.widths[c.raw]) return;
+            setColumnWidth(c.raw, measureColumn(c.raw), false);
+        });
+        syncTableWidth();
+    }
+
+    function resetGridLayout() {
+        try { localStorage.removeItem(LAYOUT_KEY); } catch (e) {}
+        window.location.reload();
+    }
+
+    function currentColumnOrder() {
+        return Array.from(document.querySelectorAll('#gridHeaderRow th.draggable-col')).map(th => th.dataset.col);
+    }
+
+    // Saved order first; columns that didn't exist when the layout was saved go after them.
+    function applySavedColumnOrder() {
+        if (!gridLayout.order.length) return;
+        const current = currentColumnOrder();
+        const finalOrder = [
+            ...gridLayout.order.filter(c => current.includes(c)),
+            ...current.filter(c => !gridLayout.order.includes(c))
+        ];
+        const headerRow = document.getElementById('gridHeaderRow');
+        const headerFiller = headerRow.querySelector(colSel('_filler'));
+        const rows = document.querySelectorAll('#gridTbody tr.grid-row');
+        finalOrder.forEach(col => {
+            const th = headerCell(col);
+            if (th) headerRow.insertBefore(th, headerFiller);
+            rows.forEach(tr => {
+                const td = tr.querySelector(`td${colSel(col)}`);
+                if (td) tr.insertBefore(td, tr.querySelector(colSel('_filler')));
+            });
+        });
+    }
+
+    // -------------------------------------------------------------------------
+    // 3b. GRID INTERACTIONS: scroll shadows, full-value tooltips, row open, shortcuts
+    // -------------------------------------------------------------------------
+    let lastCheckedRowIndex = null;
+
+    function initGridInteractions() {
+        const wrap = document.getElementById('gridScrollWrap');
+        const tbody = document.getElementById('gridTbody');
+
+        const updateScrollShadows = () => {
+            wrap.classList.toggle('is-scrolled-y', wrap.scrollTop > 0);
+            wrap.classList.toggle('is-scrolled-x', wrap.scrollLeft > 0);
+        };
+        wrap.addEventListener('scroll', updateScrollShadows, { passive: true });
+        updateScrollShadows();
+
+        // Show the full value on hover only when the cell is cut off.
+        tbody.addEventListener('mouseover', e => {
+            const td = e.target.closest('td.grid-td');
+            if (!td || td.classList.contains('col-pinned-left') || td.classList.contains('grid-filler')) return;
+            if (td.scrollWidth > td.clientWidth + 1) {
+                if (!td.title) td.title = td.innerText.trim();
+            } else if (td.title) {
+                td.removeAttribute('title');
+            }
+        });
+
+        // Double-click a row (outside links, buttons and checkboxes) to open the record.
+        tbody.addEventListener('dblclick', e => {
+            if (e.target.closest('a, button, input, label')) return;
+            const tr = e.target.closest('tr.grid-row');
+            const pk = tr && tr.dataset.pk;
+            if (pk) window.location.href = `/edit/${encodeURIComponent(TABLE_NAME)}/${encodeURIComponent(pk)}`;
+        });
+
+        // Shift+click a checkbox to select every row between it and the last one clicked.
+        tbody.addEventListener('click', e => {
+            const chk = e.target.closest('.row-select-checkbox');
+            if (!chk) return;
+            const boxes = Array.from(tbody.querySelectorAll('tr.grid-row:not([style*="display: none"]) .row-select-checkbox'));
+            const idx = boxes.indexOf(chk);
+            if (e.shiftKey && lastCheckedRowIndex !== null && idx !== -1) {
+                const [from, to] = [Math.min(idx, lastCheckedRowIndex), Math.max(idx, lastCheckedRowIndex)];
+                boxes.slice(from, to + 1).forEach(b => {
+                    if (b.checked !== chk.checked) { b.checked = chk.checked; handleRowSelect(b); }
+                });
+            }
+            lastCheckedRowIndex = idx;
+        });
+
+        // "/" focuses search; Esc closes open dialogs.
+        document.addEventListener('keydown', e => {
+            const typing = e.target.closest('input, textarea, select, [contenteditable="true"]');
+            if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey) {
+                e.preventDefault();
+                const s = document.getElementById('gridSearchInput');
+                s.focus();
+                s.select();
+            } else if (e.key === 'Escape') {
+                ['filterModal', 'columnsModal'].forEach(id => {
+                    const m = document.getElementById(id);
+                    if (m && m.style.display === 'flex') m.style.display = 'none';
+                });
+            }
+        });
     }
 
     function buildQueryUrl(overrides = {}) {
@@ -1276,25 +1562,35 @@
         document.getElementById('columnsModal').style.display = 'none';
     }
 
-    function toggleColumnVisibility(colName, isVisible) {
+    function toggleColumnVisibility(colName, isVisible, persist = true) {
         if (isVisible) hiddenColumns.delete(colName);
         else hiddenColumns.add(colName);
 
-        const th = document.querySelector(`th[data-col="${colName}"]`);
+        const th = headerCell(colName);
         if (th) th.style.display = isVisible ? '' : 'none';
+        bodyCells(colName).forEach(td => { td.style.display = isVisible ? '' : 'none'; });
 
-        document.querySelectorAll(`td[data-col="${colName}"]`).forEach(td => {
-            td.style.display = isVisible ? '' : 'none';
-        });
+        // A column shown for the first time has never been measured.
+        if (isVisible && th && !th.style.width) {
+            const saved = parseInt(gridLayout.widths[colName], 10);
+            setColumnWidth(colName, saved > 0 ? saved : measureColumn(colName), false);
+        }
+        syncTableWidth();
 
         document.getElementById('visibleColCount').textContent = ALL_COLUMNS.length - hiddenColumns.size;
+        if (persist) {
+            gridLayout.hidden = Array.from(hiddenColumns);
+            saveGridLayout();
+        }
     }
 
     function toggleAllColumns(showAll) {
         document.querySelectorAll('.col-vis-toggle').forEach(chk => {
             chk.checked = showAll;
-            toggleColumnVisibility(chk.value, showAll);
+            toggleColumnVisibility(chk.value, showAll, false);
         });
+        gridLayout.hidden = Array.from(hiddenColumns);
+        saveGridLayout();
     }
 
     // -------------------------------------------------------------------------
@@ -1309,45 +1605,57 @@
             density: currentDensity,
             hiddenColumns: Array.from(hiddenColumns),
             sortRules: activeSortRules,
-            filterRules: activeFilterRules
+            filterRules: activeFilterRules,
+            layout: { widths: gridLayout.widths, order: currentColumnOrder() }
         };
 
-        localStorage.setItem(`gridPreset_${TABLE_NAME}`, JSON.stringify(presetData));
+        try {
+            localStorage.setItem(`gridPreset_${TABLE_NAME}`, JSON.stringify(presetData));
+        } catch (e) {
+            showToast('Could not save the view in this browser', 'error');
+            return;
+        }
         const opt = document.getElementById('customPresetOption');
         if (opt) {
             opt.style.display = 'block';
             opt.textContent = `View: ${name}`;
             document.getElementById('viewPresetSelect').value = 'custom_1';
         }
-        alert(`Preset '${name}' saved successfully!`);
+        showToast(`View '${name}' saved`);
     }
 
     function applyViewPreset(presetKey) {
         if (presetKey === 'default') {
-            hiddenColumns.clear();
-            activeSortRules = [];
-            activeFilterRules = [];
+            // Back to defaults: auto-fit widths, original order, all columns, standard density, no sort/filter.
+            try { localStorage.removeItem(LAYOUT_KEY); } catch (e) {}
             setDensity('standard');
-            toggleAllColumns(true);
-            clearAllFilters();
+            window.location.href = buildQueryUrl({ page: 1, q: '', filters: [], sort_rules: [] });
         } else if (presetKey === 'compact') {
             setDensity('compact');
+            refitAutoColumns();
         } else if (presetKey === 'custom_1') {
-            loadSavedViewPreset();
+            loadSavedViewPreset(true);
         }
     }
 
-    function loadSavedViewPreset() {
-        const saved = localStorage.getItem(`gridPreset_${TABLE_NAME}`);
-        if (!saved) return;
-        try {
-            const data = JSON.parse(saved);
-            const opt = document.getElementById('customPresetOption');
-            if (opt) {
-                opt.style.display = 'block';
-                opt.textContent = `View: ${data.name || 'Custom Layout'}`;
-            }
-        } catch (e) {}
+    function loadSavedViewPreset(apply = false) {
+        let data;
+        try { data = JSON.parse(localStorage.getItem(`gridPreset_${TABLE_NAME}`) || 'null'); } catch (e) { data = null; }
+        if (!data) return;
+        const opt = document.getElementById('customPresetOption');
+        if (opt) {
+            opt.style.display = 'block';
+            opt.textContent = `View: ${data.name || 'Custom Layout'}`;
+        }
+        if (!apply) return;
+
+        // Make the preset's columns the remembered layout, then reload with its sort and filters.
+        gridLayout.widths = (data.layout && data.layout.widths) || {};
+        gridLayout.order = (data.layout && data.layout.order) || [];
+        gridLayout.hidden = data.hiddenColumns || [];
+        saveGridLayout();
+        if (data.density) setDensity(data.density);
+        window.location.href = buildQueryUrl({ page: 1, sort_rules: data.sortRules || [], filters: data.filterRules || [] });
     }
 
     // -------------------------------------------------------------------------
