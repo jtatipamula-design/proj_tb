@@ -471,6 +471,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
                 raise NotFound("Record not found")
 
         lookup_map = await get_all_lookups(conn)
+        user_company = await conn.fetchval("SELECT pus_company_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
 
         columns = []
         company_form_def = None
@@ -493,11 +494,11 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
             else:
                 val = raw_val
 
-            options = await get_dropdown_options(conn, table_name, cname, preloaded_lookups=lookup_map)
+            options = await get_dropdown_options(conn, table_name, cname, preloaded_lookups=lookup_map, company_id=user_company)
 
             json_options = None
             if table_name == 'phc_role_screen_assignment_t' and cname == 'prs_screen_id' and not is_update:
-                json_options = await get_dropdown_options(conn, table_name, cname, preloaded_lookups=lookup_map)
+                json_options = await get_dropdown_options(conn, table_name, cname, preloaded_lookups=lookup_map, company_id=user_company)
                 options = [] 
                 
             col_def = {

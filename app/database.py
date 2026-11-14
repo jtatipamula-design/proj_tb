@@ -100,7 +100,7 @@ async def get_table_columns(conn, table_name: str):
     if table_name in SCHEMA_CACHE["columns"]:
         return SCHEMA_CACHE["columns"][table_name]
     query = """
-        SELECT column_name, data_type, is_nullable, character_maximum_length, column_default 
+        SELECT column_name, data_type, is_nullable, character_maximum_length, column_default, is_identity
         FROM information_schema.columns 
         WHERE table_name = $1 AND table_schema = 'public'
         ORDER BY ordinal_position
@@ -190,7 +190,7 @@ async def resolve_fk_details(conn, table_name, column_name):
             
     return None, None
 
-async def get_fk_display_dict(conn, f_table, f_pk, specific_ids=None):
+async def get_fk_display_dict(conn, f_table, f_pk, specific_ids=None, company_id=None):
     if "display_cols" not in SCHEMA_CACHE: SCHEMA_CACHE["display_cols"] = {}
     if f_table not in SCHEMA_CACHE["display_cols"]:
         cols = await conn.fetch("SELECT column_name FROM information_schema.columns WHERE table_name = $1", f_table)
@@ -205,11 +205,15 @@ async def get_fk_display_dict(conn, f_table, f_pk, specific_ids=None):
             if c.endswith('_status') or c == 'status':
                 status_col = c
                 break
-        SCHEMA_CACHE["display_cols"][f_table] = {"display": display_col, "status": status_col}
+        company_col = None
+        if f_table != 'phc_companies_t':
+            company_col = next((c for c in col_names if (c.endswith('_company_id') or c == 'company_id') and c != f_pk), None)
+        SCHEMA_CACHE["display_cols"][f_table] = {"display": display_col, "status": status_col, "company": company_col}
         
     info = SCHEMA_CACHE["display_cols"][f_table]
     display_col = info["display"]
     status_col = info["status"]
+    company_col = info.get("company")
     
     q_table = quote_ident(f_table)
     q_pk = quote_ident(f_pk)
@@ -221,12 +225,19 @@ async def get_fk_display_dict(conn, f_table, f_pk, specific_ids=None):
         rows = await conn.fetch(q, list(specific_ids))
         return {r['id']: r['name'] for r in rows}
     else:
+        where, params = [], []
+        if status_col:
+            where.append(f"{quote_ident(status_col)} = 'ACT'")
+        if company_col and company_id is not None:
+            params.append(company_id)
+            where.append(f"{quote_ident(company_col)} = $1")
         q = f"SELECT {q_pk} as id, {q_display} as name FROM {q_table}"
-        if status_col: q += f" WHERE {quote_ident(status_col)} = 'ACT'"
-        rows = await conn.fetch(q)
+        if where:
+            q += " WHERE " + " AND ".join(where)
+        rows = await conn.fetch(q, *params)
         return [{"id": str(r['id']), "name": f"{r['name']} (ID: {r['id']})"} for r in rows]
 
-async def get_dropdown_options(conn, table_name, column_name, preloaded_lookups=None):
+async def get_dropdown_options(conn, table_name, column_name, preloaded_lookups=None, company_id=None):
     if column_name.endswith('_org_id') or column_name == 'pos_org_id':
         return []
         
@@ -243,7 +254,7 @@ async def get_dropdown_options(conn, table_name, column_name, preloaded_lookups=
     f_table, f_pk = await resolve_fk_details(conn, table_name, column_name)
     if f_table and f_pk:
         try:
-            return await get_fk_display_dict(conn, f_table, f_pk)
+            return await get_fk_display_dict(conn, f_table, f_pk, company_id=company_id)
         except Exception:
             pass
     return []
