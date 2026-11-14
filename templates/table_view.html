@@ -665,7 +665,13 @@
                                     <i data-lucide="search-x" class="w-5 h-5"></i>
                                 </div>
                                 <p class="text-sm font-semibold mt-1" style="color: var(--color-obsidian);">No records found</p>
-                                <p class="text-xs" style="color: var(--color-graphite);">No records match your active query.</p>
+                                {% if search_query or active_filter_rules %}
+                                <p class="text-xs" style="color: var(--color-graphite);">No records match your search or filters.</p>
+                                <a href="/table/{{ table_name }}" class="ghost-btn text-xs mt-2">Clear search and filters</a>
+                                {% else %}
+                                <p class="text-xs" style="color: var(--color-graphite);">This table is empty.</p>
+                                <a href="/new/{{ table_name }}" class="ghost-btn text-xs mt-2"><i data-lucide="plus" class="w-3.5 h-3.5"></i> Add the first record</a>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
@@ -734,9 +740,15 @@
                     <i data-lucide="chevron-left" class="w-4 h-4"></i> Prev
                 </button>
                 
-                <span class="px-3 py-1 font-mono text-xs font-semibold" style="color: var(--color-obsidian);">
-                    Page {{ page }} of {{ total_pages }}
-                </span>
+                <label class="px-1 py-1 font-mono text-xs font-semibold flex items-center gap-1.5" style="color: var(--color-obsidian);">
+                    Page
+                    <input type="number" min="1" max="{{ total_pages }}" value="{{ page }}" aria-label="Go to page"
+                           title="Type a page number and press Enter"
+                           class="w-14 text-center rounded-md py-1 font-mono text-xs"
+                           style="background: var(--color-bone); border: 1px solid var(--color-fog); color: var(--color-obsidian);"
+                           onchange="goToPage(parseInt(this.value, 10) || {{ page }})">
+                    of {{ total_pages }}
+                </label>
                 
                 <button onclick="goToNextPage()" 
                         class="grid-tool-btn {% if page >= total_pages %}pointer-events-none opacity-40{% endif %}"

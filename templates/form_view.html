@@ -551,7 +551,7 @@
     // Module Icon Picker Logic
     function selectModuleIcon(inputName, iconName) {
         const input = document.getElementById(inputName);
-        if (input) input.value = iconName;
+        if (input) { input.value = iconName; input.dispatchEvent(new Event('input', { bubbles: true })); }
 
         const previewLabel = document.getElementById('icon-preview-label');
         if (previewLabel) previewLabel.textContent = iconName;
@@ -596,7 +596,21 @@
 
         // SUCCESS / ERROR HANDLING — Toast + Redirect
         // ----------------------------------------------------
+        // Warn before leaving with unsaved edits; Ctrl+S saves; Save is locked while a save is in flight.
+        let dirty = false;
+        form.addEventListener('input', () => { dirty = true; });
+        form.addEventListener('change', () => { dirty = true; });
+        window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+        document.addEventListener('keydown', e => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); form.requestSubmit(); }
+        });
+        const saveBtn = form.querySelector('button[type="submit"]');
+        const saveLabel = saveBtn.querySelector('span');
+        const setSaving = on => { saveBtn.disabled = on; saveBtn.style.opacity = on ? '0.6' : ''; saveLabel.textContent = on ? 'Saving...' : 'Save Record'; };
+        form.addEventListener('htmx:beforeRequest', () => setSaving(true));
+
         form.addEventListener('htmx:afterRequest', function(evt) {
+            if (evt.detail.successful) dirty = false; else setSaving(false);
             if (evt.detail.successful) {
                 sessionStorage.setItem('pendingToast', JSON.stringify({
                     msg: isUpdate ? 'Record updated successfully!' : 'Record created successfully!',
