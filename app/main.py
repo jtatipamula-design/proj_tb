@@ -1,6 +1,5 @@
 import os
 from sanic import Sanic
-from app.config import PORT, WORKERS, logger
 
 from app.database import setup_db, close_db
 from app.auth import setup_request_context
@@ -17,7 +16,6 @@ def create_app() -> Sanic:
     # Static files and Uploads
     if os.path.isdir("static"):
         app.static("/static", "./static")
-    os.makedirs("uploads", exist_ok=True)
 
     # DB Hooks
     app.before_server_start(setup_db)

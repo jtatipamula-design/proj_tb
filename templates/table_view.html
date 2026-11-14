@@ -701,10 +701,6 @@
                                 <span class="status-pill status-dft">Draft</span>
                             {% elif val == 'None' or val == None or val == '' %} 
                                 <span class="status-pill status-def">Empty</span>
-                            {% elif val is string and val.startswith('uploads/') %}
-                                <a href="/api/file/{{ table_name }}/{{ row[pk_column] }}/{{ col.raw }}" target="_blank" class="inline-flex items-center gap-1 text-iris hover:underline font-mono text-xs">
-                                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i> View File
-                                </a>
                             {% elif val is string and val.startswith('[Binary Object') %}
                                 <a href="/api/file/{{ table_name }}/{{ row[pk_column] }}/{{ col.raw }}" target="_blank" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono hover:bg-iris/10 transition-colors" style="background: rgba(85, 93, 255, 0.08); color: var(--color-iris); border: 1px solid rgba(85, 93, 255, 0.2);" title="Download or view stored file">
                                     <i data-lucide="file-down" class="w-3.5 h-3.5"></i> {{ val }}
@@ -1711,19 +1707,22 @@
     function exportSelectedRows() {
         if (selectedRowPks.size === 0) return;
         let csv = [];
-        const headers = ALL_COLUMNS.filter(c => !hiddenColumns.has(c.raw)).map(c => `"${c.label}"`);
+        // On-screen order (after any column drags), visible columns only.
+        const cols = currentColumnOrder()
+            .filter(raw => !hiddenColumns.has(raw))
+            .map(raw => ALL_COLUMNS.find(c => c.raw === raw))
+            .filter(Boolean);
+        const headers = cols.map(c => `"${c.label}"`);
         csv.push(headers.join(','));
 
         document.querySelectorAll('#gridTbody tr.grid-row').forEach(tr => {
             const chk = tr.querySelector('.row-select-checkbox');
             if (chk && chk.checked) {
                 let rowValues = [];
-                ALL_COLUMNS.forEach(c => {
-                    if (!hiddenColumns.has(c.raw)) {
-                        const td = tr.querySelector(`td[data-col="${c.raw}"]`);
-                        const text = td ? td.innerText.replace(/"/g, '""').trim() : '';
-                        rowValues.push(`"${text}"`);
-                    }
+                cols.forEach(c => {
+                    const td = tr.querySelector(`td[data-col="${c.raw}"]`);
+                    const text = td ? td.innerText.replace(/"/g, '""').trim() : '';
+                    rowValues.push(`"${text}"`);
                 });
                 csv.push(rowValues.join(','));
             }

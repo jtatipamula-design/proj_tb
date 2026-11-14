@@ -1,6 +1,4 @@
 import os
-import re
-import uuid
 import json
 import hmac
 import hashlib
@@ -153,8 +151,8 @@ def get_client_ip(request) -> str:
     """Client IP. Forwarded headers are spoofable; Sanic's remote_addr only trusts them per PROXIES_COUNT."""
     return getattr(request, "remote_addr", "") or getattr(request, "ip", "") or "unknown"
 
-def save_uploaded_file(file_obj, upload_dir: str) -> str:
-    """Validates file extension, size, and sanitizes filename against path traversal."""
+def validate_uploaded_file(file_obj) -> None:
+    """Validates file payload, size and extension. Raises ValueError; writes nothing to disk."""
     if not file_obj or not hasattr(file_obj, 'body') or not file_obj.body:
         raise ValueError("Empty or invalid file payload.")
     
@@ -168,15 +166,6 @@ def save_uploaded_file(file_obj, upload_dir: str) -> str:
     
     if ext_low in BLOCKED_EXTENSIONS or (ext_low and ext_low not in ALLOWED_EXTENSIONS):
         raise ValueError(f"File extension '{ext_low}' is not permitted for security reasons.")
-    
-    safe_stem = re.sub(r'[^a-zA-Z0-9_-]', '_', os.path.splitext(base_name)[0])[:50]
-    final_name = f"{uuid.uuid4().hex}_{safe_stem}{ext_low}"
-    
-    os.makedirs(upload_dir, exist_ok=True)
-    fpath = os.path.join(upload_dir, final_name)
-    with open(fpath, 'wb') as f:
-        f.write(file_obj.body)
-    return f"uploads/{final_name}"
 
 def resolve_lookup_type(column_name: str) -> str:
     """Resolves a physical column name to its canonical lookup type code.
@@ -358,12 +347,22 @@ async def get_approval_workflow_info(conn, table_name: str, record_id: str, row_
     
     req_role = setup['pas_required_role'] or 'ADM'
     can_approve = (user_role == 'ADM' or user_role == req_role)
+    # Server rule: whoever submitted the record cannot approve it.
+    if can_approve:
+        submitter_id = await conn.fetchval("""
+            SELECT pae_user_id FROM phc_approval_events_t
+            WHERE LOWER(pae_table_name) = LOWER($1) AND pae_record_id = $2 AND pae_action = 'SUBMIT'
+            ORDER BY pae_timestamp DESC
+            LIMIT 1
+        """, table_name, str(record_id))
+        if submitter_id is not None and str(submitter_id) == str(user_id):
+            can_approve = False
     can_submit = is_draft or is_rejected or is_approved
     is_locked = is_pending and setup['pas_auto_lock_on_submit'] and not can_approve
 
     # Fetch last 5 events
     events = await conn.fetch("""
-        SELECT pae_event_id, pae_action, pae_from_status, pae_to_status, 
+        SELECT pae_event_id, pae_action, pae_from_status, pae_to_status, pae_user_id,
                pae_username, pae_user_role, pae_comments, pae_esig_hash, pae_timestamp
         FROM phc_approval_events_t
         WHERE LOWER(pae_table_name) = LOWER($1) AND pae_record_id = $2

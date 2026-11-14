@@ -1,10 +1,9 @@
 import time
-import os
 from datetime import datetime
 from sanic import Blueprint, response
 from app.utils import add_security_headers, render_template
 from app.auth import check_auth, get_authorized_tables
-from app.config import PORT, WORKERS, logger
+from app.config import logger
 
 system_bp = Blueprint("system_routes")
 SERVER_START_TIME = time.time()
