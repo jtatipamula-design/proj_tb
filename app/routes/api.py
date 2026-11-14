@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 from sanic import Blueprint, response
 from sanic.exceptions import NotFound
-from app.config import logger, SCHEMA_MUTATING_TABLES
+from app.config import logger, ADMIN_ONLY_TABLES, READ_ONLY_TABLES
 from app.utils import quote_ident, add_security_headers, _sanitize_for_audit, _sanitize_payload, _is_password_column, get_client_ip, save_uploaded_file, generate_csrf_token, log_audit_event, dispatch_notification, get_approval_workflow_info, validate_csrf_token, safe_cast_pk, validate_password_strength
 from app.auth import check_auth, get_authorized_tables
 from app.database import get_pk_column, get_table_columns, invalidate_caches_for_table, get_fk_map, SCHEMA_CACHE
@@ -31,6 +31,21 @@ def company_clause(scope, param_idx):
     if not col:
         return "", []
     return f" AND {quote_ident(col)} = ${param_idx}", [val]
+
+def write_block_reason(table_name, role, module_name):
+    """Why this role may not write this table through the CRUD API, or None if allowed."""
+    if table_name in READ_ONLY_TABLES:
+        return "This table is an append-only record and cannot be edited."
+    if role != 'ADM' and (table_name in ADMIN_ONLY_TABLES or (module_name or '').lower() == 'erpadmin'):
+        return "Administrator role required to modify this table."
+    return None
+
+def insert_pk_missing(schema_map, pk_column, clean_data):
+    """True when an insert gives no PK value and the database cannot generate one."""
+    if clean_data.get(pk_column) not in (None, ""):
+        return False
+    info = schema_map.get(pk_column, {})
+    return not str(info.get('column_default') or '').strip() and info.get('is_identity') != 'YES'
 
 async def record_visible(conn, table_name, record_id, user_id):
     """True if the record exists and belongs to the user's company (or the table has no company column)."""
@@ -92,11 +107,12 @@ async def process_api_action(request, table_name, pk_val):
         }, status=403))
 
     async with request.app.ctx.pool.acquire() as conn:
-        auth_tables, _ = await get_authorized_tables(conn, user_id, role)
+        auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
         if table_name not in auth_tables:
             return response.json({"error": "Unauthorized"}, status=403)
-        if role != 'ADM' and table_name in SCHEMA_MUTATING_TABLES:
-            return add_security_headers(response.json({"error": "Administrator role required to modify this table."}, status=403))
+        block_reason = write_block_reason(table_name, role, table_modules.get(table_name))
+        if block_reason:
+            return add_security_headers(response.json({"error": block_reason}, status=403))
 
         pk_column = await get_pk_column(conn, table_name)
         if not pk_column:
@@ -285,6 +301,13 @@ async def process_api_action(request, table_name, pk_val):
                     for cname in schema_map:
                         if 'start_date' in cname.lower() and (cname not in clean_data or not clean_data[cname]):
                             clean_data[cname] = datetime.now()
+
+                    if insert_pk_missing(schema_map, pk_column, clean_data):
+                        logger.error(f"Insert refused: {table_name}.{pk_column} has no default/identity and no value was given")
+                        return add_security_headers(response.json({
+                            "error": f"'{pk_column}' needs a value: this table does not generate IDs automatically. "
+                                     "Ask an administrator to add an identity/sequence default for it in a migration."
+                        }, status=400))
 
                     if table_name == 'phc_role_screen_assignment_t' and 'prs_screen_id' in data_dict:
                         raw_scr = data_dict['prs_screen_id']

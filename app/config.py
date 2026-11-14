@@ -38,6 +38,16 @@ SCHEMA_MUTATING_TABLES = {
     'phc_users_t', 'phc_lookup_values_t', 'phc_lookup_types', 'phc_lookup_types_t'
 }
 
+# Tables only administrators may write through the generic CRUD API.
+# Any table in the 'erpadmin' module is admin-only as well (checked in app/routes/api.py).
+ADMIN_ONLY_TABLES = SCHEMA_MUTATING_TABLES | {
+    'phc_companies_t', 'phc_approval_setup_t', 'phc_approval_types_t',
+    'phc_notifications_setup_t', 'phc_user_notifications_t'
+}
+
+# Append-only records written by the app itself; nobody may edit or delete them via CRUD.
+READ_ONLY_TABLES = {'phc_audit_log_t', 'phc_approval_events_t', 'phc_schema_migrations_t'}
+
 # Icon Maps
 MODULE_ICON_MAP = {
     'general': 'layers',

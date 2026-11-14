@@ -100,7 +100,7 @@ async def get_table_columns(conn, table_name: str):
     if table_name in SCHEMA_CACHE["columns"]:
         return SCHEMA_CACHE["columns"][table_name]
     query = """
-        SELECT column_name, data_type, is_nullable, character_maximum_length, column_default 
+        SELECT column_name, data_type, is_nullable, character_maximum_length, column_default, is_identity
         FROM information_schema.columns 
         WHERE table_name = $1 AND table_schema = 'public'
         ORDER BY ordinal_position
