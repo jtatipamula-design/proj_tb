@@ -121,8 +121,10 @@ async def get_pk_column(conn, table_name):
         WHERE  i.indrelid = $1::regclass AND i.indisprimary;
     """
     try:
-        pk = await conn.fetchval(query, table_name)
-        if pk:
+        rows = await conn.fetch(query, table_name)
+        # Composite keys return None: callers treat that as "not editable".
+        if len(rows) == 1:
+            pk = rows[0]['attname']
             SCHEMA_CACHE["pks"][table_name] = pk
             return pk
     except Exception:
@@ -159,8 +161,12 @@ async def preload_all_pks(conn):
     """
     try:
         rows = await conn.fetch(query)
+        by_table = {}
         for r in rows:
-            SCHEMA_CACHE["pks"][r['table_name']] = r['column_name']
+            by_table.setdefault(r['table_name'], []).append(r['column_name'])
+        for t, cols in by_table.items():
+            if len(cols) == 1:  # skip composite keys
+                SCHEMA_CACHE["pks"][t] = cols[0]
         SCHEMA_CACHE["pks_loaded"] = True
     except Exception as e:
         logger.error(f"Error preloading PKs: {e}")

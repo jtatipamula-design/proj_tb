@@ -7,12 +7,16 @@ from decimal import Decimal
 from types import SimpleNamespace
 
 import bcrypt
+import pytest
+
+import app.utils as app_utils
 
 from app.utils import (
     _sanitize_payload,
     generate_csrf_token,
     get_client_ip,
     validate_csrf_token,
+    validate_uploaded_file,
 )
 
 SCHEMA = {
@@ -93,3 +97,19 @@ def test_client_ip_ignores_spoofed_forwarded_header():
     assert get_client_ip(req) == "10.0.0.5"
     req.remote_addr = ""
     assert get_client_ip(req) == "192.168.1.1"
+
+
+def test_validate_uploaded_file_ok():
+    validate_uploaded_file(SimpleNamespace(name="report.pdf", body=b"%PDF-1.4"))
+
+
+@pytest.mark.parametrize("name", ["x.svg", "x.exe"])
+def test_validate_uploaded_file_bad_extension(name):
+    with pytest.raises(ValueError):
+        validate_uploaded_file(SimpleNamespace(name=name, body=b"data"))
+
+
+def test_validate_uploaded_file_too_large(monkeypatch):
+    monkeypatch.setattr(app_utils, "MAX_UPLOAD_SIZE", 10)
+    with pytest.raises(ValueError):
+        validate_uploaded_file(SimpleNamespace(name="report.pdf", body=b"x" * 11))

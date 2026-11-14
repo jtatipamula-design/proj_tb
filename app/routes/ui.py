@@ -1,10 +1,9 @@
 import time
 from sanic import Blueprint, response
 from sanic.exceptions import NotFound
-from app.config import logger
 from app.utils import render_template, quote_ident, add_security_headers, resolve_lookup_type, safe_cast_pk, get_approval_workflow_info
 from app.auth import check_auth, get_authorized_tables
-from app.database import get_pk_column, get_table_columns, get_dropdown_options, SCHEMA_CACHE, clear_schema_cache, get_all_lookups, get_fk_map, resolve_fk_details, get_fk_display_dict
+from app.database import get_pk_column, get_table_columns, get_dropdown_options, SCHEMA_CACHE, clear_schema_cache, get_all_lookups, resolve_fk_details, get_fk_display_dict
 from app.routes.api import get_company_scope, company_clause
 import urllib.parse
 from datetime import datetime
@@ -349,7 +348,6 @@ async def show_table(request, table_name):
         lookup_map = await get_all_lookups(conn)
 
         # Resolve FKs and lookups
-        fk_map = await get_fk_map(conn, table_name)
         
         for c in columns_data:
             cname = c['column_name']
@@ -366,7 +364,7 @@ async def show_table(request, table_name):
                             val = r[cname]
                             if val in fk_dict:
                                 r[cname] = f"{fk_dict[val]} (ID: {val})"
-                    except Exception as e:
+                    except Exception:
                         pass
             
             # 2. Dynamic Lookups (In-Memory Resolution with Prefix Stripping)

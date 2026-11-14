@@ -1,19 +1,20 @@
 import json
-import uuid
 import bcrypt
 import time
 from datetime import datetime
 from sanic import Blueprint, response
 from sanic.exceptions import NotFound
 from app.config import logger, ADMIN_ONLY_TABLES, READ_ONLY_TABLES
-from app.utils import quote_ident, add_security_headers, _sanitize_for_audit, _sanitize_payload, _is_password_column, get_client_ip, save_uploaded_file, generate_csrf_token, log_audit_event, dispatch_notification, get_approval_workflow_info, validate_csrf_token, safe_cast_pk, validate_password_strength
+from app.utils import quote_ident, add_security_headers, _sanitize_payload, get_client_ip, validate_uploaded_file, log_audit_event, dispatch_notification, validate_csrf_token, safe_cast_pk, validate_password_strength
 from app.auth import check_auth, get_authorized_tables
-from app.database import get_pk_column, get_table_columns, invalidate_caches_for_table, get_fk_map, SCHEMA_CACHE
-import os
+from app.database import get_pk_column, get_table_columns, invalidate_caches_for_table, SCHEMA_CACHE
 import urllib.parse
 import hashlib
 
 api_bp = Blueprint("api_routes")
+
+_USER_COMPANY_CACHE = {}  # user_id -> (company_id, expires_at); a user's company rarely changes
+_USER_COMPANY_TTL = 60
 
 async def get_company_scope(conn, table_name, column_names, pk_column, user_id):
     """Return (company_col, company_id) to tenant-filter this table, or (None, None)."""
@@ -22,7 +23,12 @@ async def get_company_scope(conn, table_name, column_names, pk_column, user_id):
     col = next((c for c in column_names if (c.endswith('_company_id') or c == 'company_id') and c != pk_column), None)
     if not col:
         return None, None
-    company = await conn.fetchval("SELECT pus_company_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
+    cached = _USER_COMPANY_CACHE.get(user_id)
+    if cached and cached[1] > time.monotonic():
+        company = cached[0]
+    else:
+        company = await conn.fetchval("SELECT pus_company_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
+        _USER_COMPANY_CACHE[user_id] = (company, time.monotonic() + _USER_COMPANY_TTL)
     return (col, company) if company is not None else (None, None)
 
 def company_clause(scope, param_idx):
@@ -47,8 +53,9 @@ def insert_pk_missing(schema_map, pk_column, clean_data):
     info = schema_map.get(pk_column, {})
     return not str(info.get('column_default') or '').strip() and info.get('is_identity') != 'YES'
 
-async def record_visible(conn, table_name, record_id, user_id):
-    """True if the record exists and belongs to the user's company (or the table has no company column)."""
+async def record_visible(conn, table_name, record_id, user_id, role=None):
+    """True if the record exists and belongs to the user's company (or the table has no company column).
+    A record that no longer exists (hard-deleted) stays visible to administrators so its history can be read."""
     pk_col = await get_pk_column(conn, table_name)
     if not pk_col:
         return False
@@ -61,7 +68,10 @@ async def record_visible(conn, table_name, record_id, user_id):
     if cast_pk is None:
         return False
     sc_sql, sc_vals = company_clause(scope, 2)
-    return bool(await conn.fetchval(f"SELECT 1 FROM {quote_ident(table_name)} WHERE {quote_ident(pk_col)} = $1{sc_sql}", cast_pk, *sc_vals))
+    q_table, q_pk = quote_ident(table_name), quote_ident(pk_col)
+    if await conn.fetchval(f"SELECT 1 FROM {q_table} WHERE {q_pk} = $1{sc_sql}", cast_pk, *sc_vals):
+        return True
+    return role == 'ADM' and not await conn.fetchval(f"SELECT 1 FROM {q_table} WHERE {q_pk} = $1", cast_pk)
 
 @api_bp.route('/api/<table_name>', methods=['POST'], name="api_create")
 @check_auth
@@ -129,14 +139,10 @@ async def process_api_action(request, table_name, pk_val):
         q_pk = quote_ident(pk_column)
         scope = await get_company_scope(conn, table_name, list(schema_map), pk_column, user_id)
 
-        # Pre-fetch existing record state for audit comparison
-        old_row = None
-        if method in ('PUT', 'DELETE') and cast_pk is not None:
-            try:
-                sc_sql, sc_vals = company_clause(scope, 2)
-                old_row = await conn.fetchrow(f"SELECT * FROM {q_table} WHERE {q_pk} = $1{sc_sql}", cast_pk, *sc_vals)
-            except Exception:
-                old_row = None
+        async def lock_old_row():
+            """Current record state for the audit 'before' values, locked until the transaction ends."""
+            sc_sql, sc_vals = company_clause(scope, 2)
+            return await conn.fetchrow(f"SELECT * FROM {q_table} WHERE {q_pk} = $1{sc_sql} FOR UPDATE", cast_pk, *sc_vals)
 
         if method == 'DELETE':
             try:
@@ -162,6 +168,7 @@ async def process_api_action(request, table_name, pk_val):
                         break
 
                 async with conn.transaction():
+                    old_row = await lock_old_row()
                     if status_col:
                         set_parts = [f"{quote_ident(status_col)} = $1"]
                         set_vals = [status_val]
@@ -210,7 +217,6 @@ async def process_api_action(request, table_name, pk_val):
             return add_security_headers(response.json({"error": "Invalid or malformed payload"}, status=400))
 
         if request.files:
-            upload_dir = os.path.join(os.getcwd(), 'uploads')
             for file_key, file_objs in request.files.items():
                 file_obj = file_objs[0] if isinstance(file_objs, list) else file_objs
                 if not file_obj or not getattr(file_obj, 'name', '') or not getattr(file_obj, 'body', None):
@@ -219,14 +225,13 @@ async def process_api_action(request, table_name, pk_val):
                 col_info = schema_map.get(file_key, {})
                 col_dt = col_info.get('data_type', '').lower()
 
+                if col_dt not in ('bytea', 'blob', 'oid', 'binary', 'varbinary'):
+                    return add_security_headers(response.json({"error": "Files can only be uploaded to file columns."}, status=400))
                 try:
-                    rel_path = save_uploaded_file(file_obj, upload_dir)
-                    if col_dt in ('bytea', 'blob', 'oid', 'binary', 'varbinary'):
-                        data_dict[file_key] = bytes(file_obj.body)
-                    else:
-                        data_dict[file_key] = rel_path
+                    validate_uploaded_file(file_obj)
                 except ValueError as val_err:
                     return add_security_headers(response.json({"error": str(val_err)}, status=400))
+                data_dict[file_key] = bytes(file_obj.body)
 
         # Enforce strict User Creation and Password Rules
         if table_name == 'phc_users_t':
@@ -349,6 +354,7 @@ async def process_api_action(request, table_name, pk_val):
                 elif method == 'PUT':
                     if not clean_data:
                         return add_security_headers(response.json({"error": "No update fields provided"}, status=400))
+                    old_row = await lock_old_row()
                     cols = list(clean_data.keys())
                     vals = list(clean_data.values())
                     set_clause = ", ".join([f"{quote_ident(c)} = ${i+1}" for i, c in enumerate(cols)])
@@ -396,7 +402,7 @@ async def get_record_audit_history(request, table_name, record_id):
             auth_tables, _ = await get_authorized_tables(conn, request.ctx.user_id, request.ctx.role)
             if table_name not in auth_tables:
                 return add_security_headers(response.json({"error": "Unauthorized"}, status=403))
-            if not await record_visible(conn, table_name, record_id, request.ctx.user_id):
+            if not await record_visible(conn, table_name, record_id, request.ctx.user_id, request.ctx.role):
                 return add_security_headers(response.json({"error": "Record not found"}, status=404))
             rows = await conn.fetch("""
                 SELECT
@@ -427,6 +433,26 @@ async def get_record_audit_history(request, table_name, record_id):
 # -----------------------------------------------------------------------------
 # WORKFLOW ENGINE & 21 CFR PART 11 E-SIGNATURE ROUTES
 # -----------------------------------------------------------------------------
+WORKFLOW_TARGETS = {'SUBMIT': ('PND', 'P'), 'APPROVE': ('ACT', 'A'), 'REJECT': ('REJ', 'R'), 'RECALL': ('DFT', 'D')}
+PENDING_STATUSES = ('PND', 'PENDING', 'SUBMITTED', 'IN_REVIEW', 'P')
+
+
+def transition_error(transition, old_status, submitter_id, user_id):
+    """Why this workflow move is refused as (message, http_status), or None if allowed.
+    Only a pending record can be approved, rejected or recalled; a pending record cannot be
+    submitted again; whoever submitted a record cannot approve it (segregation of duties)."""
+    if transition not in WORKFLOW_TARGETS:
+        return f"Unknown transition '{transition}'.", 400
+    is_pending = str(old_status).upper() in PENDING_STATUSES
+    if transition != 'SUBMIT' and not is_pending:
+        return f"Only a pending record can be {transition.lower()}ed. Current status: {old_status}.", 400
+    if transition == 'SUBMIT' and is_pending:
+        return "This record is already pending approval.", 400
+    if transition == 'APPROVE' and submitter_id is not None and submitter_id == user_id:
+        return "You submitted this record, so another approver must approve it.", 403
+    return None
+
+
 @api_bp.route('/api/workflow/transition', methods=['POST'])
 @check_auth
 async def api_workflow_transition(request):
@@ -507,34 +533,17 @@ async def api_workflow_transition(request):
             return add_security_headers(response.json({"error": "Target table does not have a status column."}, status=400))
 
         old_status = str(current_row.get(status_col) or 'DFT')
-        if transition == 'SUBMIT':
-            new_status = 'PND' if status_max_len >= 3 else 'P'
-        elif transition == 'APPROVE':
-            new_status = 'ACT' if status_max_len >= 3 else 'A'
-        elif transition == 'REJECT':
-            new_status = 'REJ' if status_max_len >= 3 else 'R'
-        elif transition == 'RECALL':
-            new_status = 'DFT' if status_max_len >= 3 else 'D'
-        else:
-            return add_security_headers(response.json({"error": f"Unknown transition '{transition}'."}, status=400))
-
-        # Allowed moves (same status groups as get_approval_workflow_info): only a pending record
-        # can be approved, rejected or recalled; a pending record cannot be submitted again.
-        is_pending = old_status.upper() in ('PND', 'PENDING', 'SUBMITTED', 'IN_REVIEW', 'P')
-        if transition in ('APPROVE', 'REJECT', 'RECALL') and not is_pending:
-            return add_security_headers(response.json({"error": f"Only a pending record can be {transition.lower()}ed. Current status: {old_status}."}, status=400))
-        if transition == 'SUBMIT' and is_pending:
-            return add_security_headers(response.json({"error": "This record is already pending approval."}, status=400))
-
-        # Segregation of duties: the person who submitted a record cannot approve it.
+        submitter_id = None
         if transition == 'APPROVE':
             submitter_id = await conn.fetchval("""
                 SELECT pae_user_id FROM phc_approval_events_t
                 WHERE LOWER(pae_table_name) = LOWER($1) AND pae_record_id = $2 AND pae_action = 'SUBMIT'
                 ORDER BY pae_timestamp DESC LIMIT 1
             """, table_name, str(record_id))
-            if submitter_id is not None and submitter_id == user_id:
-                return add_security_headers(response.json({"error": "You submitted this record, so another approver must approve it."}, status=403))
+        refusal = transition_error(transition, old_status, submitter_id, user_id)
+        if refusal:
+            return add_security_headers(response.json({"error": refusal[0]}, status=refusal[1]))
+        new_status = WORKFLOW_TARGETS[transition][0 if status_max_len >= 3 else 1]
 
         # Generate 21 CFR Part 11 Cryptographic Signature Stamp
         ts_now = datetime.now()
@@ -618,7 +627,7 @@ async def get_workflow_history(request, table_name, record_id):
             auth_tables, _ = await get_authorized_tables(conn, request.ctx.user_id, request.ctx.role)
             if table_name not in auth_tables:
                 return add_security_headers(response.json({"error": "Unauthorized"}, status=403))
-            if not await record_visible(conn, table_name, record_id, request.ctx.user_id):
+            if not await record_visible(conn, table_name, record_id, request.ctx.user_id, request.ctx.role):
                 return add_security_headers(response.json({"error": "Record not found"}, status=404))
             rows = await conn.fetch("""
                 SELECT pae_event_id, pae_action, pae_from_status, pae_to_status, 
@@ -664,9 +673,11 @@ async def get_user_notifications(request):
     try:
         async with request.app.ctx.pool.acquire() as conn:
             rows = await conn.fetch("""
-                SELECT pun_notification_id, pun_title, pun_message, pun_category, 
-                       pun_link_url, pun_is_read, pun_created_at
+                SELECT pun_notification_id, pun_title, pun_message, pun_category,
+                       pun_link_url, (r.pnr_notification_id IS NOT NULL) AS is_read, pun_created_at
                 FROM phc_user_notifications_t
+                LEFT JOIN phc_notification_reads_t r
+                       ON r.pnr_notification_id = pun_notification_id AND r.pnr_user_id = $1
                 WHERE (pun_recipient_user_id = $1 OR pun_recipient_role = $2 OR (pun_recipient_user_id IS NULL AND pun_recipient_role IS NULL))
                 ORDER BY pun_created_at DESC
                 LIMIT 30
@@ -675,7 +686,7 @@ async def get_user_notifications(request):
             notifs = []
             unread_count = 0
             for r in rows:
-                if not r['pun_is_read']:
+                if not r['is_read']:
                     unread_count += 1
                 notifs.append({
                     "id": r['pun_notification_id'],
@@ -683,7 +694,7 @@ async def get_user_notifications(request):
                     "message": r['pun_message'],
                     "category": r['pun_category'] or 'WORKFLOW',
                     "link_url": r['pun_link_url'] or '#',
-                    "is_read": bool(r['pun_is_read']),
+                    "is_read": r['is_read'],
                     "timestamp": r['pun_created_at'].strftime('%Y-%m-%d %H:%M') if r['pun_created_at'] else ""
                 })
             return add_security_headers(response.json({"notifications": notifs, "unread_count": unread_count}))
@@ -701,7 +712,14 @@ async def mark_notification_read(request, notif_id):
     try:
         nid = int(notif_id)
         async with request.app.ctx.pool.acquire() as conn:
-            await conn.execute("UPDATE phc_user_notifications_t SET pun_is_read = TRUE WHERE pun_notification_id = $1 AND (pun_recipient_user_id = $2 OR pun_recipient_role = $3)", nid, request.ctx.user_id, request.ctx.role)
+            # Read state is per user: one approver opening a role notification must not clear it for the others.
+            await conn.execute("""
+                INSERT INTO phc_notification_reads_t (pnr_user_id, pnr_notification_id)
+                SELECT $2, pun_notification_id FROM phc_user_notifications_t
+                WHERE pun_notification_id = $1
+                  AND (pun_recipient_user_id = $2 OR pun_recipient_role = $3 OR (pun_recipient_user_id IS NULL AND pun_recipient_role IS NULL))
+                ON CONFLICT DO NOTHING
+            """, nid, request.ctx.user_id, request.ctx.role)
         return add_security_headers(response.json({"status": "success"}))
     except ValueError:
         return add_security_headers(response.json({"error": "Invalid notification id"}, status=400))
@@ -761,15 +779,6 @@ async def download_file_column(request, table_name, pk_val, col_name):
             
             res = response.raw(b_data, content_type=mime)
             res.headers["Content-Disposition"] = f'inline; filename="{col_name}_{pk_val}"'
-            return add_security_headers(res)
-        elif isinstance(val, str) and val.startswith("uploads/"):
-            upload_root = os.path.realpath(os.path.join(os.getcwd(), 'uploads'))
-            file_path = os.path.realpath(os.path.join(os.getcwd(), val))
-            if os.path.commonpath([upload_root, file_path]) != upload_root or not os.path.isfile(file_path):
-                raise NotFound("File not found")
-            res = await response.file(file_path, headers={
-                "Content-Disposition": f'attachment; filename="{os.path.basename(file_path)}"'
-            })
             return add_security_headers(res)
         else:
             return response.text(str(val))

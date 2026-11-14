@@ -3,7 +3,7 @@ import uuid
 import time
 import bcrypt
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sanic import Blueprint, response
 
 from app.config import JWT_SECRET, logger
@@ -12,6 +12,18 @@ from app.auth import check_login_rate_limit, record_login_attempt, USER_AUTH_CAC
 from app.database import get_table_columns
 
 auth_bp = Blueprint("auth_routes")
+
+
+def _as_utc(dt):
+    """Treat naive datetimes (older rows) as UTC."""
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
+def next_failed_count(failed_attempts, locked_until, now):
+    """Failure count after one more wrong password; an expired lock resets the count."""
+    if locked_until and _as_utc(locked_until) <= now:
+        failed_attempts = 0
+    return (failed_attempts or 0) + 1
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 async def login(request):
@@ -54,7 +66,8 @@ async def login(request):
             # Check for persistent database account lockout
             locked_until = user.get('pus_locked_until')
             if locked_until:
-                now_dt = datetime.now(locked_until.tzinfo) if locked_until.tzinfo else datetime.now()
+                locked_until = _as_utc(locked_until)
+                now_dt = datetime.now(timezone.utc)
                 if locked_until > now_dt:
                     secs_left = int((locked_until - now_dt).total_seconds())
                     mins_left = max(1, secs_left // 60 + 1)
@@ -106,17 +119,18 @@ async def login(request):
                 return add_security_headers(res)
             else:
                 # Increment failed attempts in PostgreSQL
-                failed_count = (user.get('pus_failed_attempts') or 0) + 1
+                now_utc = datetime.now(timezone.utc)
+                failed_count = next_failed_count(user.get('pus_failed_attempts'), user.get('pus_locked_until'), now_utc)
                 user_id_val = user.get('pus_user_id') or user.get('id')
                 if failed_count >= 5:
-                    lock_time = datetime.now() + timedelta(minutes=15)
+                    lock_time = now_utc + timedelta(minutes=15)
                     await conn.execute("UPDATE phc_users_t SET pus_failed_attempts = $1, pus_locked_until = $2 WHERE pus_user_id = $3", failed_count, lock_time, user_id_val)
                     return add_security_headers(response.json({
                         "status": "error", 
                         "message": "Account has been temporarily locked for 15 minutes due to 5 consecutive failed login attempts."
                     }, status=403))
                 else:
-                    await conn.execute("UPDATE phc_users_t SET pus_failed_attempts = $1 WHERE pus_user_id = $2", failed_count, user_id_val)
+                    await conn.execute("UPDATE phc_users_t SET pus_failed_attempts = $1, pus_locked_until = NULL WHERE pus_user_id = $2", failed_count, user_id_val)
         
         record_login_attempt(client_ip, success=False)
         return add_security_headers(response.json({"status": "error", "message": "Invalid credentials"}, status=401))
