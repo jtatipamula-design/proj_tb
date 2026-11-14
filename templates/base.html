@@ -328,6 +328,35 @@
         .theme-transitioning *::after {
             transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease !important;
         }
+
+        /* Accessibility: visible keyboard focus, skip link, reduced motion */
+        :focus-visible { outline: 2px solid var(--color-iris); outline-offset: 2px; }
+        .skip-link {
+            position: fixed; top: 8px; left: 8px; z-index: 10000; padding: 8px 14px; border-radius: 8px;
+            background: var(--surface-onyx-action); color: #fff; font-size: 13px; transform: translateY(-200%);
+        }
+        .skip-link:focus { transform: none; }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+        }
+        .toast { cursor: pointer; }
+        kbd {
+            font-family: var(--font-mono); font-size: 11px; padding: 1px 6px; border-radius: 5px;
+            border: 1px solid var(--color-ash); background: var(--color-bone); color: var(--color-graphite);
+        }
+
+        /* Phones: the sidebar becomes a slide-over drawer instead of squeezing the page */
+        #sidebar-backdrop { display: none; }
+        @media (max-width: 767px) {
+            #main-sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: 40; max-width: 88vw; box-shadow: var(--shadow-dropdown); }
+            #main-sidebar:not(.sidebar-closed) ~ #sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, 0.45); }
+            .hide-on-phone { display: none !important; }
+        }
+
+        @media print {
+            #main-sidebar, header, .toast-container, .atmospheric-wash, .floating-action-dock, .grid-toolbar, .pagination-bar, .form-actions { display: none !important; }
+            body, #app-body, main, #main-dynamic-content, .grid-scroll-wrap { overflow: visible !important; height: auto !important; max-height: none !important; }
+        }
     </style>
     <script>
         // Prevent FOUC (Flash of Unstyled Content) by applying the theme synchronously
@@ -346,7 +375,8 @@
     <div class="atmospheric-wash"></div>
 
     <!-- Toast Notification Container -->
-    <div id="toast-container" class="toast-container"></div>
+    <a href="#main-dynamic-content" class="skip-link">Skip to content</a>
+    <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
     
     <div id="app-body" class="flex h-screen overflow-hidden relative z-10">
         
@@ -461,7 +491,7 @@
                                 type="button"
                                 class="p-2 rounded-lg transition-all cursor-pointer"
                                 style="background: var(--color-bone); border: 1px solid var(--color-fog); color: var(--color-slate);"
-                                title="Toggle Theme (Light / Dark)">
+                                title="Toggle Theme (Light / Dark)" aria-label="Toggle theme">
                             <i data-lucide="moon" id="theme-moon-icon" class="w-4 h-4"></i>
                             <i data-lucide="sun" id="theme-sun-icon" class="w-4 h-4 hidden"></i>
                         </button>
@@ -469,13 +499,14 @@
                         <!-- Logout -->
                         <a href="/logout" 
                            class="p-2 rounded-lg transition-colors text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30" 
-                           title="Sign Out">
+                           title="Sign Out" aria-label="Sign out">
                             <i data-lucide="log-out" class="w-4 h-4"></i>
                         </a>
                     </div>
                 </div>
             </div>
         </aside>
+        <div id="sidebar-backdrop" onclick="setSidebarOpen(false)"></div>
 
         <!-- Main Content Area -->
         <main class="flex-1 flex flex-col h-screen overflow-hidden relative">
@@ -488,7 +519,7 @@
                             type="button"
                             class="p-1.5 rounded-lg transition-all cursor-pointer"
                             style="color: var(--color-slate); background: var(--color-bone); border: 1px solid var(--color-fog);"
-                            title="Toggle Sidebar">
+                            title="Toggle Sidebar" aria-label="Toggle sidebar">
                         <i data-lucide="panel-left" class="w-4 h-4"></i>
                     </button>
                     <h2 id="header-title" class="text-base font-semibold tracking-tight font-serif-heading" style="color: var(--color-obsidian);">
@@ -498,13 +529,25 @@
 
                 <!-- Header Actions: Notification Center -->
                 <div class="flex items-center gap-3">
+                    <button onclick="toggleCmdPalette()" type="button" class="flex items-center gap-2 px-3 py-2 rounded-lg text-xs cursor-pointer"
+                            style="color: var(--color-slate); background: var(--color-bone); border: 1px solid var(--color-fog);"
+                            title="Search screens (Ctrl+K)" aria-label="Search screens">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                        <span class="hide-on-phone">Search screens</span>
+                        <kbd class="hide-on-phone">Ctrl K</kbd>
+                    </button>
+                    <button onclick="toggleShortcuts()" type="button" class="p-2 rounded-lg cursor-pointer hide-on-phone"
+                            style="color: var(--color-slate); background: var(--color-bone); border: 1px solid var(--color-fog);"
+                            title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
+                        <i data-lucide="keyboard" class="w-4 h-4"></i>
+                    </button>
                     <div class="relative" id="notificationDropdownWrap">
                         <button onclick="toggleNotificationDropdown()" 
                                 type="button"
                                 id="notificationBellBtn"
                                 class="p-2 rounded-lg transition-all cursor-pointer relative"
                                 style="color: var(--color-slate); background: var(--color-bone); border: 1px solid var(--color-fog);"
-                                title="Notifications">
+                                title="Notifications" aria-label="Notifications">
                             <i data-lucide="bell" class="w-4 h-4"></i>
                             <span id="notificationBadge" class="hidden absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white font-mono text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">0</span>
                         </button>
@@ -517,7 +560,10 @@
                                     <i data-lucide="bell-ring" class="w-4 h-4 text-iris"></i>
                                     <span class="font-semibold text-xs text-obsidian">Notifications</span>
                                 </div>
-                                <button onclick="fetchNotifications()" class="text-xs text-iris hover:underline font-mono" type="button">Refresh</button>
+                                <div class="flex items-center gap-3">
+                                    <button onclick="markAllNotificationsRead()" class="text-xs text-iris hover:underline font-mono" type="button">Mark all read</button>
+                                    <button onclick="fetchNotifications()" class="text-xs text-iris hover:underline font-mono" type="button">Refresh</button>
+                                </div>
                             </div>
                             <div id="notificationList" class="max-h-72 overflow-y-auto divide-y" style="border-color: var(--color-fog);">
                                 <div class="p-4 text-center font-mono text-xs text-mist">Loading notifications...</div>
@@ -528,7 +574,7 @@
             </header>
 
             <!-- Dynamic Content Block -->
-            <div id="main-dynamic-content" class="flex-1 overflow-y-auto p-6 md:p-8 scroll-smooth relative z-0">
+            <div id="main-dynamic-content" tabindex="-1" class="flex-1 overflow-y-auto p-6 md:p-8 scroll-smooth relative z-0">
                 {% block content %}{% endblock %}
             </div>
         </main>
@@ -568,14 +614,11 @@
         function setSidebarOpen(open) {
             const aside = document.getElementById('main-sidebar');
             if (!aside) return;
-            if (open) {
-                aside.classList.remove('sidebar-closed');
-                localStorage.setItem('sidebarOpen', 'true');
-            } else {
-                aside.classList.add('sidebar-closed');
-                localStorage.setItem('sidebarOpen', 'false');
-            }
+            aside.classList.toggle('sidebar-closed', !open);
+            // On phones the drawer always starts closed, so its state is not remembered.
+            if (!isPhone()) localStorage.setItem('sidebarOpen', open ? 'true' : 'false');
         }
+        const isPhone = () => window.matchMedia('(max-width: 767px)').matches;
 
         function toggleSidebar() {
             const aside = document.getElementById('main-sidebar');
@@ -712,17 +755,45 @@
             const icon = type === 'success' ? 'check-circle-2' : 'alert-circle';
             const iconColor = type === 'success' ? 'var(--color-lagoon)' : '#ef4444';
             toast.innerHTML = `<i data-lucide="${icon}" style="color: ${iconColor}; min-width: 18px;"></i> <span>${esc(message)}</span>`;
+            // Errors stay long enough to read; any toast can be clicked away.
+            const ms = type === 'error' ? 9000 : 4000;
+            toast.style.animationDelay = `0s, ${ms - 500}ms`;
+            toast.title = 'Click to dismiss';
+            toast.onclick = () => toast.remove();
             container.appendChild(toast);
             if (window.lucide) lucide.createIcons();
-            setTimeout(() => toast.remove(), 4000);
+            setTimeout(() => toast.remove(), ms);
         }
+
+        // ======== SESSION EXPIRY & CONNECTIVITY ========
+        let sessionExpiredShown = false;
+        function handleSessionExpired() {
+            if (sessionExpiredShown) return;
+            sessionExpiredShown = true;
+            showToast('Your session has expired. Taking you to sign in...', 'error');
+            setTimeout(() => { window.location.href = '/login'; }, 1800);
+        }
+        const nativeFetch = window.fetch.bind(window);
+        window.fetch = async (...args) => {
+            const res = await nativeFetch(...args);
+            // Only the auth layer's own 401 means "signed out"; a wrong e-signature password is also a 401.
+            if (res.status === 401) res.clone().json().then(b => { if (b.error === 'Unauthorized') handleSessionExpired(); }).catch(() => {});
+            return res;
+        };
+        document.addEventListener('htmx:responseError', e => {
+            const xhr = e.detail.xhr;
+            if (xhr && xhr.status === 401 && xhr.responseText.includes('"Unauthorized"')) handleSessionExpired();
+        });
+        document.addEventListener('htmx:sendError', () => showToast('Could not reach the server. Check your connection and try again.', 'error'));
+        window.addEventListener('offline', () => showToast('You are offline. Changes cannot be saved until you reconnect.', 'error'));
+        window.addEventListener('online', () => showToast('Back online.'));
 
         // ======== PAGE INITIALIZATION ========
         document.addEventListener('DOMContentLoaded', () => {
             const savedTheme = localStorage.getItem('theme') || 'light';
             applyTheme(savedTheme);
 
-            if (localStorage.getItem('sidebarOpen') === 'false') {
+            if (isPhone() || localStorage.getItem('sidebarOpen') === 'false') {
                 document.getElementById('main-sidebar')?.classList.add('sidebar-closed');
             }
 
@@ -808,6 +879,7 @@
             try {
                 const res = await fetch('/api/notifications');
                 const data = await res.json();
+                unreadNotificationIds = (data.notifications || []).filter(n => !n.is_read).map(n => Number(n.id));
                 const badge = document.getElementById('notificationBadge');
                 const list = document.getElementById('notificationList');
                 if (!badge || !list) return;
@@ -884,13 +956,38 @@
             }
         });
 
-        // Initialize notifications poll on page load
+        let unreadNotificationIds = [];
+        async function markAllNotificationsRead() {
+            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+            // shortcut: one request per unread item (the list is capped at 30); add a bulk endpoint if that cap grows.
+            await Promise.allSettled(unreadNotificationIds.map(id =>
+                fetch(`/api/notifications/${id}/read`, { method: 'POST', headers: { 'X-CSRF-Token': token } })));
+            fetchNotifications();
+        }
+
+        // Load on page open, then refresh every minute while the tab is visible.
         document.addEventListener('DOMContentLoaded', fetchNotifications);
+        setInterval(() => { if (!document.hidden && navigator.onLine) fetchNotifications(); }, 60000);
     </script>
 
     <!-- Command Palette Modal -->
+    <!-- Keyboard Shortcuts Help -->
+    <div id="shortcutsOverlay" class="fixed inset-0 bg-black/60 z-[100] hidden items-center justify-center p-4" onclick="toggleShortcuts()">
+        <div class="sketch-card w-full max-w-md p-5" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" onclick="event.stopPropagation()">
+            <h3 class="font-semibold text-sm mb-3" style="color: var(--color-obsidian);">Keyboard shortcuts</h3>
+            <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 text-[13px] items-center" style="color: var(--color-graphite);">
+                <dt><kbd>Ctrl</kbd> <kbd>K</kbd></dt><dd>Search and jump to any screen</dd>
+                <dt><kbd>/</kbd></dt><dd>Search the current table</dd>
+                <dt><kbd>Ctrl</kbd> <kbd>S</kbd></dt><dd>Save the record you are editing</dd>
+                <dt>Double-click</dt><dd>Open a table row for editing</dd>
+                <dt><kbd>Esc</kbd></dt><dd>Close the open dialog</dd>
+                <dt><kbd>?</kbd></dt><dd>Show this list</dd>
+            </dl>
+        </div>
+    </div>
+
     <div id="cmdPaletteOverlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] hidden items-start justify-center pt-[15vh] p-4 transition-opacity opacity-0">
-        <div id="cmdPaletteModal" class="bg-surface-pure-white-cards dark:bg-bone w-full max-w-2xl rounded-2xl shadow-dropdown overflow-hidden transform scale-95 transition-transform" onclick="event.stopPropagation()">
+        <div id="cmdPaletteModal" role="dialog" aria-modal="true" aria-label="Search screens" class="bg-surface-pure-white-cards dark:bg-bone w-full max-w-2xl rounded-2xl shadow-dropdown overflow-hidden transform scale-95 transition-transform" onclick="event.stopPropagation()">
             <div class="p-4 border-b border-glass-border dark:border-graphite/20 flex items-center gap-3">
                 <i data-lucide="search" class="w-5 h-5 text-mist"></i>
                 <input type="text" id="cmdPaletteInput" class="w-full bg-transparent border-none outline-none text-obsidian dark:text-bone text-lg font-ui placeholder-mist" placeholder="Search modules and screens... (Ctrl+K or Cmd+K)">
@@ -928,6 +1025,23 @@
         let cmdSelectedIndex = -1;
         let currentFilteredResults = [];
 
+        // Remember the last few screens opened (table or form pages) for the palette.
+        let recentScreens = [];
+        try {
+            recentScreens = JSON.parse(localStorage.getItem('recentScreens') || '[]');
+            const code = (location.pathname.match(/^\/(?:table|new|edit|form)\/([^/]+)/) || [])[1];
+            if (code && cmdPaletteData.some(i => i.url === '/table/' + code)) {
+                recentScreens = ['/table/' + code, ...recentScreens.filter(u => u !== '/table/' + code)].slice(0, 6);
+                localStorage.setItem('recentScreens', JSON.stringify(recentScreens));
+            }
+        } catch (e) { recentScreens = []; }
+
+        function toggleShortcuts() {
+            const o = document.getElementById('shortcutsOverlay');
+            o.classList.toggle('hidden');
+            o.classList.toggle('flex');
+        }
+
         function toggleCmdPalette() {
             if (cmdOverlay.classList.contains('hidden')) {
                 cmdOverlay.classList.remove('hidden');
@@ -951,10 +1065,13 @@
 
         function renderCmdResults(query) {
             query = query.toLowerCase();
-            currentFilteredResults = cmdPaletteData.filter(item => 
-                item.name.toLowerCase().includes(query) || 
+            currentFilteredResults = cmdPaletteData.filter(item =>
+                item.name.toLowerCase().includes(query) ||
                 item.module.toLowerCase().includes(query)
             );
+            // With nothing typed, recently opened screens come first.
+            const rank = item => { const i = recentScreens.indexOf(item.url); return i < 0 ? Infinity : i; };
+            if (!query) currentFilteredResults.sort((a, b) => rank(a) - rank(b));
 
             if (currentFilteredResults.length === 0) {
                 cmdResults.innerHTML = '<div class="p-6 text-center text-sm text-mist font-ui">No results found</div>';
@@ -968,7 +1085,7 @@
                     </div>
                     <div>
                         <div class="text-sm font-semibold text-obsidian dark:text-bone">${esc(item.name)}</div>
-                        <div class="text-[11px] text-mist font-mono">${esc(item.module)}</div>
+                        <div class="text-[11px] text-mist font-mono">${esc(item.module)}${!query && recentScreens.includes(item.url) ? ' · Recent' : ''}</div>
                     </div>
                     <div class="ml-auto text-mist opacity-0 transition-opacity">
                         <i data-lucide="corner-down-left" class="w-4 h-4"></i>
@@ -999,6 +1116,14 @@
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
                 e.preventDefault();
                 toggleCmdPalette();
+            }
+            const typing = e.target.closest && e.target.closest('input, textarea, select, [contenteditable="true"]');
+            const shortcutsOpen = !document.getElementById('shortcutsOverlay').classList.contains('hidden');
+            if ((e.key === '?' && !typing) || (e.key === 'Escape' && shortcutsOpen)) toggleShortcuts();
+            if (e.key === 'Escape') {
+                // Close any open dialog (audit trail, e-signature, filters, columns) and the notification list.
+                document.querySelectorAll('.grid-modal-overlay').forEach(m => { if (m.style.display === 'flex') m.style.display = 'none'; });
+                document.getElementById('notificationPopover')?.classList.add('hidden');
             }
             if (!cmdOverlay.classList.contains('hidden')) {
                 if (e.key === 'Escape') {
