@@ -95,8 +95,9 @@ def generate_csrf_token(session_id: str) -> str:
 
 def validate_csrf_token(provided_token: str, session_id: str) -> bool:
     """Constant-time validation of CSRF token against active session ID."""
-    # Temporarily disabled CSRF validation as requested to unblock record creation
-    return True
+    if not provided_token or not session_id:
+        return False
+    return hmac.compare_digest(str(provided_token).strip(), generate_csrf_token(session_id))
 
 def validate_password_strength(password: str) -> tuple:
     """Enforces enterprise password complexity requirements."""

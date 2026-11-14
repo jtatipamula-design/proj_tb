@@ -1091,7 +1091,7 @@
         row.className = 'filter-rule-row';
 
         let colOptions = ALL_COLUMNS.map(c => 
-            `<option value="${c.raw}" ${c.raw === rule.col ? 'selected' : ''}>${c.label}</option>`
+            `<option value="${esc(c.raw)}" ${c.raw === rule.col ? 'selected' : ''}>${esc(c.label)}</option>`
         ).join('');
 
         row.innerHTML = `
@@ -1110,7 +1110,7 @@
                 <option value="is_empty" ${rule.op === 'is_empty' ? 'selected' : ''}>Is empty</option>
                 <option value="is_not_empty" ${rule.op === 'is_not_empty' ? 'selected' : ''}>Is not empty</option>
             </select>
-            <input type="text" class="sketch-input py-1 text-xs" value="${rule.val || ''}" placeholder="Value..." 
+            <input type="text" class="sketch-input py-1 text-xs" value="${esc(rule.val)}" placeholder="Value..."
                    oninput="activeFilterRules[${index}].val = this.value">
             <button type="button" class="text-red-400 hover:text-red-600 p-1" onclick="removeFilterRule(${index})">
                 <i data-lucide="trash-2" class="w-4 h-4"></i>

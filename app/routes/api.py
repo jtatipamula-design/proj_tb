@@ -337,8 +337,11 @@ async def get_record_audit_history(request, table_name, record_id):
     
     try:
         async with request.app.ctx.pool.acquire() as conn:
+            auth_tables, _ = await get_authorized_tables(conn, request.ctx.user_id, request.ctx.role)
+            if table_name not in auth_tables:
+                return add_security_headers(response.json({"error": "Unauthorized"}, status=403))
             rows = await conn.fetch("""
-                SELECT 
+                SELECT
                     pal_audit_id, pal_action, pal_username, pal_client_ip, 
                     pal_old_values, pal_new_values, pal_timestamp
                 FROM phc_audit_log_t 
@@ -531,6 +534,9 @@ async def get_workflow_history(request, table_name, record_id):
         
     try:
         async with request.app.ctx.pool.acquire() as conn:
+            auth_tables, _ = await get_authorized_tables(conn, request.ctx.user_id, request.ctx.role)
+            if table_name not in auth_tables:
+                return add_security_headers(response.json({"error": "Unauthorized"}, status=403))
             rows = await conn.fetch("""
                 SELECT pae_event_id, pae_action, pae_from_status, pae_to_status, 
                        pae_username, pae_user_role, pae_comments, pae_esig_hash, 
