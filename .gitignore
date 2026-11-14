@@ -9,3 +9,6 @@ __pycache__/
 uploads/
 .DS_Store
 Thumbs.db
+venv/
+.pytest_cache/
+docs/12i TRM/

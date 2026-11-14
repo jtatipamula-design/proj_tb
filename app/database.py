@@ -128,24 +128,6 @@ async def get_pk_column(conn, table_name):
     except Exception:
         pass
 
-    # Heuristic fallback if table lacks formal primary key constraint
-    try:
-        cols = await conn.fetch("""
-            SELECT column_name 
-            FROM information_schema.columns 
-            WHERE table_name = $1 AND table_schema = 'public'
-            ORDER BY ordinal_position
-        """, table_name)
-        col_names = [c['column_name'] for c in cols]
-        for c in col_names:
-            if c.endswith('_id') or c.endswith('_code') or c == 'id':
-                SCHEMA_CACHE["pks"][table_name] = c
-                return c
-        if col_names:
-            SCHEMA_CACHE["pks"][table_name] = col_names[0]
-            return col_names[0]
-    except Exception:
-        pass
     return None
 
 async def get_fk_map(conn, table_name):
@@ -298,11 +280,15 @@ async def setup_db(app, loop):
                         is_applied = await conn.fetchval("SELECT 1 FROM phc_schema_migrations_t WHERE version = $1", version)
                         if not is_applied:
                             logger.info(f"Applying migration: {version}")
-                            with open(mf, 'r') as f:
+                            with open(mf, 'r', encoding='utf-8') as f:
                                 sql = f.read()
-                            async with conn.transaction():
-                                await conn.execute(sql)
-                                await conn.execute("INSERT INTO phc_schema_migrations_t (version) VALUES ($1)", version)
+                            # Each file is its own transaction; one failing file must not block the rest.
+                            try:
+                                async with conn.transaction():
+                                    await conn.execute(sql)
+                                    await conn.execute("INSERT INTO phc_schema_migrations_t (version) VALUES ($1)", version)
+                            except Exception as mig_err:
+                                logger.error(f"Migration {version} FAILED and was rolled back: {mig_err}")
                 finally:
                     await conn.execute("SELECT pg_advisory_unlock(742918)")
         except Exception as e:

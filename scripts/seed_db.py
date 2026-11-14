@@ -1,6 +1,7 @@
 """
 ERP Database Seeding Module and Module Classification Rules.
-Includes Cleaning Validation (Module 10) table definitions and seeding logic.
+Includes Cleaning Validation (Module 10) seeding logic.
+Table DDL lives in migrations/000_base_schema.sql (single source of truth).
 """
 
 import os
@@ -27,7 +28,7 @@ REQUIRED_MODULES = [
 ]
 
 CLEANING_VALIDATION_SCREENS = {
-    "pcv_products_t": "Products & Dosage Master",
+    "pcv_production_products_t": "Products & Dosage Master",  # live table name (was pcv_products_t)
     "pcv_product_strengths_t": "Product Strengths",
     "pcv_product_stages_t": "Product Manufacturing Stages",
     "pcv_product_pack_styles_t": "Product Pack Styles",
@@ -54,405 +55,6 @@ CLEANING_VALIDATION_SCREENS = {
     "pcv_test_results_t": "Analytical Test Results",
     "pcv_validation_reports_t": "Validation Reports"
 }
-
-CLEANING_VALIDATION_DDL = [
-    """
-    CREATE TABLE IF NOT EXISTS pcv_products_t (
-        pcv_product_id BIGSERIAL PRIMARY KEY,
-        pcv_product_code VARCHAR(50) UNIQUE NOT NULL,
-        pcv_product_name VARCHAR(200) NOT NULL,
-        pcv_dosage_form VARCHAR(50) NOT NULL CHECK (pcv_dosage_form IN ('Tablets', 'Capsules', 'Liquids', 'Sachets', 'Injections')),
-        pcv_grade VARCHAR(50) DEFAULT 'USP',
-        pcv_description TEXT,
-        pcv_is_active BOOLEAN DEFAULT TRUE,
-        pcv_company_id BIGINT NOT NULL DEFAULT 1 REFERENCES phc_companies_t(pcp_company_id),
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_product_strengths_t (
-        pcv_strength_id BIGSERIAL PRIMARY KEY,
-        pcv_product_id BIGINT NOT NULL REFERENCES pcv_products_t(pcv_product_id) ON DELETE CASCADE,
-        pcv_strength_value VARCHAR(100) NOT NULL,
-        pcv_uom VARCHAR(20) NOT NULL,
-        pcv_notes TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_product_stages_t (
-        pcv_stage_id BIGSERIAL PRIMARY KEY,
-        pcv_product_id BIGINT NOT NULL REFERENCES pcv_products_t(pcv_product_id) ON DELETE CASCADE,
-        pcv_stage_name VARCHAR(100) NOT NULL,
-        pcv_stage_code VARCHAR(30) NOT NULL,
-        pcv_mfc_mfr_no VARCHAR(50) NOT NULL,
-        pcv_description TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        CONSTRAINT idx_pcv_prod_stage_code UNIQUE (pcv_product_id, pcv_stage_code)
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_product_pack_styles_t (
-        pcv_pack_style_id BIGSERIAL PRIMARY KEY,
-        pcv_product_id BIGINT NOT NULL REFERENCES pcv_products_t(pcv_product_id) ON DELETE CASCADE,
-        pcv_pack_type VARCHAR(100) NOT NULL,
-        pcv_pack_count INT NOT NULL,
-        pcv_pack_code VARCHAR(30) NOT NULL,
-        pcv_description TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_pde_registrations_t (
-        pcv_pde_id BIGSERIAL PRIMARY KEY,
-        pcv_product_id BIGINT NOT NULL REFERENCES pcv_products_t(pcv_product_id) ON DELETE CASCADE,
-        pcv_ref_document_no VARCHAR(50) NOT NULL,
-        pcv_validity_date TIMESTAMPTZ NOT NULL,
-        pcv_remarks TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_pde_api_details_t (
-        pcv_pde_detail_id BIGSERIAL PRIMARY KEY,
-        pcv_pde_id BIGINT NOT NULL REFERENCES pcv_pde_registrations_t(pcv_pde_id) ON DELETE CASCADE,
-        pcv_api_name VARCHAR(150) NOT NULL,
-        pcv_pde_value NUMERIC(10, 4) NOT NULL,
-        pcv_uom VARCHAR(20) NOT NULL DEFAULT 'mg/day',
-        pcv_description TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_solubility_details_t (
-        pcv_solubility_id BIGSERIAL PRIMARY KEY,
-        pcv_product_id BIGINT NOT NULL REFERENCES pcv_products_t(pcv_product_id) ON DELETE CASCADE,
-        pcv_api_name VARCHAR(150) NOT NULL,
-        pcv_solubility_in_water VARCHAR(50) NOT NULL CHECK (pcv_solubility_in_water IN (
-            'Very soluble', 'Freely soluble', 'Soluble', 'Sparingly soluble', 
-            'Slightly soluble', 'Very slightly soluble', 'Practically insoluble'
-        )),
-        pcv_ref_document_no VARCHAR(50) NOT NULL,
-        pcv_notes TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_mdd_registrations_t (
-        pcv_mdd_id BIGSERIAL PRIMARY KEY,
-        pcv_product_id BIGINT NOT NULL REFERENCES pcv_products_t(pcv_product_id) ON DELETE CASCADE,
-        pcv_product_mdd NUMERIC(10, 2) NOT NULL,
-        pcv_product_mdd_uom VARCHAR(20) NOT NULL,
-        pcv_ref_document_no VARCHAR(50) NOT NULL,
-        pcv_remarks TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_mdd_api_details_t (
-        pcv_mdd_detail_id BIGSERIAL PRIMARY KEY,
-        pcv_mdd_id BIGINT NOT NULL REFERENCES pcv_mdd_registrations_t(pcv_mdd_id) ON DELETE CASCADE,
-        pcv_api_name VARCHAR(150) NOT NULL,
-        pcv_api_mdd NUMERIC(10, 2) NOT NULL,
-        pcv_uom VARCHAR(20) NOT NULL DEFAULT 'mg',
-        pcv_description TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_test_methods_t (
-        pcv_method_id BIGSERIAL PRIMARY KEY,
-        pcv_product_id BIGINT NOT NULL REFERENCES pcv_products_t(pcv_product_id) ON DELETE CASCADE,
-        pcv_test_method_no VARCHAR(50) NOT NULL,
-        pcv_api_name VARCHAR(150) NOT NULL,
-        pcv_lod_value NUMERIC(10, 4) NOT NULL,
-        pcv_loq_value NUMERIC(10, 4) NOT NULL,
-        pcv_uom VARCHAR(20) NOT NULL DEFAULT 'ppm',
-        pcv_description TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_product_batch_sizes_t (
-        pcv_batch_size_id BIGSERIAL PRIMARY KEY,
-        pcv_product_id BIGINT NOT NULL REFERENCES pcv_products_t(pcv_product_id) ON DELETE CASCADE,
-        pcv_strength_value VARCHAR(100) NOT NULL,
-        pcv_stage_code VARCHAR(30) NOT NULL,
-        pcv_batch_size NUMERIC(12, 2) NOT NULL,
-        pcv_uom VARCHAR(20) NOT NULL,
-        pcv_ref_bmr_no VARCHAR(50) NOT NULL,
-        pcv_notes TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_equipments_t (
-        pcv_equipment_id VARCHAR(50) PRIMARY KEY,
-        pcv_equipment_name VARCHAR(150) NOT NULL,
-        pcv_make VARCHAR(100),
-        pcv_model VARCHAR(50),
-        pcv_capacity NUMERIC(10, 2),
-        pcv_uom VARCHAR(20),
-        pcv_location_building VARCHAR(100),
-        pcv_room_name VARCHAR(100),
-        pcv_room_number VARCHAR(30),
-        pcv_is_active BOOLEAN DEFAULT TRUE,
-        pcv_description TEXT,
-        pcv_company_id BIGINT NOT NULL DEFAULT 1 REFERENCES phc_companies_t(pcp_company_id),
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_equipment_surface_areas_t (
-        pcv_surface_area_id BIGSERIAL PRIMARY KEY,
-        pcv_equipment_id VARCHAR(50) NOT NULL REFERENCES pcv_equipments_t(pcv_equipment_id) ON DELETE CASCADE,
-        pcv_product_contact_surface_area NUMERIC(12, 2) NOT NULL,
-        pcv_uom VARCHAR(20) NOT NULL DEFAULT 'Sq.Cm',
-        pcv_notes TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_equipment_sampling_locations_t (
-        pcv_sampling_loc_id BIGSERIAL PRIMARY KEY,
-        pcv_equipment_id VARCHAR(50) NOT NULL REFERENCES pcv_equipments_t(pcv_equipment_id) ON DELETE CASCADE,
-        pcv_location_description TEXT NOT NULL,
-        pcv_sample_type VARCHAR(30) CHECK (pcv_sample_type IN ('Swab', 'Rinse', 'Swab/Rinse')),
-        pcv_test_for VARCHAR(30) CHECK (pcv_test_for IN ('Chemical', 'Micro', 'Detergent')),
-        pcv_sample_identifier VARCHAR(30) NOT NULL,
-        pcv_image_ref TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_product_equipment_mapping_t (
-        pcv_mapping_id BIGSERIAL PRIMARY KEY,
-        pcv_product_id BIGINT NOT NULL REFERENCES pcv_products_t(pcv_product_id) ON DELETE CASCADE,
-        pcv_block_no VARCHAR(30) NOT NULL,
-        pcv_module_no VARCHAR(30) NOT NULL,
-        pcv_equipment_id VARCHAR(50) NOT NULL REFERENCES pcv_equipments_t(pcv_equipment_id) ON DELETE CASCADE,
-        pcv_notes TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        CONSTRAINT idx_pcv_prod_block_equip UNIQUE (pcv_product_id, pcv_block_no, pcv_module_no, pcv_equipment_id)
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_validation_executions_t (
-        pcv_execution_id BIGSERIAL PRIMARY KEY,
-        pcv_product_id BIGINT NOT NULL REFERENCES pcv_products_t(pcv_product_id),
-        pcv_block_no VARCHAR(30) NOT NULL,
-        pcv_module_no VARCHAR(30) NOT NULL,
-        pcv_protocol_no VARCHAR(50) UNIQUE NOT NULL,
-        pcv_current_status VARCHAR(50) DEFAULT 'Training' CHECK (pcv_current_status IN (
-            'Training', 'CPR', 'Equipment Clearance', 'TRF', 'Sampling', 'Results Entry', 'Equipment Release', 'Completed'
-        )),
-        pcv_description TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_training_records_t (
-        pcv_training_id BIGSERIAL PRIMARY KEY,
-        pcv_execution_id BIGINT NOT NULL REFERENCES pcv_validation_executions_t(pcv_execution_id) ON DELETE CASCADE,
-        pcv_trainer_name VARCHAR(100) NOT NULL,
-        pcv_trainer_employee_id VARCHAR(50) NOT NULL,
-        pcv_emp_id BIGINT REFERENCES phc_emp_t(pem_emp_id),
-        pcv_is_submitted BOOLEAN DEFAULT FALSE,
-        pcv_submitted_at TIMESTAMPTZ,
-        pcv_notes TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_training_attendees_t (
-        pcv_attendee_id BIGSERIAL PRIMARY KEY,
-        pcv_training_id BIGINT NOT NULL REFERENCES pcv_training_records_t(pcv_training_id) ON DELETE CASCADE,
-        pcv_employee_name VARCHAR(100) NOT NULL,
-        pcv_employee_id VARCHAR(50) NOT NULL,
-        pcv_emp_id BIGINT REFERENCES phc_emp_t(pem_emp_id),
-        pcv_notes TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_cleaning_process_records_t (
-        pcv_cpr_id BIGSERIAL PRIMARY KEY,
-        pcv_cpr_no VARCHAR(50) UNIQUE NOT NULL,
-        pcv_execution_id BIGINT NOT NULL REFERENCES pcv_validation_executions_t(pcv_execution_id),
-        pcv_equipment_id VARCHAR(50) NOT NULL REFERENCES pcv_equipments_t(pcv_equipment_id),
-        pcv_batch_number VARCHAR(50),
-        pcv_sop_no VARCHAR(50) NOT NULL,
-        pcv_status VARCHAR(30) DEFAULT 'In-Progress' CHECK (pcv_status IN ('In-Progress', 'Completed', 'Approved')),
-        pcv_remarks TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_cpr_execution_steps_t (
-        pcv_step_id BIGSERIAL PRIMARY KEY,
-        pcv_cpr_id BIGINT NOT NULL REFERENCES pcv_cleaning_process_records_t(pcv_cpr_id) ON DELETE CASCADE,
-        pcv_step_number VARCHAR(10) NOT NULL,
-        pcv_instruction TEXT NOT NULL,
-        pcv_criteria TEXT NOT NULL,
-        pcv_observation_type VARCHAR(30) CHECK (pcv_observation_type IN ('Yes/No', 'Done', 'Text_Entry')),
-        pcv_is_done BOOLEAN DEFAULT FALSE,
-        pcv_vacuum_cleaner_id VARCHAR(50),
-        pcv_performed_by VARCHAR(50),
-        pcv_performed_at TIMESTAMPTZ,
-        pcv_notes TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_equipment_clearance_checklists_t (
-        pcv_clearance_id BIGSERIAL PRIMARY KEY,
-        pcv_cpr_id BIGINT NOT NULL REFERENCES pcv_cleaning_process_records_t(pcv_cpr_id),
-        pcv_status VARCHAR(30) DEFAULT 'Pending QA Inspection',
-        pcv_remarks TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_equipment_clearance_items_t (
-        pcv_item_id BIGSERIAL PRIMARY KEY,
-        pcv_clearance_id BIGINT NOT NULL REFERENCES pcv_equipment_clearance_checklists_t(pcv_clearance_id) ON DELETE CASCADE,
-        pcv_checkpoint_no INT NOT NULL,
-        pcv_checkpoint_description TEXT NOT NULL,
-        pcv_inspected_by_pd VARCHAR(30) CHECK (pcv_inspected_by_pd IN ('YES', 'NO', 'Satisfactory', 'Not satisfactory')),
-        pcv_inspected_by_qa VARCHAR(30) CHECK (pcv_inspected_by_qa IN ('YES', 'NO', 'Satisfactory', 'Not satisfactory')),
-        pcv_remarks TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_test_request_forms_t (
-        pcv_trf_id BIGSERIAL PRIMARY KEY,
-        pcv_cpr_id BIGINT NOT NULL REFERENCES pcv_cleaning_process_records_t(pcv_cpr_id),
-        pcv_equipment_id VARCHAR(50) NOT NULL REFERENCES pcv_equipments_t(pcv_equipment_id),
-        pcv_submitted_to_qa BOOLEAN DEFAULT FALSE,
-        pcv_submitted_at TIMESTAMPTZ,
-        pcv_notes TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_sampling_records_t (
-        pcv_sampling_record_id BIGSERIAL PRIMARY KEY,
-        pcv_trf_id BIGINT NOT NULL REFERENCES pcv_test_request_forms_t(pcv_trf_id),
-        pcv_is_sampling_done BOOLEAN DEFAULT FALSE,
-        pcv_sampling_done_at TIMESTAMPTZ,
-        pcv_is_acknowledged_by_qc BOOLEAN DEFAULT FALSE,
-        pcv_qc_acknowledged_at TIMESTAMPTZ,
-        pcv_remarks TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_test_results_t (
-        pcv_result_id BIGSERIAL PRIMARY KEY,
-        pcv_sampling_record_id BIGINT NOT NULL REFERENCES pcv_sampling_records_t(pcv_sampling_record_id),
-        pcv_sampling_loc_id BIGINT NOT NULL REFERENCES pcv_equipment_sampling_locations_t(pcv_sampling_loc_id),
-        pcv_chemical_result NUMERIC(10, 4),
-        pcv_microbiological_result NUMERIC(10, 4),
-        pcv_detergent_result NUMERIC(10, 4),
-        pcv_result_status VARCHAR(20) DEFAULT 'Pass' CHECK (pcv_result_status IN ('Pass', 'Fail', 'OOS')),
-        pcv_qa_acknowledged BOOLEAN DEFAULT FALSE,
-        pcv_qa_acknowledged_at TIMESTAMPTZ,
-        pcv_notes TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """,
-    """
-    CREATE TABLE IF NOT EXISTS pcv_validation_reports_t (
-        pcv_report_id BIGSERIAL PRIMARY KEY,
-        pcv_execution_id BIGINT NOT NULL REFERENCES pcv_validation_executions_t(pcv_execution_id),
-        pcv_report_no VARCHAR(50) UNIQUE NOT NULL,
-        pcv_generated_by VARCHAR(50) NOT NULL,
-        pcv_generated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-        pcv_report_pdf_url TEXT,
-        pcv_summary_notes TEXT,
-        pcv_created TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_created_by VARCHAR(50) NOT NULL DEFAULT 'System',
-        pcv_modified TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        pcv_modified_by VARCHAR(50) NOT NULL DEFAULT 'System'
-    );
-    """
-]
 
 def classify_table(table_name: str) -> int:
     """
@@ -504,8 +106,8 @@ def classify_table(table_name: str) -> int:
 
 async def seed_database():
     """
-    Connects to PostgreSQL database, creates all 26 pcv_*_t tables,
-    upserts Module ID 10 ("Cleaning Validation"), and registers all 26 screens.
+    Connects to PostgreSQL database, upserts Module ID 10 ("Cleaning Validation"),
+    and registers all 26 screens. Requires the schema from migrations/000_base_schema.sql.
     """
     dsn = os.environ.get("DATABASE_URL")
     if not dsn:
@@ -515,13 +117,10 @@ async def seed_database():
     print("Connecting to database for seeding...")
     conn = await asyncpg.connect(dsn=dsn)
     try:
-        # 1. Create all 26 DDL tables
-        print("Executing Cleaning Validation DDL creation statements...")
-        for stmt in CLEANING_VALIDATION_DDL:
-            await conn.execute(stmt)
-        print("All 26 pcv_*_t tables verified/created successfully.")
+        # Schema (all pcv_*_t and phc_*_t tables) is created by migrations/000_base_schema.sql,
+        # applied by app/database.py setup_db. This script only seeds data.
 
-        # 2. Upsert Module ID 10 in phc_module_t
+        # 1. Upsert Module ID 10 in phc_module_t
         await conn.execute("""
             INSERT INTO phc_module_t (pmd_module_id, pmd_module_name, pmd_status, pmd_created_by, pmd_modified_by)
             VALUES (10, 'Cleaning Validation', 'ACT', 'System', 'System')
@@ -529,7 +128,7 @@ async def seed_database():
         """)
         print("Module ID 10 ('Cleaning Validation') registered in phc_module_t.")
 
-        # 3. Register all 26 screens into phc_screens_t
+        # 2. Register all 26 screens into phc_screens_t
         print("Registering 26 Cleaning Validation screens in phc_screens_t...")
         for screen_code, screen_name in CLEANING_VALIDATION_SCREENS.items():
             exists = await conn.fetchval("SELECT psn_screen_id FROM phc_screens_t WHERE psn_screen_code = $1", screen_code)

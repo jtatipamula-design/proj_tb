@@ -31,7 +31,7 @@ register_auth_cache_clear_cb(clear_auth_cache)
 async def build_modules_tree(conn, all_tables, table_modules, schema_cols_map):
     """Constructs the hierarchical module and screen navigation tree with icons and cached search indexing."""
     if not all_tables:
-        return {}
+        return {}, schema_cols_map
         
     table_codes = list(all_tables.keys())
     if schema_cols_map is None:
@@ -205,7 +205,7 @@ def check_auth(f):
                     request.ctx.modules_tree = modules_tree
             except Exception as db_err:
                 logger.error(f"Database Auth Check Error: {db_err}")
-                return add_security_headers(response.text(f"Database connection error: {db_err}", status=500))
+                return add_security_headers(response.text("Database connection error", status=500))
 
         return await f(request, *args, **kwargs)
     return decorated_function
@@ -213,15 +213,23 @@ def check_auth(f):
 # Enterprise Sliding-Window Rate Limiter
 LOGIN_ATTEMPTS = {}  # ip -> list of timestamp floats
 
+def _sweep_login_attempts(now):
+    """Drops IPs whose attempts are all outside the window, so the dict stays bounded."""
+    if len(LOGIN_ATTEMPTS) > 1000:
+        for k in [k for k, v in LOGIN_ATTEMPTS.items() if not v or now - v[-1] >= RATE_LIMIT_WINDOW]:
+            del LOGIN_ATTEMPTS[k]
+
 def check_login_rate_limit(ip: str):
     """Returns (is_allowed, seconds_remaining)."""
     now = time.time()
-    attempts = LOGIN_ATTEMPTS.get(ip, [])
-    attempts = [t for t in attempts if now - t < RATE_LIMIT_WINDOW]
+    _sweep_login_attempts(now)
+    attempts = [t for t in LOGIN_ATTEMPTS.get(ip, []) if now - t < RATE_LIMIT_WINDOW]
+    if not attempts:
+        LOGIN_ATTEMPTS.pop(ip, None)
+        return True, 0
     LOGIN_ATTEMPTS[ip] = attempts
     if len(attempts) >= MAX_LOGIN_ATTEMPTS:
-        oldest = attempts[0]
-        remaining = int(RATE_LIMIT_WINDOW - (now - oldest))
+        remaining = int(RATE_LIMIT_WINDOW - (now - attempts[0]))
         return False, max(1, remaining)
     return True, 0
 
@@ -231,6 +239,7 @@ def record_login_attempt(ip: str, success: bool = False):
         LOGIN_ATTEMPTS.pop(ip, None)
     else:
         now = time.time()
+        _sweep_login_attempts(now)
         attempts = LOGIN_ATTEMPTS.get(ip, [])
         attempts.append(now)
         LOGIN_ATTEMPTS[ip] = [t for t in attempts if now - t < RATE_LIMIT_WINDOW]
