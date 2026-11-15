@@ -7,7 +7,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
     <script src="https://unpkg.com/lucide@1.59.0/dist/umd/lucide.min.js" integrity="sha384-4VQAGBhahgTiMVvXUqbh6qcs45zGzR/8znv7XORRfWkxZfzRbhLL5Uh+fSdvdqdM" crossorigin="anonymous"></script>
     
     <script>
@@ -220,6 +219,8 @@
             margin-top: 16px; min-height: 20px; opacity: 0; transition: opacity 0.3s; text-align: center;
         }
     </style>
+    <!-- Last in <head> so utilities override the inline styles above, as the Tailwind CDN did -->
+    <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
 

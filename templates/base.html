@@ -18,40 +18,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,500;0,600;1,500&family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     
     <script src="https://unpkg.com/lucide@1.59.0/dist/umd/lucide.min.js" integrity="sha384-4VQAGBhahgTiMVvXUqbh6qcs45zGzR/8znv7XORRfWkxZfzRbhLL5Uh+fSdvdqdM" crossorigin="anonymous"></script>
-    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://cdn.jsdelivr.net/npm/animejs@3.2.2/lib/anime.min.js"></script>
     
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        obsidian: '#212123',
-                        bone: '#fafafa',
-                        graphite: '#4a4a4a',
-                        carbon: '#000000',
-                        slate: '#5c5c5c',
-                        mist: '#a7a7a7',
-                        ash: '#c4c4c4',
-                        fog: '#e6e6e6',
-                        onyx: '#151515',
-                        steel: '#7f7f7f',
-                        iris: '#555dff',
-                        lagoon: '#03cbbc',
-                        cobalt: '#4389e6',
-                        brand: { 50: '#f5f3ff', 500: '#555dff', 600: '#434ce6' }
-                    },
-                    fontFamily: {
-                        reckless: ['Lora', 'Playfair Display', 'Georgia', 'serif'],
-                        ui: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'monospace']
-                    }
-                }
-            }
-        }
-    </script>
     
     <style>
         :root {
@@ -367,6 +335,8 @@
             }
         })();
     </script>
+    <!-- Last in <head> so utilities override the inline styles above, as the Tailwind CDN did -->
+    <link rel="stylesheet" href="/static/app.css">
 </head>
 
 <body class="relative overflow-hidden antialiased">

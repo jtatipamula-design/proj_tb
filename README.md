@@ -29,6 +29,16 @@ python server.py
 
 On startup the server applies any pending `migrations/*.sql` files in filename order and records each applied version in `phc_schema_migrations_t`. Name new files with a sortable prefix (for example `002_add_x.sql`).
 
+## Styles (Tailwind)
+
+`static/app.css` is a prebuilt, committed Tailwind v3.4.17 build, so deploys need no build step.
+After adding or changing Tailwind classes in `templates/`, rebuild it with the
+[standalone CLI](https://github.com/tailwindlabs/tailwindcss/releases/tag/v3.4.17) (no Node needed) and commit the result:
+
+```bash
+tailwindcss -c tailwind.config.js -o static/app.css --minify
+```
+
 ## Tests
 
 ```bash
