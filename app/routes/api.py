@@ -2,10 +2,11 @@ import json
 import bcrypt
 import time
 from datetime import datetime
+from asyncpg import exceptions as pgexc
 from sanic import Blueprint, response
 from sanic.exceptions import NotFound
 from app.config import logger, ADMIN_ONLY_TABLES, READ_ONLY_TABLES
-from app.utils import quote_ident, add_security_headers, _sanitize_payload, get_client_ip, validate_uploaded_file, log_audit_event, dispatch_notification, validate_csrf_token, safe_cast_pk, validate_password_strength
+from app.utils import quote_ident, add_security_headers, _sanitize_payload, get_client_ip, validate_uploaded_file, get_approval_workflow_info, log_audit_event, dispatch_notification, validate_csrf_token, safe_cast_pk, validate_password_strength
 from app.auth import check_auth, get_authorized_tables
 from app.database import get_pk_column, get_table_columns, invalidate_caches_for_table, SCHEMA_CACHE
 import urllib.parse
@@ -52,6 +53,33 @@ def insert_pk_missing(schema_map, pk_column, clean_data):
         return False
     info = schema_map.get(pk_column, {})
     return not str(info.get('column_default') or '').strip() and info.get('is_identity') != 'YES'
+
+def row_version_conflict(client_version, current_modified_at):
+    """True when the client's `_row_version` (modified-at isoformat it loaded, '' if never modified)
+    no longer matches the row. No version sent (None) means no check, so plain API clients keep working."""
+    if client_version is None:
+        return False
+    # shortcut: a DATE modified column (e.g. phc_users_t.pus_modified) only catches edits made on a different day, change the column to timestamp to upgrade
+    return str(client_version).strip() != (current_modified_at.isoformat() if current_modified_at else '')
+
+def db_error_response(exc, is_delete):
+    """(message, http_status) for a failed write; never exposes raw SQL or exception text."""
+    if isinstance(exc, pgexc.UniqueViolationError):
+        what = getattr(exc, 'column_name', None) or getattr(exc, 'constraint_name', None) or 'value'
+        return f"A record with the same {what} already exists.", 409
+    if isinstance(exc, pgexc.ForeignKeyViolationError):
+        return ("This record is referenced by other records and cannot be deleted." if is_delete
+                else "A referenced record does not exist."), 409
+    if isinstance(exc, pgexc.NotNullViolationError):
+        return f"'{getattr(exc, 'column_name', None) or 'A mandatory field'}' is required.", 400
+    if isinstance(exc, pgexc.StringDataRightTruncationError):
+        return "A value is too long for its field.", 400
+    if isinstance(exc, pgexc.NumericValueOutOfRangeError):
+        return "A number is out of the allowed range for its field.", 400
+    if isinstance(exc, pgexc.CheckViolationError):
+        return "A value is not allowed by this table's rules.", 400
+    return ("Could not delete the record." if is_delete
+            else "Could not save the record. Please check the values and try again."), 400
 
 async def record_visible(conn, table_name, record_id, user_id, role=None):
     """True if the record exists and belongs to the user's company (or the table has no company column).
@@ -144,6 +172,15 @@ async def process_api_action(request, table_name, pk_val):
             sc_sql, sc_vals = company_clause(scope, 2)
             return await conn.fetchrow(f"SELECT * FROM {q_table} WHERE {q_pk} = $1{sc_sql} FOR UPDATE", cast_pk, *sc_vals)
 
+        async def approval_lock_response(old_row):
+            """409 when the record is pending approval and locked for this user, else None."""
+            if not old_row:
+                return None
+            wf = await get_approval_workflow_info(conn, table_name, str(cast_pk), dict(old_row), user_id, role)
+            if wf and wf['is_locked']:
+                return add_security_headers(response.json({"error": "This record is pending approval and is locked. It can be changed after it is approved, rejected or recalled."}, status=409))
+            return None
+
         if method == 'DELETE':
             try:
                 # Dynamically inspect schema for soft-delete / status columns
@@ -169,6 +206,9 @@ async def process_api_action(request, table_name, pk_val):
 
                 async with conn.transaction():
                     old_row = await lock_old_row()
+                    locked = await approval_lock_response(old_row)
+                    if locked:
+                        return locked
                     if status_col:
                         set_parts = [f"{quote_ident(status_col)} = $1"]
                         set_vals = [status_val]
@@ -204,15 +244,17 @@ async def process_api_action(request, table_name, pk_val):
                     return add_security_headers(response.json({"error": "Record not found"}, status=404))
                 invalidate_caches_for_table(table_name)
                 return add_security_headers(response.json({"status": "success", "soft_deleted": bool(status_col)}))
-            except Exception:
+            except Exception as e:
                 logger.error(f"Delete error on {table_name}", exc_info=True)
-                return add_security_headers(response.json({"error": "Could not delete the record."}, status=400))
+                msg, status = db_error_response(e, True)
+                return add_security_headers(response.json({"error": msg}, status=status))
 
         try:
             data = request.form if request.form else request.json
             if not data:
                 return add_security_headers(response.json({"error": "No data provided"}, status=400))
             data_dict = {k: v[0] if isinstance(v, list) else v for k, v in data.items() if k != '_method'}
+            row_version = data_dict.pop('_row_version', None)  # concurrency token, never a column
         except Exception:
             return add_security_headers(response.json({"error": "Invalid or malformed payload"}, status=400))
 
@@ -355,6 +397,12 @@ async def process_api_action(request, table_name, pk_val):
                     if not clean_data:
                         return add_security_headers(response.json({"error": "No update fields provided"}, status=400))
                     old_row = await lock_old_row()
+                    locked = await approval_lock_response(old_row)
+                    if locked:
+                        return locked
+                    mod_at_col = next((c for c in schema_map if ('modified' in c.lower() or 'updated' in c.lower() or 'edited' in c.lower()) and 'by' not in c.lower()), None)
+                    if old_row and mod_at_col and row_version_conflict(row_version, old_row[mod_at_col]):
+                        return add_security_headers(response.json({"error": "This record was changed by someone else since you opened it. Reload and re-apply your changes."}, status=409))
                     cols = list(clean_data.keys())
                     vals = list(clean_data.values())
                     set_clause = ", ".join([f"{quote_ident(c)} = ${i+1}" for i, c in enumerate(cols)])
@@ -383,7 +431,8 @@ async def process_api_action(request, table_name, pk_val):
             
         except Exception as e:
             logger.error(f"Action Error: {e}", exc_info=True)
-            return add_security_headers(response.json({"error": "Could not save the record. Please check the values and try again."}, status=400))
+            msg, status = db_error_response(e, False)
+            return add_security_headers(response.json({"error": msg}, status=status))
 
 # -----------------------------------------------------------------------------
 # AUDIT TRAIL API ROUTE

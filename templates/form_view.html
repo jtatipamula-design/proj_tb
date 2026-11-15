@@ -357,6 +357,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             {% if is_update %}
             <input type="hidden" name="_method" value="PUT">
+            <input type="hidden" name="_row_version" value="{{ audit_info.modified_at.isoformat() if audit_info and audit_info.modified_at else '' }}">
             {% endif %}
 
             <div class="form-grid">

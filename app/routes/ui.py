@@ -5,6 +5,7 @@ from app.utils import render_template, quote_ident, add_security_headers, resolv
 from app.auth import check_auth, get_authorized_tables
 from app.database import get_pk_column, get_table_columns, get_dropdown_options, SCHEMA_CACHE, clear_schema_cache, get_all_lookups, resolve_fk_details, get_fk_display_dict
 from app.routes.api import get_company_scope, company_clause
+from app.query import parse_list_args, build_list_query
 import urllib.parse
 from datetime import datetime
 
@@ -78,47 +79,10 @@ async def show_table(request, table_name):
 
     per_page = 50
     offset = (page - 1) * per_page
-    search_query = request.args.get("q", "").strip()
-    type_filter = request.args.get("type_filter", "").strip()
-
-    # 1. Parse server-side sorting parameters
-    raw_sort_rules = request.args.get("sort_rules", "")
-    sort_col = request.args.get("sort_col", "").strip()
-    sort_dir = request.args.get("sort_dir", "desc").strip().lower()
-    if sort_dir not in ('asc', 'desc'):
-        sort_dir = 'desc'
-
-    active_sort_rules = []
-    if raw_sort_rules:
-        try:
-            import json
-            parsed_sort = json.loads(raw_sort_rules)
-            if isinstance(parsed_sort, list):
-                for s in parsed_sort:
-                    if isinstance(s, dict) and s.get("col") and s.get("dir") in ("asc", "desc"):
-                        active_sort_rules.append({"col": s["col"], "dir": s["dir"]})
-        except Exception:
-            pass
-    elif sort_col:
-        active_sort_rules = [{"col": sort_col, "dir": sort_dir}]
-
-    # 2. Parse server-side structured filter parameters
-    raw_filters = request.args.get("filters", "")
-    active_filter_rules = []
-    if raw_filters:
-        try:
-            import json
-            parsed_filters = json.loads(raw_filters)
-            if isinstance(parsed_filters, list):
-                for f in parsed_filters:
-                    if isinstance(f, dict) and f.get("col") and f.get("op"):
-                        active_filter_rules.append({
-                            "col": str(f["col"]).strip(),
-                            "op": str(f["op"]).strip().lower(),
-                            "val": str(f.get("val", "")).strip()
-                        })
-        except Exception:
-            pass
+    list_args = parse_list_args(request.args)
+    search_query, type_filter = list_args["q"], list_args["type_filter"]
+    active_sort_rules, active_filter_rules = list_args["sort_rules"], list_args["filters"]
+    sort_col, sort_dir = list_args["sort_col"], list_args["sort_dir"]
 
     auth_tables = getattr(request.ctx, 'all_tables', None)
     table_modules = getattr(request.ctx, 'table_modules', None)
@@ -204,134 +168,11 @@ async def show_table(request, table_name):
                     lookup_categories = []
 
         q_table = quote_ident(table_name)
-        q_pk = quote_ident(pk_column)
-        schema_cols = {c['column_name']: c for c in columns_data}
-        
-        base_query = f"SELECT * FROM {q_table}"
-        count_query = f"SELECT COUNT(*) FROM {q_table}"
-        params = []
-        where_clauses = []
+        scope = await get_company_scope(conn, table_name, [c['column_name'] for c in columns_data], pk_column, user_id)
+        where_sql, params, order_sql = build_list_query(list_args, columns_data, pk_column, scope, table_name)
+        count_query = f"SELECT COUNT(*) FROM {q_table}{where_sql}"
+        base_query = f"SELECT * FROM {q_table}{where_sql}{order_sql} LIMIT ${len(params)+1} OFFSET ${len(params)+2}"
 
-        company_col, company_val = await get_company_scope(conn, table_name, list(schema_cols), pk_column, user_id)
-        if company_col:
-            params.append(company_val)
-            where_clauses.append(f"{quote_ident(company_col)} = ${len(params)}")
-
-        if table_name == 'phc_lookup_values_t' and type_filter:
-            params.append(type_filter)
-            where_clauses.append(f"{quote_ident('plv_lookup_type_code')} = ${len(params)}")
-
-        # 3. Server-side global search across all text-castable columns
-        if search_query:
-            params.append(f"%{search_query}%")
-            param_idx = len(params)
-            searchable_cols = [
-                c['column_name'] for c in columns_data 
-                if c['data_type'] not in ('bytea', 'json', 'jsonb', 'geometry', 'point', 'polygon')
-            ]
-            if searchable_cols:
-                search_clauses = [f"CAST({quote_ident(col)} AS TEXT) ILIKE ${param_idx}" for col in searchable_cols]
-                where_clauses.append("(" + " OR ".join(search_clauses) + ")")
-
-        # 4. Server-side structured 10-operator filter execution
-        for f in active_filter_rules:
-            col_name = f['col']
-            op = f['op']
-            val = f['val']
-            if col_name not in schema_cols:
-                continue
-            
-            c_info = schema_cols[col_name]
-            target_type = c_info.get('data_type', '').lower()
-            q_col = quote_ident(col_name)
-
-            if op == 'is_empty':
-                where_clauses.append(f"({q_col} IS NULL OR CAST({q_col} AS TEXT) = '')")
-            elif op == 'is_not_empty':
-                where_clauses.append(f"({q_col} IS NOT NULL AND CAST({q_col} AS TEXT) != '')")
-            elif op == 'contains' and val:
-                params.append(f"%{val}%")
-                where_clauses.append(f"CAST({q_col} AS TEXT) ILIKE ${len(params)}")
-            elif op == 'not_contains' and val:
-                params.append(f"%{val}%")
-                where_clauses.append(f"(CAST({q_col} AS TEXT) NOT ILIKE ${len(params)} OR {q_col} IS NULL)")
-            elif op == 'starts_with' and val:
-                params.append(f"{val}%")
-                where_clauses.append(f"CAST({q_col} AS TEXT) ILIKE ${len(params)}")
-            elif op == 'ends_with' and val:
-                params.append(f"%{val}")
-                where_clauses.append(f"CAST({q_col} AS TEXT) ILIKE ${len(params)}")
-            elif op == 'equals' and val:
-                if target_type in ('integer', 'bigint', 'smallint', 'numeric'):
-                    try:
-                        num_val = float(val) if '.' in val else int(val)
-                        params.append(num_val)
-                        where_clauses.append(f"{q_col} = ${len(params)}")
-                    except (ValueError, TypeError):
-                        pass
-                elif target_type == 'boolean':
-                    b_val = val.lower() in ('true', '1', 'yes', 't', 'act')
-                    params.append(b_val)
-                    where_clauses.append(f"{q_col} = ${len(params)}")
-                else:
-                    params.append(val)
-                    where_clauses.append(f"LOWER(CAST({q_col} AS TEXT)) = LOWER(${len(params)})")
-            elif op == 'not_equals' and val:
-                if target_type in ('integer', 'bigint', 'smallint', 'numeric'):
-                    try:
-                        num_val = float(val) if '.' in val else int(val)
-                        params.append(num_val)
-                        where_clauses.append(f"({q_col} != ${len(params)} OR {q_col} IS NULL)")
-                    except (ValueError, TypeError):
-                        pass
-                elif target_type == 'boolean':
-                    b_val = val.lower() in ('true', '1', 'yes', 't', 'act')
-                    params.append(b_val)
-                    where_clauses.append(f"({q_col} != ${len(params)} OR {q_col} IS NULL)")
-                else:
-                    params.append(val)
-                    where_clauses.append(f"(LOWER(CAST({q_col} AS TEXT)) != LOWER(${len(params)}) OR {q_col} IS NULL)")
-            elif op == 'greater_than' and val:
-                if target_type in ('integer', 'bigint', 'smallint', 'numeric'):
-                    try:
-                        num_val = float(val) if '.' in val else int(val)
-                        params.append(num_val)
-                        where_clauses.append(f"{q_col} > ${len(params)}")
-                    except (ValueError, TypeError):
-                        pass
-                elif 'date' in target_type or 'timestamp' in target_type:
-                    params.append(val)
-                    where_clauses.append(f"{q_col} > ${len(params)}::timestamp")
-            elif op == 'less_than' and val:
-                if target_type in ('integer', 'bigint', 'smallint', 'numeric'):
-                    try:
-                        num_val = float(val) if '.' in val else int(val)
-                        params.append(num_val)
-                        where_clauses.append(f"{q_col} < ${len(params)}")
-                    except (ValueError, TypeError):
-                        pass
-                elif 'date' in target_type or 'timestamp' in target_type:
-                    params.append(val)
-                    where_clauses.append(f"{q_col} < ${len(params)}::timestamp")
-
-        if where_clauses:
-            where_str = " WHERE " + " AND ".join(where_clauses)
-            base_query += where_str
-            count_query += where_str
-
-        # 5. Dynamic server-side ORDER BY generation
-        order_clauses = []
-        for s in active_sort_rules:
-            c_name = s['col']
-            d_str = 'ASC' if s['dir'] == 'asc' else 'DESC'
-            if c_name in schema_cols:
-                order_clauses.append(f"{quote_ident(c_name)} {d_str}")
-        
-        if not order_clauses or pk_column not in [s['col'] for s in active_sort_rules]:
-            order_clauses.append(f"{q_pk} DESC")
-        
-        base_query += f" ORDER BY {', '.join(order_clauses)} LIMIT ${len(params)+1} OFFSET ${len(params)+2}"
-        
         try:
             total_count = await conn.fetchval(count_query, *params)
             total_count = total_count or 0
@@ -596,9 +437,8 @@ async def export_table_csv(request, table_name):
 
         col_list = ", ".join(quote_ident(c) for c in export_cols)
         q_table = quote_ident(table_name)
-        company_col, company_val = await get_company_scope(conn, table_name, [c['column_name'] for c in columns_data], pk_column, user_id)
-        where_clause, query_params = (f" WHERE {quote_ident(company_col)} = $1", [company_val]) if company_col else ("", [])
-        order_clause = f" ORDER BY {quote_ident(pk_column)} DESC" if pk_column else ""
+        scope = await get_company_scope(conn, table_name, [c['column_name'] for c in columns_data], pk_column, user_id)
+        where_clause, query_params, order_clause = build_list_query(parse_list_args(request.args), columns_data, pk_column, scope, table_name)
         query = f"SELECT {col_list} FROM {q_table}{where_clause}{order_clause}"
 
     table_title = auth_tables.get(table_name, table_name)
