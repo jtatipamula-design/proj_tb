@@ -357,6 +357,7 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             {% if is_update %}
             <input type="hidden" name="_method" value="PUT">
+            <input type="hidden" name="_row_version" value="{{ audit_info.modified_at.isoformat() if audit_info and audit_info.modified_at else '' }}">
             {% endif %}
 
             <div class="form-grid">
@@ -610,8 +611,11 @@
         form.addEventListener('htmx:beforeRequest', () => setSaving(true));
 
         form.addEventListener('htmx:afterRequest', function(evt) {
-            if (evt.detail.successful) dirty = false; else setSaving(false);
-            if (evt.detail.successful) {
+            // htmx leaves detail.successful unset when the response carries HX-Redirect (every successful save), so read the status.
+            const xhr = evt.detail.xhr;
+            const ok = !!xhr && xhr.status >= 200 && xhr.status < 400;
+            if (ok) dirty = false; else setSaving(false);
+            if (ok) {
                 sessionStorage.setItem('pendingToast', JSON.stringify({
                     msg: isUpdate ? 'Record updated successfully!' : 'Record created successfully!',
                     type: 'success'

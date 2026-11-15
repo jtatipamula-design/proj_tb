@@ -7,7 +7,10 @@ from datetime import datetime, timedelta, timezone
 from sanic import Blueprint, response
 
 from app.config import JWT_SECRET, logger
-from app.utils import get_client_ip, add_security_headers, generate_csrf_token, render_template, quote_ident
+from app.utils import (
+    get_client_ip, add_security_headers, generate_csrf_token, render_template, quote_ident,
+    validate_csrf_token, validate_password_strength, log_audit_event,
+)
 from app.auth import check_login_rate_limit, record_login_attempt, USER_AUTH_CACHE, check_auth
 from app.database import get_table_columns
 
@@ -24,6 +27,37 @@ def next_failed_count(failed_attempts, locked_until, now):
     if locked_until and _as_utc(locked_until) <= now:
         failed_attempts = 0
     return (failed_attempts or 0) + 1
+
+
+def password_change_error(current_ok, new, confirm, same_as_current):
+    """Why a self-service password change is refused, or None if it may proceed."""
+    if not current_ok:
+        return "Current password is incorrect."
+    if new != confirm:
+        return "New password and confirmation do not match."
+    ok, msg = validate_password_strength(new)
+    if not ok:
+        return msg
+    if len(new.encode('utf-8')) > 72:  # bcrypt ignores (or rejects) anything past 72 bytes
+        return "Password must be at most 72 bytes long."
+    if same_as_current:
+        return "New password must be different from the current password."
+    return None
+
+
+def _set_session_cookies(request, res, user_id, username, session_id):
+    """Issues the JWT + CSRF cookies for session_id and drops the user's cached auth entry."""
+    token = jwt.encode({
+        "user_id": user_id,
+        "username": username,
+        "session_id": session_id,
+        "exp": int(time.time() + 86400)
+    }, JWT_SECRET, algorithm="HS256")
+    USER_AUTH_CACHE.pop(user_id, None)
+    is_secure = request.scheme == 'https' or os.environ.get("ENV") == "production" or bool(os.environ.get("RENDER"))
+    res.add_cookie("auth_token", token, httponly=True, samesite="Lax", path="/", secure=is_secure)
+    res.add_cookie("csrf_token", generate_csrf_token(session_id), httponly=False, samesite="Lax", path="/", secure=is_secure)
+    return add_security_headers(res)
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 async def login(request):
@@ -102,21 +136,8 @@ async def login(request):
                         WHERE pus_user_id = $2
                     """, session_id, user_id_val)
                 
-                token_payload = {
-                    "user_id": user_id_val,
-                    "username": user_name_val,
-                    "session_id": session_id,
-                    "exp": int(time.time() + 86400)
-                }
-                token = jwt.encode(token_payload, JWT_SECRET, algorithm="HS256")
-                csrf_token = generate_csrf_token(session_id)
-                USER_AUTH_CACHE.pop(user_id_val, None)
-                
-                is_secure = request.scheme == 'https' or os.environ.get("ENV") == "production" or bool(os.environ.get("RENDER"))
                 res = response.json({"status": "success", "message": "Login successful"})
-                res.add_cookie("auth_token", token, httponly=True, samesite="Lax", path="/", secure=is_secure)
-                res.add_cookie("csrf_token", csrf_token, httponly=False, samesite="Lax", path="/", secure=is_secure)
-                return add_security_headers(res)
+                return _set_session_cookies(request, res, user_id_val, user_name_val, session_id)
             else:
                 # Increment failed attempts in PostgreSQL
                 now_utc = datetime.now(timezone.utc)
@@ -134,6 +155,60 @@ async def login(request):
         
         record_login_attempt(client_ip, success=False)
         return add_security_headers(response.json({"status": "error", "message": "Invalid credentials"}, status=401))
+
+@auth_bp.route('/account/password', methods=['GET', 'POST'])
+@check_auth
+async def change_password(request):
+    if request.method == 'GET':
+        return render_template('change_password.html', request=request)
+
+    def fail(msg, status=400):
+        return add_security_headers(response.json({"error": msg}, status=status))
+
+    data = request.json if isinstance(request.json, dict) else {}
+    client_csrf = request.headers.get("X-CSRF-Token") or data.get('csrf_token')
+    if not validate_csrf_token(client_csrf, request.ctx.session_id):
+        return fail("Invalid or expired CSRF token.", 403)
+
+    # Same limiter as /login, so a hijacked session cannot be used to guess the password.
+    client_ip = get_client_ip(request)
+    allowed, wait_sec = check_login_rate_limit(client_ip)
+    if not allowed:
+        return fail(f"Too many failed attempts. Please try again in {wait_sec // 60 + 1} minute(s).", 429)
+
+    current = str(data.get("current_password", ""))
+    new = str(data.get("new_password", ""))
+    confirm = str(data.get("confirm_password", ""))
+    user_id = request.ctx.user_id
+    username = request.ctx.username or ""
+
+    async with request.app.ctx.pool.acquire() as conn:
+        stored_pwd = await conn.fetchval("SELECT pus_pwd FROM phc_users_t WHERE pus_user_id = $1", user_id) or ""
+        current_ok = False
+        if current and stored_pwd:
+            try:
+                current_ok = bcrypt.checkpw(current.encode('utf-8'), stored_pwd.encode('utf-8'))
+            except (ValueError, TypeError):
+                pass
+        if not current_ok:
+            record_login_attempt(client_ip, success=False)
+
+        err = password_change_error(current_ok, new, confirm, new == current)
+        if err:
+            return fail(err)
+
+        new_hash = bcrypt.hashpw(new.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        session_id = str(uuid.uuid4())  # new session id signs out every other device
+        async with conn.transaction():
+            await conn.execute("""
+                UPDATE phc_users_t
+                SET pus_pwd = $1, pus_session_id = $2, pus_modified = CURRENT_DATE, pus_modified_by = $3
+                WHERE pus_user_id = $4
+            """, new_hash, session_id, username[:20], user_id)
+            await log_audit_event(conn, 'phc_users_t', user_id, 'PASSWORD_CHANGE', user_id, username, client_ip)
+
+    res = response.json({"status": "success", "message": "Password changed"})
+    return _set_session_cookies(request, res, user_id, username, session_id)
 
 @auth_bp.route('/logout', methods=['GET'])
 @check_auth

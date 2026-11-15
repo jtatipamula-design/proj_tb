@@ -145,6 +145,18 @@ def add_security_headers(res):
     res.headers["X-Frame-Options"] = "SAMEORIGIN"
     res.headers["X-XSS-Protection"] = "1; mode=block"
     res.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    res.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    # shortcut: 'unsafe-inline' because templates use inline <script>/<style>/on*= handlers; move to nonces to drop it.
+    # unpkg = lucide + htmx, cdnjs = swagger-ui (/docs), fonts.googleapis/gstatic = Google Fonts.
+    res.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self'; "
+        "object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
+    )
     return res
 
 def get_client_ip(request) -> str:

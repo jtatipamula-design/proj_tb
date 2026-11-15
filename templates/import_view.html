@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block head_title %}Import - {{ table_title }}{% endblock %}
+{% block header_title %}Import - {{ table_title }}{% endblock %}
+
+{% block content %}
+<div style="width: 100%; max-width: 720px; margin: 0 auto; padding-bottom: 80px;">
+    <div class="flex items-center gap-2 text-xs font-mono mb-3" style="color: var(--color-mist);">
+        <a href="/" class="hover:underline" style="color: var(--color-slate);">Brihas ERP</a>
+        <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+        <a href="/table/{{ table_name }}" class="hover:underline" style="color: var(--color-slate);">{{ table_title }}</a>
+        <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+        <span style="color: var(--color-obsidian);" class="font-semibold">Import CSV</span>
+    </div>
+
+    <span class="badge-iris text-xs font-mono uppercase tracking-wider">
+        <i data-lucide="database" class="w-3.5 h-3.5"></i>
+        {{ table_name }}
+    </span>
+    <h1 class="text-2xl md:text-3xl font-semibold tracking-tight font-serif-heading mt-1.5" style="color: var(--color-obsidian);">
+        Import {{ table_title }}
+    </h1>
+
+    <div style="background-color: var(--surface-pure-white-cards); border: 1px solid var(--color-fog); border-radius: var(--radius-cards); padding: 36px 32px; box-shadow: var(--shadow-card); margin-top: 20px;">
+        <form id="importForm" action="/import/{{ table_name }}" method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+            <label for="importFile" class="block text-sm font-semibold mb-2" style="color: var(--color-graphite);">CSV file</label>
+            <input type="file" id="importFile" name="file" accept=".csv,text/csv" required
+                   class="w-full text-sm" style="background-color: var(--color-bone); border: 1px solid var(--color-fog); color: var(--color-obsidian); padding: 10px 14px; border-radius: var(--radius-inputs);">
+            <p class="text-xs mt-2" style="color: var(--color-slate);">
+                The first row must be a header of column names, as in a file from Export. Up to {{ max_rows }} rows.
+                Either every row is imported or none: the first row with a problem stops the import.
+            </p>
+
+            <div id="importResult" role="status" aria-live="polite" class="text-sm mt-4 p-3 rounded-lg hidden" style="border: 1px solid var(--color-fog);"></div>
+
+            <div class="flex items-center justify-between mt-8 pt-6" style="border-top: 1px solid var(--color-fog);">
+                <a href="/table/{{ table_name }}" class="ghost-btn">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                    <span>Cancel</span>
+                </a>
+                <button type="submit" class="glow-halo-btn">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    <span>Import</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    (function () {
+        if (window.lucide) lucide.createIcons();
+        const form = document.getElementById('importForm');
+        const result = document.getElementById('importResult');
+        const btn = form.querySelector('button[type="submit"]');
+        const label = btn.querySelector('span');
+
+        function show(msg, ok) {
+            result.textContent = msg;
+            result.style.color = ok ? 'var(--color-lagoon)' : '#ef4444';
+            result.classList.remove('hidden');
+        }
+
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            btn.disabled = true;
+            label.textContent = 'Importing...';
+            try {
+                const res = await fetch(form.action, { method: 'POST', body: new FormData(form) });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.status === 'success') {
+                    sessionStorage.setItem('pendingToast', JSON.stringify({ msg: `${data.inserted} record(s) imported.`, type: 'success' }));
+                    window.location.href = form.action.replace('/import/', '/table/');
+                    return;
+                }
+                show((data.row ? `Row ${data.row}: ` : '') + (data.error || 'Import failed. Please try again.'), false);
+            } catch (err) {
+                show('Could not reach the server. Check your connection and try again.', false);
+            }
+            btn.disabled = false;
+            label.textContent = 'Import';
+        });
+    })();
+</script>
+{% endblock %}

@@ -7,6 +7,8 @@ from app.routes.auth import auth_bp
 from app.routes.ui import ui_bp
 from app.routes.api import api_bp
 from app.routes.system import system_bp
+from app.routes.importer import import_bp
+from app.routes.read_api import read_api_bp
 
 def create_app() -> Sanic:
     app = Sanic("ERP_System")
@@ -29,6 +31,8 @@ def create_app() -> Sanic:
     app.blueprint(ui_bp)
     app.blueprint(api_bp)
     app.blueprint(system_bp)
+    app.blueprint(import_bp)
+    app.blueprint(read_api_bp)
     
     return app
 

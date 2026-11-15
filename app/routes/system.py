@@ -62,7 +62,14 @@ async def openapi_spec(request):
                 "get": {
                     "tags": [table_name],
                     "summary": f"List {table_name}",
-                    "responses": {"200": {"description": "Successful Response"}}
+                    "parameters": [
+                        {"name": "page", "in": "query", "schema": {"type": "integer", "default": 1}},
+                        {"name": "per_page", "in": "query", "schema": {"type": "integer", "default": 50, "maximum": 200}},
+                        {"name": "q", "in": "query", "description": "Search text across all columns", "schema": {"type": "string"}},
+                        {"name": "filters", "in": "query", "description": 'JSON list, e.g. [{"col": "name", "op": "contains", "val": "x"}]', "schema": {"type": "string"}},
+                        {"name": "sort_rules", "in": "query", "description": 'JSON list, e.g. [{"col": "name", "dir": "asc"}]', "schema": {"type": "string"}}
+                    ],
+                    "responses": {"200": {"description": "Object with data, page, per_page and total"}}
                 },
                 "post": {
                     "tags": [table_name],
@@ -71,6 +78,12 @@ async def openapi_spec(request):
                 }
             }
             paths[f"/api/{table_name}/{{id}}"] = {
+                "get": {
+                    "tags": [table_name],
+                    "summary": f"Get one {table_name} record",
+                    "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "Successful Response"}, "404": {"description": "Record not found"}}
+                },
                 "put": {
                     "tags": [table_name],
                     "summary": f"Update {table_name}",
