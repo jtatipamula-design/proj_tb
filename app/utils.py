@@ -320,6 +320,35 @@ async def dispatch_notification(conn, recipient_user_id, recipient_role, title: 
     except Exception as e:
         logger.warning(f"Notification dispatch notice: {e}")
 
+APPROVAL_SETUP_SQL = """
+    SELECT s.*, t.pat_approval_type_desc
+    FROM phc_approval_setup_t s
+    LEFT JOIN phc_approval_types_t t ON t.pat_approval_type = s.pas_approval_type
+    WHERE LOWER(s.pas_table_name) = LOWER($1) AND s.pas_status = 'ACT'
+      AND s.pas_company_id = (SELECT pus_company_id FROM phc_users_t WHERE pus_user_id = $2)
+      AND s.pas_start_date <= CURRENT_DATE AND (s.pas_end_date IS NULL OR s.pas_end_date >= CURRENT_DATE)
+    ORDER BY s.pas_appr_seq
+    LIMIT 1
+"""
+
+# shortcut: approval events store the record id as bigint (pae_event_table_pk_id), so tables with non-integer primary keys cannot use approvals; widen that column to text to upgrade
+def approval_record_id(record_id):
+    """Record id as stored in phc_approval_events_t, or None when it is not an integer."""
+    try:
+        return int(str(record_id).strip())
+    except (TypeError, ValueError):
+        return None
+
+async def get_approval_setup(conn, table_name: str, user_id):
+    """The active approval setup governing table_name for the user's company, or None."""
+    try:
+        # Savepoint: a failed lookup must not abort the caller's save transaction.
+        async with conn.transaction():
+            return await conn.fetchrow(APPROVAL_SETUP_SQL, table_name, user_id)
+    except Exception as e:
+        logger.warning(f"Approval setup lookup failed for {table_name}: {e}")
+        return None
+
 async def get_approval_workflow_info(conn, table_name: str, record_id: str, row_data: dict, user_id: int, user_role: str):
     """
     Dynamically inspects if a workflow rule is configured for the table.
@@ -328,21 +357,10 @@ async def get_approval_workflow_info(conn, table_name: str, record_id: str, row_
     """
     if not table_name or not row_data:
         return None
-    
-    try:
-        # Savepoint: a failed lookup (e.g. schema without these columns) must not abort the caller's save transaction.
-        async with conn.transaction():
-            setup = await conn.fetchrow("""
-                SELECT s.*, t.pat_type_name, t.pat_type_code
-                FROM phc_approval_setup_t s
-                LEFT JOIN phc_approval_types_t t ON s.pas_type_id = t.pat_type_id
-                WHERE LOWER(s.pas_table_name) = LOWER($1) AND (s.pas_status = 'ACT' OR s.pas_status IS NULL)
-            """, table_name)
-    except Exception as e:
-        logger.warning(f"Approval setup lookup failed for {table_name}: {e}")
-        setup = None
-    
-    if not setup:
+
+    setup = await get_approval_setup(conn, table_name, user_id)
+    rec_id = approval_record_id(record_id)
+    if not setup or rec_id is None:
         return None
     
     # Detect record status column
@@ -360,16 +378,16 @@ async def get_approval_workflow_info(conn, table_name: str, record_id: str, row_
     is_rejected = raw_status in ('REJ', 'REJECTED', 'R')
     is_draft = not (is_pending or is_approved or is_rejected)
     
-    req_role = setup['pas_required_role'] or 'ADM'
+    req_role = setup['pas_appr_role_type'] or 'ADM'
     can_approve = (user_role == 'ADM' or user_role == req_role)
     # Server rule: whoever submitted the record cannot approve it.
     if can_approve:
         submitter_id = await conn.fetchval("""
             SELECT pae_user_id FROM phc_approval_events_t
-            WHERE LOWER(pae_table_name) = LOWER($1) AND pae_record_id = $2 AND pae_action = 'SUBMIT'
-            ORDER BY pae_timestamp DESC
+            WHERE pae_event_table = $1 AND pae_event_table_pk_id = $2 AND pae_action = 'SUBMIT'
+            ORDER BY pae_created DESC
             LIMIT 1
-        """, table_name, str(record_id))
+        """, table_name.lower(), rec_id)
         if submitter_id is not None and str(submitter_id) == str(user_id):
             can_approve = False
     can_submit = is_draft or is_rejected or is_approved
@@ -377,13 +395,12 @@ async def get_approval_workflow_info(conn, table_name: str, record_id: str, row_
 
     # Fetch last 5 events
     events = await conn.fetch("""
-        SELECT pae_event_id, pae_action, pae_from_status, pae_to_status, pae_user_id,
-               pae_username, pae_user_role, pae_comments, pae_esig_hash, pae_timestamp
+        SELECT pae_action, pae_username, pae_user_role, pae_decision_notes, pae_esig_hash, pae_created
         FROM phc_approval_events_t
-        WHERE LOWER(pae_table_name) = LOWER($1) AND pae_record_id = $2
-        ORDER BY pae_timestamp DESC
+        WHERE pae_event_table = $1 AND pae_event_table_pk_id = $2
+        ORDER BY pae_created DESC
         LIMIT 5
-    """, table_name, str(record_id))
+    """, table_name.lower(), rec_id)
     
     event_list = []
     for ev in events:
@@ -391,14 +408,14 @@ async def get_approval_workflow_info(conn, table_name: str, record_id: str, row_
             "action": ev['pae_action'],
             "username": ev['pae_username'],
             "role": ev['pae_user_role'],
-            "comments": ev['pae_comments'] or "",
+            "comments": ev['pae_decision_notes'] or "",
             "esig_hash": ev['pae_esig_hash'] or "",
-            "timestamp": ev['pae_timestamp'].strftime('%Y-%m-%d %H:%M:%S') if ev['pae_timestamp'] else ""
+            "timestamp": ev['pae_created'].strftime('%Y-%m-%d %H:%M:%S') if ev['pae_created'] else ""
         })
 
     return {
         "is_active": True,
-        "type_name": setup['pat_type_name'] or 'Standard Approval',
+        "type_name": setup['pat_approval_type_desc'] or setup['pas_approval_type'] or 'Standard Approval',
         "status_col": status_col,
         "current_status": raw_status,
         "is_pending": is_pending,

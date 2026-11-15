@@ -6,7 +6,7 @@ from asyncpg import exceptions as pgexc
 from sanic import Blueprint, response
 from sanic.exceptions import NotFound
 from app.config import logger, ADMIN_ONLY_TABLES, READ_ONLY_TABLES
-from app.utils import quote_ident, add_security_headers, _sanitize_payload, get_client_ip, validate_uploaded_file, get_approval_workflow_info, log_audit_event, dispatch_notification, validate_csrf_token, safe_cast_pk, validate_password_strength
+from app.utils import quote_ident, add_security_headers, _sanitize_payload, get_client_ip, validate_uploaded_file, get_approval_workflow_info, get_approval_setup, approval_record_id, log_audit_event, dispatch_notification, validate_csrf_token, safe_cast_pk, validate_password_strength
 from app.auth import check_auth, get_authorized_tables
 from app.database import get_pk_column, get_table_columns, invalidate_caches_for_table, SCHEMA_CACHE
 import urllib.parse
@@ -533,14 +533,14 @@ async def api_workflow_transition(request):
         if table_name not in auth_tables:
             return add_security_headers(response.json({"error": "Unauthorized access to table."}, status=403))
 
-        setup = await conn.fetchrow("""
-            SELECT * FROM phc_approval_setup_t 
-            WHERE LOWER(pas_table_name) = LOWER($1) AND (pas_status = 'ACT' OR pas_status IS NULL)
-        """, table_name)
+        setup = await get_approval_setup(conn, table_name, user_id)
         if not setup:
             return add_security_headers(response.json({"error": "No active approval workflow configured for this table."}, status=400))
-            
-        req_role = setup['pas_required_role'] or 'ADM'
+        rec_id = approval_record_id(record_id)
+        if rec_id is None:
+            return add_security_headers(response.json({"error": "Approvals are only supported for records with a numeric ID."}, status=400))
+
+        req_role = setup['pas_appr_role_type'] or 'ADM'
         if transition in ('APPROVE', 'REJECT') and (user_role != 'ADM' and user_role != req_role):
             return add_security_headers(response.json({"error": f"Role '{req_role}' or Administrator required to approve/reject."}, status=403))
 
@@ -586,9 +586,9 @@ async def api_workflow_transition(request):
         if transition == 'APPROVE':
             submitter_id = await conn.fetchval("""
                 SELECT pae_user_id FROM phc_approval_events_t
-                WHERE LOWER(pae_table_name) = LOWER($1) AND pae_record_id = $2 AND pae_action = 'SUBMIT'
-                ORDER BY pae_timestamp DESC LIMIT 1
-            """, table_name, str(record_id))
+                WHERE pae_event_table = $1 AND pae_event_table_pk_id = $2 AND pae_action = 'SUBMIT'
+                ORDER BY pae_created DESC LIMIT 1
+            """, table_name, rec_id)
         refusal = transition_error(transition, old_status, submitter_id, user_id)
         if refusal:
             return add_security_headers(response.json({"error": refusal[0]}, status=refusal[1]))
@@ -616,13 +616,18 @@ async def api_workflow_transition(request):
             sc_sql, sc_vals = company_clause(scope, len(set_vals) + 1)
             await conn.execute(f"UPDATE {q_table} SET {', '.join(set_parts)} WHERE {q_pk} = ${len(set_vals)}{sc_sql}", *set_vals, *sc_vals)
             
+            signer = str(username)[:20]  # pae_created_by / pae_modified_by are varchar(20)
             await conn.execute("""
                 INSERT INTO phc_approval_events_t (
-                    pae_table_name, pae_record_id, pae_action, pae_from_status, 
-                    pae_to_status, pae_user_id, pae_username, pae_user_role, 
-                    pae_comments, pae_esig_hash, pae_client_ip, pae_timestamp
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-            """, table_name, str(record_id), transition, old_status, new_status, user_id, username, user_role, comments, esig_hash, client_ip, ts_now)
+                    pae_appr_setup_id, pae_approval_type, pae_appr_seq, pae_appr_role_type,
+                    pae_event_table, pae_event_table_pk_id, pae_action, pae_from_status,
+                    pae_to_status, pae_user_id, pae_username, pae_user_role,
+                    pae_decision_notes, pae_esig_hash, pae_client_ip, pae_event_start,
+                    pae_created, pae_modified, pae_created_by, pae_modified_by, pae_company_id
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17, $18, $18, $19)
+            """, setup['pas_appr_setup_id'], setup['pas_approval_type'], setup['pas_appr_seq'], req_role,
+                table_name, rec_id, transition, old_status, new_status, user_id, username, user_role,
+                comments, esig_hash, client_ip, ts_now.date(), ts_now, signer, setup['pas_company_id'])
             
             await log_audit_event(
                 conn, table_name, str(record_id), f"WORKFLOW_{transition}", 
@@ -679,28 +684,28 @@ async def get_workflow_history(request, table_name, record_id):
             if not await record_visible(conn, table_name, record_id, request.ctx.user_id, request.ctx.role):
                 return add_security_headers(response.json({"error": "Record not found"}, status=404))
             rows = await conn.fetch("""
-                SELECT pae_event_id, pae_action, pae_from_status, pae_to_status, 
-                       pae_username, pae_user_role, pae_comments, pae_esig_hash, 
-                       pae_client_ip, pae_timestamp
+                SELECT pae_appr_event_id, pae_action, pae_from_status, pae_to_status,
+                       pae_username, pae_user_role, pae_decision_notes, pae_esig_hash,
+                       pae_client_ip, pae_created
                 FROM phc_approval_events_t
-                WHERE LOWER(pae_table_name) = LOWER($1) AND pae_record_id = $2
-                ORDER BY pae_timestamp DESC
+                WHERE pae_event_table = $1 AND pae_event_table_pk_id = $2
+                ORDER BY pae_created DESC
                 LIMIT 50
-            """, table_name, record_id)
+            """, table_name, approval_record_id(record_id))
             
             events = []
             for r in rows:
                 events.append({
-                    "id": r['pae_event_id'],
+                    "id": r['pae_appr_event_id'],
                     "action": r['pae_action'],
                     "from_status": r['pae_from_status'],
                     "to_status": r['pae_to_status'],
                     "username": r['pae_username'],
                     "role": r['pae_user_role'],
-                    "comments": r['pae_comments'] or "",
+                    "comments": r['pae_decision_notes'] or "",
                     "esig_hash": r['pae_esig_hash'] or "",
                     "client_ip": r['pae_client_ip'] or "Unknown",
-                    "timestamp": r['pae_timestamp'].strftime('%Y-%m-%d %H:%M:%S') if r['pae_timestamp'] else ""
+                    "timestamp": r['pae_created'].strftime('%Y-%m-%d %H:%M:%S') if r['pae_created'] else ""
                 })
             return add_security_headers(response.json({"status": "success", "history": events}))
     except Exception as e:
