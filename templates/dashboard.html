@@ -189,6 +189,60 @@
         color: var(--color-iris);
     }
 
+    .module-card[aria-expanded="true"] {
+        border-color: var(--color-iris);
+    }
+
+    /* Inline screen list for the open module; spans the full grid row */
+    .module-panel {
+        grid-column: 1 / -1;
+        background-color: var(--surface-pure-white-cards);
+        border: 1px solid var(--color-fog);
+        border-radius: var(--radius-cards);
+        box-shadow: var(--shadow-card);
+        padding: 16px 18px;
+    }
+
+    .module-panel-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--color-iris);
+        margin-bottom: 12px;
+    }
+
+    .module-panel-links {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 6px;
+    }
+
+    .module-panel-link {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border-radius: 8px;
+        font-size: 13px;
+        color: var(--color-obsidian);
+        text-decoration: none;
+        min-width: 0;
+    }
+
+    .module-panel-link span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .module-panel-link:hover,
+    .module-panel-link:focus-visible {
+        background: rgba(85, 93, 255, 0.08);
+        color: var(--color-iris);
+    }
+
     /* Hero Headline Section */
     .dashboard-hero {
         max-width: 1200px;
@@ -347,7 +401,7 @@
         <h2 class="text-sm font-semibold font-mono uppercase tracking-wider" style="color: var(--color-slate);">
             ERP Business Modules ({{ modules_tree|length }})
         </h2>
-        <span class="text-xs font-mono" style="color: var(--color-mist);">Click any module to filter sidebar</span>
+        <span class="text-xs font-mono" style="color: var(--color-mist);">Click any module to see its screens</span>
     </div>
 
     <!-- 6-Across Responsive Grid with Module Icons at Top & Names Underneath -->
@@ -356,10 +410,12 @@
         {% set screens = mod_info.screens if mod_info is mapping and mod_info.screens is defined else mod_info %}
         {% set mod_icon = mod_info.icon if mod_info is mapping and mod_info.icon is defined else 'layers' %}
         
-        <button class="module-card group" 
-                aria-label="{{ module_name }}" 
-                type="button" 
-                onclick="openModuleFromDashboard('{{ module_name | urlencode }}')">
+        <button class="module-card group"
+                aria-label="{{ module_name }}"
+                aria-expanded="false"
+                aria-controls="dash-screens-{{ loop.index }}"
+                type="button"
+                onclick="toggleDashboardModule(this, {{ loop.index }})">
             
             <!-- Module Icon (Large at Top) -->
             <div class="module-icon-wrap">
@@ -374,6 +430,22 @@
                 {{ screens|length }} screen{{ 's' if screens|length != 1 else '' }}
             </span>
         </button>
+        <div class="module-panel" id="dash-screens-{{ loop.index }}" hidden>
+            <div class="module-panel-head">
+                <i data-lucide="{{ mod_icon }}" class="w-4 h-4"></i>
+                <span>{{ module_name }}</span>
+            </div>
+            <div class="module-panel-links">
+                {% for screen in screens %}
+                <a href="/table/{{ screen.code }}" class="module-panel-link">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+                    <span>{{ screen.name }}</span>
+                </a>
+                {% else %}
+                <span class="text-xs" style="color: var(--color-mist);">No screens in this module.</span>
+                {% endfor %}
+            </div>
+        </div>
         {% endfor %}
     </div>
 
@@ -392,5 +464,20 @@
     document.addEventListener('DOMContentLoaded', function() {
         if (window.lucide) lucide.createIcons();
     });
+
+    // Open one module's screen list inline, placed right after the last card in the clicked card's row.
+    window.toggleDashboardModule = function(card, idx) {
+        const panel = document.getElementById('dash-screens-' + idx);
+        const wasOpen = card.getAttribute('aria-expanded') === 'true';
+        document.querySelectorAll('#moduleGrid .module-panel').forEach(p => { p.hidden = true; });
+        document.querySelectorAll('#moduleGrid .module-card').forEach(c => c.setAttribute('aria-expanded', 'false'));
+        if (wasOpen || !panel) return;
+        const cards = Array.from(document.querySelectorAll('#moduleGrid .module-card'));
+        const rowEnd = cards.filter(c => c.offsetTop === card.offsetTop).pop() || card;
+        rowEnd.after(panel);
+        panel.hidden = false;
+        card.setAttribute('aria-expanded', 'true');
+        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
 </script>
 {% endblock %}

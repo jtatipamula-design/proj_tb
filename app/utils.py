@@ -330,13 +330,16 @@ async def get_approval_workflow_info(conn, table_name: str, record_id: str, row_
         return None
     
     try:
-        setup = await conn.fetchrow("""
-            SELECT s.*, t.pat_type_name, t.pat_type_code 
-            FROM phc_approval_setup_t s
-            LEFT JOIN phc_approval_types_t t ON s.pas_type_id = t.pat_type_id
-            WHERE LOWER(s.pas_table_name) = LOWER($1) AND (s.pas_status = 'ACT' OR s.pas_status IS NULL)
-        """, table_name)
-    except Exception:
+        # Savepoint: a failed lookup (e.g. schema without these columns) must not abort the caller's save transaction.
+        async with conn.transaction():
+            setup = await conn.fetchrow("""
+                SELECT s.*, t.pat_type_name, t.pat_type_code
+                FROM phc_approval_setup_t s
+                LEFT JOIN phc_approval_types_t t ON s.pas_type_id = t.pat_type_id
+                WHERE LOWER(s.pas_table_name) = LOWER($1) AND (s.pas_status = 'ACT' OR s.pas_status IS NULL)
+            """, table_name)
+    except Exception as e:
+        logger.warning(f"Approval setup lookup failed for {table_name}: {e}")
         setup = None
     
     if not setup:
