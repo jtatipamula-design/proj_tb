@@ -339,6 +339,10 @@ def approval_record_id(record_id):
     except (TypeError, ValueError):
         return None
 
+def workflow_status_column(column_names):
+    """The column an approval workflow drives (first *_status / status / *_state), or None."""
+    return next((c for c in column_names if c.lower().endswith(('_status', '_state')) or c.lower() == 'status'), None)
+
 async def get_approval_setup(conn, table_name: str, user_id):
     """The active approval setup governing table_name for the user's company, or None."""
     try:
@@ -364,13 +368,7 @@ async def get_approval_workflow_info(conn, table_name: str, record_id: str, row_
         return None
     
     # Detect record status column
-    status_col = None
-    for k in row_data.keys():
-        kl = k.lower()
-        if kl.endswith('_status') or kl == 'status' or kl.endswith('_state'):
-            status_col = k
-            break
-            
+    status_col = workflow_status_column(row_data.keys())
     raw_status = str(row_data.get(status_col) or 'DFT').upper() if status_col else 'DFT'
     
     is_pending = raw_status in ('PND', 'PENDING', 'SUBMITTED', 'IN_REVIEW', 'P')

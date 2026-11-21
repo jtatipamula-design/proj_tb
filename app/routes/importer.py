@@ -4,10 +4,10 @@ from datetime import datetime
 from sanic import Blueprint, response
 from sanic.exceptions import NotFound
 from app.config import logger, MAX_UPLOAD_SIZE
-from app.utils import render_template, quote_ident, add_security_headers, _sanitize_payload, get_client_ip, log_audit_event, validate_csrf_token
+from app.utils import render_template, quote_ident, add_security_headers, _sanitize_payload, get_client_ip, log_audit_event, validate_csrf_token, get_approval_setup
 from app.auth import check_auth, get_authorized_tables
 from app.database import get_pk_column, get_table_columns, invalidate_caches_for_table, SCHEMA_CACHE
-from app.routes.api import get_company_scope, write_block_reason, insert_pk_missing
+from app.routes.api import get_company_scope, write_block_reason, insert_pk_missing, apply_workflow_status_rule
 
 import_bp = Blueprint("import_routes")
 
@@ -160,11 +160,14 @@ async def import_upload(request, table_name):
 
         scope = await get_company_scope(conn, table_name, list(schema_map), pk_column, user_id)
         q_table, q_pk = quote_ident(table_name), quote_ident(pk_column)
+        has_workflow = await get_approval_setup(conn, table_name, user_id) is not None
         row_no = None
         try:
             async with conn.transaction():
                 for row_no, raw in rows:
                     clean = build_insert_row(raw, table_name, schema_map, pk_column, scope, role, session_username, datetime.now())
+                    if has_workflow:
+                        apply_workflow_status_rule(clean, schema_map, is_insert=True)
                     if insert_pk_missing(schema_map, pk_column, clean):
                         raise CsvImportError(f"'{pk_column}' needs a value: this table does not generate IDs automatically.", row=row_no)
                     cols = ", ".join(quote_ident(c) for c in clean)

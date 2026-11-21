@@ -1,7 +1,7 @@
 """Pure builders for the list query (search, filters, sort, company scope) shared by the
 table page, CSV export and the JSON read API. No database access here."""
 import json
-from app.utils import quote_ident
+from app.utils import quote_ident, _is_password_column
 
 NUMERIC_TYPES = ('integer', 'bigint', 'smallint', 'numeric')
 UNSEARCHABLE_TYPES = ('bytea', 'json', 'jsonb', 'geometry', 'point', 'polygon')
@@ -47,7 +47,9 @@ def parse_list_args(args):
 def build_list_query(list_args, columns_data, pk_column, company_scope, table_name):
     """Return (where_sql, params, order_sql) for a parse_list_args() result.
     where_sql is '' or ' WHERE ...', order_sql is '' or ' ORDER BY ...'; params are numbered from $1.
-    Column names reach SQL only if they exist in columns_data, and only through quote_ident."""
+    Column names reach SQL only if they exist in columns_data, and only through quote_ident.
+    Password columns are never searched, filtered or sorted on: a prefix filter would reveal the hash."""
+    columns_data = [c for c in columns_data if not _is_password_column(c['column_name'])]
     schema_cols = {c['column_name']: c for c in columns_data}
     params, where = [], []
 
