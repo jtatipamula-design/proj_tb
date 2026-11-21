@@ -2,7 +2,7 @@ import time
 from datetime import datetime
 from sanic import Blueprint, response
 from app.utils import add_security_headers, render_template
-from app.auth import check_auth, get_authorized_tables
+from app.auth import check_auth
 from app.config import logger
 
 system_bp = Blueprint("system_routes")
@@ -51,7 +51,7 @@ async def openapi_spec(request):
     role = request.ctx.role
     
     async with request.app.ctx.pool.acquire() as conn:
-        auth_tables, _ = await get_authorized_tables(conn, user_id, role)
+        auth_tables = request.ctx.all_tables
         
         paths = {}
         tags = []

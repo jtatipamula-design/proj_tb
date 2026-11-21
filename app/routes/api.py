@@ -6,8 +6,8 @@ from asyncpg import exceptions as pgexc
 from sanic import Blueprint, response
 from sanic.exceptions import NotFound
 from app.config import logger, ADMIN_ONLY_TABLES, READ_ONLY_TABLES
-from app.utils import quote_ident, add_security_headers, _sanitize_payload, get_client_ip, validate_uploaded_file, get_approval_workflow_info, get_approval_setup, approval_record_id, workflow_status_column, log_audit_event, dispatch_notification, validate_csrf_token, safe_cast_pk, validate_password_strength
-from app.auth import check_auth, get_authorized_tables
+from app.utils import quote_ident, add_security_headers, _sanitize_payload, get_client_ip, validate_uploaded_file, get_approval_workflow_info, get_approval_setup, approval_record_id, workflow_status_column, audit_stamp, find_audit_column, log_audit_event, dispatch_notification, validate_csrf_token, safe_cast_pk, validate_password_strength
+from app.auth import check_auth, check_login_rate_limit, record_login_attempt
 from app.database import get_pk_column, get_table_columns, invalidate_caches_for_table, SCHEMA_CACHE
 import urllib.parse
 import hashlib
@@ -156,7 +156,7 @@ async def process_api_action(request, table_name, pk_val):
         }, status=403))
 
     async with request.app.ctx.pool.acquire() as conn:
-        auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
+        auth_tables, table_modules = request.ctx.all_tables, request.ctx.table_modules
         if table_name not in auth_tables:
             return response.json({"error": "Unauthorized"}, status=403)
         block_reason = write_block_reason(table_name, role, table_modules.get(table_name))
@@ -223,18 +223,9 @@ async def process_api_action(request, table_name, pk_val):
                     if status_col:
                         set_parts = [f"{quote_ident(status_col)} = $1"]
                         set_vals = [status_val]
-                        
-                        mod_by_col = next((c for c in schema_map if ('modified' in c.lower() or 'updated' in c.lower() or 'edited' in c.lower()) and 'by' in c.lower()), None)
-                        mod_at_col = next((c for c in schema_map if ('modified' in c.lower() or 'updated' in c.lower() or 'edited' in c.lower()) and 'by' not in c.lower()), None)
-                        
-                        if mod_by_col:
-                            max_len = schema_map[mod_by_col].get('character_maximum_length') or 50
-                            set_parts.append(f"{quote_ident(mod_by_col)} = ${len(set_vals)+1}")
-                            set_vals.append(str(session_username)[:max_len])
-                        if mod_at_col:
-                            set_parts.append(f"{quote_ident(mod_at_col)} = ${len(set_vals)+1}")
-                            set_vals.append(datetime.now())
-                        
+                        for col, val in audit_stamp(schema_map, user_id, session_username, datetime.now(), is_insert=False).items():
+                            set_parts.append(f"{quote_ident(col)} = ${len(set_vals)+1}")
+                            set_vals.append(val)
                         set_vals.append(cast_pk)
                         sc_sql, sc_vals = company_clause(scope, len(set_vals) + 1)
                         q = f"UPDATE {q_table} SET {', '.join(set_parts)} WHERE {q_pk} = ${len(set_vals)}{sc_sql}"
@@ -339,21 +330,8 @@ async def process_api_action(request, table_name, pk_val):
         if company_col and not (table_name == 'phc_screens_t' and role == 'ADM' and clean_data.get(company_col)):
             clean_data[company_col] = user_company
 
-        # Mandatory Session Username and Audit Trail Binding
-        who_cols = [c for c in schema_map if 'created' in c.lower() or 'modified' in c.lower() or 'edited' in c.lower() or 'update' in c.lower()]
-        for wc in who_cols:
-            max_len = schema_map.get(wc, {}).get('character_maximum_length') or 50
-            user_str = str(session_username)[:max_len]
-            
-            if ('modified' in wc.lower() or 'edited' in wc.lower() or 'update' in wc.lower()) and 'by' not in wc.lower():
-                clean_data[wc] = datetime.now()
-            elif ('modified' in wc.lower() or 'edited' in wc.lower() or 'update' in wc.lower()) and 'by' in wc.lower():
-                clean_data[wc] = user_str
-            elif method == 'POST':
-                if 'created' in wc.lower() and 'by' not in wc.lower():
-                    clean_data[wc] = datetime.now()
-                elif 'created' in wc.lower() and 'by' in wc.lower():
-                    clean_data[wc] = user_str
+        # Audit columns (created/modified by/at) always come from the session, never from the form.
+        clean_data.update(audit_stamp(schema_map, user_id, session_username, datetime.now(), is_insert=(method == 'POST')))
 
         try:
             async with conn.transaction():
@@ -413,7 +391,7 @@ async def process_api_action(request, table_name, pk_val):
                     locked = await approval_lock_response(old_row)
                     if locked:
                         return locked
-                    mod_at_col = next((c for c in schema_map if ('modified' in c.lower() or 'updated' in c.lower() or 'edited' in c.lower()) and 'by' not in c.lower()), None)
+                    mod_at_col = find_audit_column(schema_map, 'modified_at')
                     if old_row and mod_at_col and row_version_conflict(row_version, old_row[mod_at_col]):
                         return add_security_headers(response.json({"error": "This record was changed by someone else since you opened it. Reload and re-apply your changes."}, status=409))
                     cols = list(clean_data.keys())
@@ -461,7 +439,7 @@ async def get_record_audit_history(request, table_name, record_id):
     
     try:
         async with request.app.ctx.pool.acquire() as conn:
-            auth_tables, _ = await get_authorized_tables(conn, request.ctx.user_id, request.ctx.role)
+            auth_tables = request.ctx.all_tables
             if table_name not in auth_tables:
                 return add_security_headers(response.json({"error": "Unauthorized"}, status=403))
             if not await record_visible(conn, table_name, record_id, request.ctx.user_id, request.ctx.role):
@@ -499,10 +477,11 @@ WORKFLOW_TARGETS = {'SUBMIT': ('PND', 'P'), 'APPROVE': ('ACT', 'A'), 'REJECT': (
 PENDING_STATUSES = ('PND', 'PENDING', 'SUBMITTED', 'IN_REVIEW', 'P')
 
 
-def transition_error(transition, old_status, submitter_id, user_id):
+def transition_error(transition, old_status, submitter_id, user_id, is_approver=False):
     """Why this workflow move is refused as (message, http_status), or None if allowed.
     Only a pending record can be approved, rejected or recalled; a pending record cannot be
-    submitted again; whoever submitted a record cannot approve it (segregation of duties)."""
+    submitted again; whoever submitted a record cannot approve it (segregation of duties);
+    only the submitter or an approver may recall it."""
     if transition not in WORKFLOW_TARGETS:
         return f"Unknown transition '{transition}'.", 400
     is_pending = str(old_status).upper() in PENDING_STATUSES
@@ -512,6 +491,8 @@ def transition_error(transition, old_status, submitter_id, user_id):
         return "This record is already pending approval.", 400
     if transition == 'APPROVE' and submitter_id is not None and submitter_id == user_id:
         return "You submitted this record, so another approver must approve it.", 403
+    if transition == 'RECALL' and not is_approver and (submitter_id is None or submitter_id != user_id):
+        return "Only the person who submitted this record or an approver can recall it.", 403
     return None
 
 
@@ -542,7 +523,7 @@ async def api_workflow_transition(request):
         return add_security_headers(response.json({"error": "A rejection reason/comment is mandatory."}, status=400))
 
     async with request.app.ctx.pool.acquire() as conn:
-        auth_tables, _ = await get_authorized_tables(conn, user_id, user_role)
+        auth_tables = request.ctx.all_tables
         if table_name not in auth_tables:
             return add_security_headers(response.json({"error": "Unauthorized access to table."}, status=403))
 
@@ -554,15 +535,25 @@ async def api_workflow_transition(request):
             return add_security_headers(response.json({"error": "Approvals are only supported for records with a numeric ID."}, status=400))
 
         req_role = setup['pas_appr_role_type'] or 'ADM'
-        if transition in ('APPROVE', 'REJECT') and (user_role != 'ADM' and user_role != req_role):
+        is_approver = user_role in ('ADM', req_role)
+        if transition in ('APPROVE', 'REJECT') and not is_approver:
             return add_security_headers(response.json({"error": f"Role '{req_role}' or Administrator required to approve/reject."}, status=403))
 
         # 21 CFR Part 11 Electronic Signature Password Verification
         if setup['pas_require_esig'] or sig_pwd:
             if not sig_pwd:
                 return add_security_headers(response.json({"error": "Electronic signature password is required for this action."}, status=400))
+            # Same limiter as /login, so a hijacked session cannot be used to guess the password here.
+            allowed, wait_sec = check_login_rate_limit(client_ip)
+            if not allowed:
+                return add_security_headers(response.json({"error": f"Too many failed attempts. Please try again in {wait_sec // 60 + 1} minute(s)."}, status=429))
             user_pwd = await conn.fetchval("SELECT pus_pwd FROM phc_users_t WHERE pus_user_id = $1", user_id)
-            if not user_pwd or not bcrypt.checkpw(sig_pwd.encode('utf-8'), user_pwd.encode('utf-8')):
+            try:
+                sig_ok = bool(user_pwd) and bcrypt.checkpw(sig_pwd.encode('utf-8'), user_pwd.encode('utf-8'))
+            except (ValueError, TypeError):
+                sig_ok = False
+            if not sig_ok:
+                record_login_attempt(client_ip, success=False)
                 return add_security_headers(response.json({"error": "Invalid signature password. Electronic signature verification failed."}, status=401))
 
         pk_col = await get_pk_column(conn, table_name)
@@ -589,13 +580,13 @@ async def api_workflow_transition(request):
 
         old_status = str(current_row.get(status_col) or 'DFT')
         submitter_id = None
-        if transition == 'APPROVE':
+        if transition in ('APPROVE', 'RECALL'):
             submitter_id = await conn.fetchval("""
                 SELECT pae_user_id FROM phc_approval_events_t
                 WHERE pae_event_table = $1 AND pae_event_table_pk_id = $2 AND pae_action = 'SUBMIT'
                 ORDER BY pae_created DESC LIMIT 1
             """, table_name, rec_id)
-        refusal = transition_error(transition, old_status, submitter_id, user_id)
+        refusal = transition_error(transition, old_status, submitter_id, user_id, is_approver)
         if refusal:
             return add_security_headers(response.json({"error": refusal[0]}, status=refusal[1]))
         new_status = WORKFLOW_TARGETS[transition][0 if status_max_len >= 3 else 1]
@@ -608,16 +599,9 @@ async def api_workflow_transition(request):
         async with conn.transaction():
             set_parts = [f"{quote_ident(status_col)} = $1"]
             set_vals = [new_status]
-            
-            mod_by_col = next((c['column_name'] for c in cols_data if ('modified' in c['column_name'].lower() or 'updated' in c['column_name'].lower()) and 'by' in c['column_name'].lower()), None)
-            mod_at_col = next((c['column_name'] for c in cols_data if ('modified' in c['column_name'].lower() or 'updated' in c['column_name'].lower()) and 'by' not in c['column_name'].lower()), None)
-            if mod_by_col:
-                set_parts.append(f"{quote_ident(mod_by_col)} = ${len(set_vals)+1}")
-                set_vals.append(str(username)[:50])
-            if mod_at_col:
-                set_parts.append(f"{quote_ident(mod_at_col)} = ${len(set_vals)+1}")
-                set_vals.append(ts_now)
-                
+            for col, val in audit_stamp({c['column_name']: c for c in cols_data}, user_id, username, ts_now, is_insert=False).items():
+                set_parts.append(f"{quote_ident(col)} = ${len(set_vals)+1}")
+                set_vals.append(val)
             set_vals.append(cast_pk)
             sc_sql, sc_vals = company_clause(scope, len(set_vals) + 1)
             await conn.execute(f"UPDATE {q_table} SET {', '.join(set_parts)} WHERE {q_pk} = ${len(set_vals)}{sc_sql}", *set_vals, *sc_vals)
@@ -652,10 +636,12 @@ async def api_workflow_transition(request):
                     link_url, "WORKFLOW"
                 )
             elif transition in ('APPROVE', 'REJECT'):
-                created_by_col = next((c['column_name'] for c in cols_data if 'created' in c['column_name'].lower() and 'by' in c['column_name'].lower()), None)
+                created_by_col = find_audit_column([c['column_name'] for c in cols_data], 'created_by')
                 created_by_user = current_row.get(created_by_col) if created_by_col else None
                 creator_id = None
-                if created_by_user:
+                if isinstance(created_by_user, int):  # numeric *_by columns hold the user id
+                    creator_id = created_by_user
+                elif created_by_user:
                     creator_id = await conn.fetchval("SELECT pus_user_id FROM phc_users_t WHERE LOWER(pus_user_name) = LOWER($1)", str(created_by_user))
                 await dispatch_notification(
                     conn, creator_id, None, 
@@ -684,7 +670,7 @@ async def get_workflow_history(request, table_name, record_id):
         
     try:
         async with request.app.ctx.pool.acquire() as conn:
-            auth_tables, _ = await get_authorized_tables(conn, request.ctx.user_id, request.ctx.role)
+            auth_tables = request.ctx.all_tables
             if table_name not in auth_tables:
                 return add_security_headers(response.json({"error": "Unauthorized"}, status=403))
             if not await record_visible(conn, table_name, record_id, request.ctx.user_id, request.ctx.role):
@@ -799,7 +785,7 @@ async def download_file_column(request, table_name, pk_val, col_name):
     col_name = col_name.lower()
     
     async with request.app.ctx.pool.acquire() as conn:
-        auth_tables, _ = await get_authorized_tables(conn, user_id, role)
+        auth_tables = request.ctx.all_tables
         if table_name not in auth_tables:
             raise NotFound("Table not found or unauthorized")
         

@@ -15,6 +15,7 @@ from app.auth import check_login_rate_limit, record_login_attempt, USER_AUTH_CAC
 from app.database import get_table_columns
 
 auth_bp = Blueprint("auth_routes")
+_DUMMY_HASH = bcrypt.hashpw(b"not-a-real-password", bcrypt.gensalt()).decode('utf-8')
 
 
 def _as_utc(dt):
@@ -27,6 +28,18 @@ def next_failed_count(failed_attempts, locked_until, now):
     if locked_until and _as_utc(locked_until) <= now:
         failed_attempts = 0
     return (failed_attempts or 0) + 1
+
+
+def login_outcome(password_ok, is_inactive, is_locked):
+    """'ok', 'locked', 'inactive' or 'invalid'. Without the right password the answer is always
+    'invalid', so a stranger cannot tell which usernames exist, are locked or are inactive."""
+    if not password_ok:
+        return 'invalid'
+    if is_locked:
+        return 'locked'
+    if is_inactive:
+        return 'inactive'
+    return 'ok'
 
 
 def password_change_error(current_ok, new, confirm, same_as_current):
@@ -96,63 +109,53 @@ async def login(request):
         
         user = await conn.fetchrow(f"SELECT * FROM phc_users_t WHERE LOWER({q_user_col}) = LOWER($1)", username)
         
-        if user:
-            # Check for persistent database account lockout
-            locked_until = user.get('pus_locked_until')
-            if locked_until:
-                locked_until = _as_utc(locked_until)
-                now_dt = datetime.now(timezone.utc)
-                if locked_until > now_dt:
-                    secs_left = int((locked_until - now_dt).total_seconds())
-                    mins_left = max(1, secs_left // 60 + 1)
-                    return add_security_headers(response.json({
-                        "status": "error", 
-                        "message": f"Account is temporarily locked due to excessive failed attempts. Please try again in {mins_left} minute(s) or contact an administrator."
-                    }, status=403))
+        # Always run one bcrypt check (a dummy hash for unknown users) so response time does not reveal
+        # whether the username exists; lock / inactive details are only shown after a correct password.
+        stored_pwd = (user.get('pus_pwd') if user else None) or _DUMMY_HASH
+        try:
+            password_ok = bcrypt.checkpw(password.encode('utf-8'), stored_pwd.encode('utf-8')) and user is not None
+        except (ValueError, TypeError):
+            password_ok = False
 
-            if user.get('pus_status') and user['pus_status'] == 'INA':
-                record_login_attempt(client_ip, success=False)
-                return add_security_headers(response.json({"status": "error", "message": "Account is inactive. Please contact your administrator."}, status=403))
+        now_utc = datetime.now(timezone.utc)
+        locked_until = _as_utc(user['pus_locked_until']) if user and user.get('pus_locked_until') else None
+        is_locked = bool(locked_until and locked_until > now_utc)
+        outcome = login_outcome(password_ok, bool(user) and user.get('pus_status') == 'INA', is_locked)
 
-            stored_pwd = user.get('pus_pwd') or ""
-            is_valid = False
-            if stored_pwd:
-                try:
-                    if bcrypt.checkpw(password.encode('utf-8'), stored_pwd.encode('utf-8')):
-                        is_valid = True
-                except (ValueError, TypeError):
-                    pass
-                    
-            if is_valid:
-                record_login_attempt(client_ip, success=True)
-                session_id = str(uuid.uuid4())
-                user_id_val = user.get('pus_user_id') or user.get('id')
-                user_name_val = user.get('pus_user_name') or user.get('pus_usr_name') or username
+        if outcome == 'locked':
+            mins_left = max(1, int((locked_until - now_utc).total_seconds()) // 60 + 1)
+            return add_security_headers(response.json({
+                "status": "error",
+                "message": f"Account is temporarily locked due to excessive failed attempts. Please try again in {mins_left} minute(s) or contact an administrator."
+            }, status=403))
 
-                async with conn.transaction():
-                    await conn.execute("""
-                        UPDATE phc_users_t 
-                        SET pus_session_id = $1, pus_failed_attempts = 0, pus_locked_until = NULL 
-                        WHERE pus_user_id = $2
-                    """, session_id, user_id_val)
-                
-                res = response.json({"status": "success", "message": "Login successful"})
-                return _set_session_cookies(request, res, user_id_val, user_name_val, session_id)
-            else:
-                # Increment failed attempts in PostgreSQL
-                now_utc = datetime.now(timezone.utc)
-                failed_count = next_failed_count(user.get('pus_failed_attempts'), user.get('pus_locked_until'), now_utc)
-                user_id_val = user.get('pus_user_id') or user.get('id')
-                if failed_count >= 5:
-                    lock_time = now_utc + timedelta(minutes=15)
-                    await conn.execute("UPDATE phc_users_t SET pus_failed_attempts = $1, pus_locked_until = $2 WHERE pus_user_id = $3", failed_count, lock_time, user_id_val)
-                    return add_security_headers(response.json({
-                        "status": "error", 
-                        "message": "Account has been temporarily locked for 15 minutes due to 5 consecutive failed login attempts."
-                    }, status=403))
-                else:
-                    await conn.execute("UPDATE phc_users_t SET pus_failed_attempts = $1, pus_locked_until = NULL WHERE pus_user_id = $2", failed_count, user_id_val)
-        
+        if outcome == 'inactive':
+            record_login_attempt(client_ip, success=False)
+            return add_security_headers(response.json({"status": "error", "message": "Account is inactive. Please contact your administrator."}, status=403))
+
+        if outcome == 'ok':
+            record_login_attempt(client_ip, success=True)
+            session_id = str(uuid.uuid4())
+            user_id_val = user.get('pus_user_id') or user.get('id')
+            user_name_val = user.get('pus_user_name') or user.get('pus_usr_name') or username
+
+            async with conn.transaction():
+                await conn.execute("""
+                    UPDATE phc_users_t 
+                    SET pus_session_id = $1, pus_failed_attempts = 0, pus_locked_until = NULL 
+                    WHERE pus_user_id = $2
+                """, session_id, user_id_val)
+
+            res = response.json({"status": "success", "message": "Login successful"})
+            return _set_session_cookies(request, res, user_id_val, user_name_val, session_id)
+
+        # Wrong password for an existing account that is not already locked: count it (5 locks for 15 min).
+        if user and not is_locked:
+            failed_count = next_failed_count(user.get('pus_failed_attempts'), user.get('pus_locked_until'), now_utc)
+            lock_time = now_utc + timedelta(minutes=15) if failed_count >= 5 else None
+            await conn.execute("UPDATE phc_users_t SET pus_failed_attempts = $1, pus_locked_until = $2 WHERE pus_user_id = $3",
+                               failed_count, lock_time, user.get('pus_user_id') or user.get('id'))
+
         record_login_attempt(client_ip, success=False)
         return add_security_headers(response.json({"status": "error", "message": "Invalid credentials"}, status=401))
 
