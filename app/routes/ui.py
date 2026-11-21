@@ -1,7 +1,7 @@
 import time
 from sanic import Blueprint, response
 from sanic.exceptions import NotFound
-from app.utils import render_template, quote_ident, add_security_headers, resolve_lookup_type, safe_cast_pk, get_approval_workflow_info
+from app.utils import render_template, quote_ident, add_security_headers, resolve_lookup_type, safe_cast_pk, get_approval_workflow_info, get_approval_setup, workflow_status_column, _is_password_column
 from app.auth import check_auth, get_authorized_tables
 from app.database import get_pk_column, get_table_columns, get_dropdown_options, SCHEMA_CACHE, clear_schema_cache, get_all_lookups, resolve_fk_details, get_fk_display_dict
 from app.routes.api import get_company_scope, company_clause
@@ -113,7 +113,7 @@ async def show_table(request, table_name):
         for c in columns_data:
             cname = c['column_name']
             cname_low = cname.lower()
-            if cname in (pk_column, 'psn_screen_id'): continue
+            if cname in (pk_column, 'psn_screen_id') or _is_password_column(cname): continue
             
             is_company_col = 'company_id' in cname_low
             if is_company_col:
@@ -271,6 +271,15 @@ async def show_edit_form(request, table_name, pk_val):
 async def show_form_view_alias(request, table_name, pk_val):
     return await render_form(request, table_name, is_update=True, pk_val=pk_val)
 
+def form_field_value(column_name, is_file, raw_val, is_update):
+    """Value pre-filled in a form input. A stored password hash is never sent: saving the form
+    would otherwise store the hash itself as the new password (an empty box keeps the old one)."""
+    if _is_password_column(column_name):
+        return ''
+    if is_file and is_update:
+        return "[Stored Binary Object]" if raw_val not in (None, '') else ''
+    return raw_val
+
 async def render_form(request, table_name, is_update=False, pk_val=None):
     user_id = request.ctx.user_id
     role = request.ctx.role
@@ -311,12 +320,14 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
 
         lookup_map = await get_all_lookups(conn)
         user_company = await conn.fetchval("SELECT pus_company_id FROM phc_users_t WHERE pus_user_id = $1", user_id)
+        # With an approval rule the status is set only by the workflow panel, so it is not a form field.
+        wf_status_col = workflow_status_column(schema_map) if await get_approval_setup(conn, table_name, user_id) else None
 
         columns = []
         company_form_def = None
         for c in columns_data:
             cname = c['column_name']
-            if 'created' in cname.lower() or 'modified' in cname.lower() or 'edited' in cname.lower():
+            if 'created' in cname.lower() or 'modified' in cname.lower() or 'edited' in cname.lower() or cname == wf_status_col:
                 continue
                 
             is_company_col = 'company_id' in cname.lower()
@@ -328,10 +339,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
             
             raw_val = row_data.get(cname, '') if is_update else ''
             is_file = c['data_type'].lower() in ('bytea', 'blob', 'oid', 'binary', 'varbinary')
-            if is_file and is_update:
-                val = "[Stored Binary Object]" if raw_val not in (None, '') else ''
-            else:
-                val = raw_val
+            val = form_field_value(cname, is_file, raw_val, is_update)
 
             options = await get_dropdown_options(conn, table_name, cname, preloaded_lookups=lookup_map, company_id=user_company)
 
@@ -421,7 +429,7 @@ async def export_table_csv(request, table_name):
         company_csv_col = None
         for c in columns_data:
             cname = c['column_name']
-            if cname == pk_column: continue
+            if cname == pk_column or _is_password_column(cname): continue
             
             is_company_col = 'company_id' in cname.lower()
             if is_company_col:

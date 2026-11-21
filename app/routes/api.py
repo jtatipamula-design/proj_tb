@@ -6,7 +6,7 @@ from asyncpg import exceptions as pgexc
 from sanic import Blueprint, response
 from sanic.exceptions import NotFound
 from app.config import logger, ADMIN_ONLY_TABLES, READ_ONLY_TABLES
-from app.utils import quote_ident, add_security_headers, _sanitize_payload, get_client_ip, validate_uploaded_file, get_approval_workflow_info, get_approval_setup, approval_record_id, log_audit_event, dispatch_notification, validate_csrf_token, safe_cast_pk, validate_password_strength
+from app.utils import quote_ident, add_security_headers, _sanitize_payload, get_client_ip, validate_uploaded_file, get_approval_workflow_info, get_approval_setup, approval_record_id, workflow_status_column, log_audit_event, dispatch_notification, validate_csrf_token, safe_cast_pk, validate_password_strength
 from app.auth import check_auth, get_authorized_tables
 from app.database import get_pk_column, get_table_columns, invalidate_caches_for_table, SCHEMA_CACHE
 import urllib.parse
@@ -53,6 +53,17 @@ def insert_pk_missing(schema_map, pk_column, clean_data):
         return False
     info = schema_map.get(pk_column, {})
     return not str(info.get('column_default') or '').strip() and info.get('is_identity') != 'YES'
+
+def apply_workflow_status_rule(clean_data, schema_map, is_insert):
+    """On a table with an approval rule the status changes only through /api/workflow/transition:
+    an edit may not set it, and a new record always starts as draft."""
+    status_col = workflow_status_column(schema_map)
+    if not status_col:
+        return
+    clean_data.pop(status_col, None)
+    if is_insert:
+        max_len = schema_map[status_col].get('character_maximum_length') or 10
+        clean_data[status_col] = WORKFLOW_TARGETS['RECALL'][0 if max_len >= 3 else 1]
 
 def row_version_conflict(client_version, current_modified_at):
     """True when the client's `_row_version` (modified-at isoformat it loaded, '' if never modified)
@@ -320,6 +331,8 @@ async def process_api_action(request, table_name, pk_val):
                     data_dict.pop('pus_pwd', None)
 
         clean_data = _sanitize_payload(data_dict, pk_column, schema_map, is_update=(method == 'PUT'))
+        if method in ('POST', 'PUT') and await get_approval_setup(conn, table_name, user_id):
+            apply_workflow_status_rule(clean_data, schema_map, is_insert=(method == 'POST'))
 
         # Multi-tenant Company Segregation
         company_col, user_company = scope
@@ -569,15 +582,8 @@ async def api_workflow_transition(request):
         if not current_row:
             return add_security_headers(response.json({"error": "Record not found."}, status=404))
 
-        status_col = None
-        status_max_len = 10
-        for c in cols_data:
-            cname = c['column_name'].lower()
-            if cname.endswith('_status') or cname == 'status' or cname.endswith('_state'):
-                status_col = c['column_name']
-                status_max_len = c.get('character_maximum_length') or 10
-                break
-                
+        status_col = workflow_status_column([c['column_name'] for c in cols_data])
+        status_max_len = (schema_map.get(status_col.lower(), {}).get('character_maximum_length') or 10) if status_col else 10
         if not status_col:
             return add_security_headers(response.json({"error": "Target table does not have a status column."}, status=400))
 
@@ -802,8 +808,9 @@ async def download_file_column(request, table_name, pk_val, col_name):
             raise NotFound("This table has no primary key")
         cols_data = await get_table_columns(conn, table_name)
         schema_map = {c['column_name'].lower(): c for c in cols_data}
-        if col_name not in schema_map:
-            raise NotFound(f"Column '{col_name}' not found")
+        # Only file columns are served: other columns (e.g. password hashes) must not be readable here.
+        if (schema_map.get(col_name, {}).get('data_type') or '').lower() not in ('bytea', 'blob', 'oid', 'binary', 'varbinary'):
+            raise NotFound(f"Column '{col_name}' is not a file column")
 
         pk_type = schema_map.get(pk_col.lower(), {}).get('data_type', 'integer')
         cast_pk = safe_cast_pk(pk_val, pk_type)

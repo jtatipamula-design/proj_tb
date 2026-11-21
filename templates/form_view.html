@@ -487,11 +487,11 @@
                                 <input type="{% if col.data_type in ('integer', 'numeric', 'bigint', 'smallint') %}number{% elif col.column_name == 'pus_pwd' %}password{% else %}text{% endif %}" 
                                        id="{{ col.column_name }}" name="{{ col.column_name }}" class="sketch-input" 
                                        value="{{ col.value if col.value is not none else '' }}" 
-                                       {% if col.column_name == 'pus_pwd' and not is_update %}placeholder="At least 6 chars with 1+ uppercase letter (A-Z)"{% endif %}
+                                       {% if col.column_name == 'pus_pwd' %}placeholder="{{ 'Leave blank to keep the current password' if is_update else 'At least 8 chars with upper, lower case and a digit' }}" autocomplete="new-password"{% endif %}
                                        {% if col.required and not is_update and col.column_name != 'pus_pwd' %}required{% endif %}>
                                 {% if col.column_name == 'pus_pwd' %}
                                     <span class="text-[11px] flex items-center gap-1 mt-1" style="color: var(--color-slate);">
-                                        <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-amber-500"></i> Must contain at least one uppercase letter (A-Z) and 6+ characters.
+                                        <i data-lucide="shield-alert" class="w-3.5 h-3.5 text-amber-500"></i> At least 8 characters with an uppercase letter, a lowercase letter and a digit.
                                     </span>
                                 {% elif col.column_name in ('pus_user_name', 'pus_usr_name') %}
                                     <span class="text-[11px] flex items-center gap-1 mt-1" style="color: var(--color-slate);">

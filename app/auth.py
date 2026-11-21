@@ -115,9 +115,18 @@ async def get_authorized_tables(conn, user_id, role):
                 FROM phc_screens_t s
                 JOIN phc_role_screen_assignment_t rsa ON s.psn_screen_id = rsa.prs_screen_id
                 JOIN phc_user_roles_assignment_t ura ON rsa.prs_role_id = ura.pua_role_id
+                JOIN phc_roles_t r ON r.prl_role_id = ura.pua_role_id
                 LEFT JOIN phc_module_t m ON s.psn_module_id = m.pmd_module_id
-                WHERE ura.pua_user_id = $1 
+                WHERE ura.pua_user_id = $1
                   AND (s.psn_status = 'ACT' OR s.psn_status IS NULL)
+                  -- same active / in-date rules as v_user_authorized_screens (migration 006)
+                  AND ura.pua_status = 'ACT'
+                  AND CURRENT_DATE >= ura.pua_start_date AND (ura.pua_end_date IS NULL OR CURRENT_DATE <= ura.pua_end_date)
+                  AND rsa.prs_status = 'ACT'
+                  AND CURRENT_DATE >= rsa.prs_start_date AND (rsa.prs_end_date IS NULL OR CURRENT_DATE <= rsa.prs_end_date)
+                  AND (r.prl_status IS NULL OR r.prl_status = 'ACT')
+                  AND (r.prl_start_date IS NULL OR CURRENT_DATE >= r.prl_start_date)
+                  AND (r.prl_end_date IS NULL OR CURRENT_DATE <= r.prl_end_date)
                 ORDER BY m.pmd_module_name, s.psn_screen_name
             """
             rows = await conn.fetch(query, user_id)
