@@ -200,6 +200,38 @@ def resolve_lookup_type(column_name: str) -> str:
         
     return col_clean.upper()
 
+AUDIT_NUMERIC_TYPES = ('integer', 'bigint', 'smallint', 'numeric')
+
+def audit_column_kind(column_name):
+    """'created_by', 'created_at', 'modified_by', 'modified_at', or None for an ordinary column.
+    These columns are filled by the app on every save and are never taken from user input."""
+    n = str(column_name).lower()
+    if 'created' in n:
+        return 'created_by' if 'by' in n else 'created_at'
+    if 'modified' in n or 'edited' in n or 'updated' in n:
+        return 'modified_by' if 'by' in n else 'modified_at'
+    return None
+
+def find_audit_column(column_names, kind):
+    """First column of the given audit kind, or None."""
+    return next((c for c in column_names if audit_column_kind(c) == kind), None)
+
+def audit_stamp(schema_map, user_id, username, now, is_insert):
+    """Values for the audit columns of one save: modified-by/at always, created-by/at only on insert.
+    A numeric *_by column gets the user id, a text one the username cut to the column length."""
+    out = {}
+    for col, info in schema_map.items():
+        kind = audit_column_kind(col)
+        if not kind or (kind.startswith('created') and not is_insert):
+            continue
+        if kind.endswith('_at'):
+            out[col] = now
+        elif (info.get('data_type') or '').lower() in AUDIT_NUMERIC_TYPES:
+            out[col] = user_id
+        else:
+            out[col] = str(username)[:info.get('character_maximum_length') or 50]
+    return out
+
 def _sanitize_payload(data, pk_column, schema_map, is_update=False):
     clean_data = {}
     for k, v in data.items():
@@ -210,7 +242,7 @@ def _sanitize_payload(data, pk_column, schema_map, is_update=False):
                 continue
             if v == "" or v is None:
                 continue 
-        if 'created' in k.lower() or 'modified' in k.lower() or 'edited' in k.lower() or 'update' in k.lower():
+        if audit_column_kind(k):
             continue
 
         col_info = schema_map.get(k, {})

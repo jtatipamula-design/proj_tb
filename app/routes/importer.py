@@ -4,8 +4,8 @@ from datetime import datetime
 from sanic import Blueprint, response
 from sanic.exceptions import NotFound
 from app.config import logger, MAX_UPLOAD_SIZE
-from app.utils import render_template, quote_ident, add_security_headers, _sanitize_payload, get_client_ip, log_audit_event, validate_csrf_token, get_approval_setup
-from app.auth import check_auth, get_authorized_tables
+from app.utils import render_template, quote_ident, add_security_headers, _sanitize_payload, get_client_ip, log_audit_event, validate_csrf_token, get_approval_setup, audit_stamp
+from app.auth import check_auth
 from app.database import get_pk_column, get_table_columns, invalidate_caches_for_table, SCHEMA_CACHE
 from app.routes.api import get_company_scope, write_block_reason, insert_pk_missing, apply_workflow_status_rule
 
@@ -75,7 +75,7 @@ def parse_csv(body, columns, max_rows=MAX_IMPORT_ROWS):
     return rows
 
 
-def build_insert_row(raw, table_name, schema_map, pk_column, scope, role, username, now):
+def build_insert_row(raw, table_name, schema_map, pk_column, scope, role, username, now, user_id=None):
     """One CSV row -> the values to insert, under the same rules as a single create in process_api_action."""
     # The export writes binary cells as a "[Binary Object ...]" placeholder; never store that text.
     raw = {k: v for k, v in raw.items() if schema_map.get(k, {}).get('data_type', '').lower() not in BINARY_TYPES}
@@ -85,12 +85,7 @@ def build_insert_row(raw, table_name, schema_map, pk_column, scope, role, userna
     if company_col and not (table_name == 'phc_screens_t' and role == 'ADM' and clean.get(company_col)):
         clean[company_col] = user_company
 
-    for wc in schema_map:
-        low = wc.lower()
-        if not any(w in low for w in ('created', 'modified', 'edited', 'update')):
-            continue
-        max_len = schema_map[wc].get('character_maximum_length') or 50
-        clean[wc] = str(username)[:max_len] if 'by' in low else now
+    clean.update(audit_stamp(schema_map, user_id, username, now, is_insert=True))
 
     for cname in schema_map:
         if 'start_date' in cname.lower() and not clean.get(cname):
@@ -140,7 +135,7 @@ async def import_upload(request, table_name):
         return _err(f"File exceeds maximum allowed size of {MAX_UPLOAD_SIZE // (1024*1024)}MB.")
 
     async with request.app.ctx.pool.acquire() as conn:
-        auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
+        auth_tables, table_modules = request.ctx.all_tables, request.ctx.table_modules
         if table_name not in auth_tables:
             return _err("Unauthorized", 403)
         block_reason = write_block_reason(table_name, role, table_modules.get(table_name))
@@ -165,7 +160,7 @@ async def import_upload(request, table_name):
         try:
             async with conn.transaction():
                 for row_no, raw in rows:
-                    clean = build_insert_row(raw, table_name, schema_map, pk_column, scope, role, session_username, datetime.now())
+                    clean = build_insert_row(raw, table_name, schema_map, pk_column, scope, role, session_username, datetime.now(), user_id)
                     if has_workflow:
                         apply_workflow_status_rule(clean, schema_map, is_insert=True)
                     if insert_pk_missing(schema_map, pk_column, clean):

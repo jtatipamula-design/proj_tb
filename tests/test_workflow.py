@@ -9,10 +9,10 @@ from app.routes.api import transition_error
 
 @pytest.mark.parametrize("transition", ["APPROVE", "REJECT", "RECALL"])
 def test_only_pending_records_can_be_decided(transition):
-    assert transition_error(transition, "PND", None, 1) is None
-    assert transition_error(transition, "p", None, 1) is None
+    assert transition_error(transition, "PND", None, 1, is_approver=True) is None
+    assert transition_error(transition, "p", None, 1, is_approver=True) is None
     for status in ("DFT", "ACT", "REJ"):
-        msg, code = transition_error(transition, status, None, 1)
+        msg, code = transition_error(transition, status, None, 1, is_approver=True)
         assert code == 400 and "pending" in msg
 
 
@@ -31,6 +31,13 @@ def test_submitter_cannot_approve_own_record():
 
 def test_submitter_may_recall_own_record():
     assert transition_error("RECALL", "PND", 5, 5) is None
+
+
+def test_others_cannot_recall_a_submission():
+    msg, code = transition_error("RECALL", "PND", 5, 6)
+    assert code == 403
+    assert transition_error("RECALL", "PND", None, 6)[1] == 403  # no SUBMIT event on record
+    assert transition_error("RECALL", "PND", 5, 6, is_approver=True) is None
 
 
 def test_unknown_transition_refused():

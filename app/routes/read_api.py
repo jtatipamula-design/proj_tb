@@ -2,7 +2,7 @@
 import urllib.parse
 from sanic import Blueprint, response
 from app.utils import quote_ident, add_security_headers, safe_cast_pk, _is_password_column
-from app.auth import check_auth, get_authorized_tables
+from app.auth import check_auth
 from app.database import get_pk_column, get_table_columns
 from app.routes.api import get_company_scope, company_clause
 from app.query import parse_list_args, build_list_query
@@ -58,7 +58,7 @@ def _error(message, status):
 
 async def _table_context(request, conn, table_name):
     """(pk_column, columns_data, scope) for an authorized table, or an error response."""
-    auth_tables, _ = await get_authorized_tables(conn, request.ctx.user_id, request.ctx.role)
+    auth_tables = request.ctx.all_tables
     if table_name not in auth_tables:
         return _error("Unauthorized", 403)
     pk_column = await get_pk_column(conn, table_name)

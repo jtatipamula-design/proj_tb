@@ -1,8 +1,8 @@
 import time
 from sanic import Blueprint, response
 from sanic.exceptions import NotFound
-from app.utils import render_template, quote_ident, add_security_headers, resolve_lookup_type, safe_cast_pk, get_approval_workflow_info, get_approval_setup, workflow_status_column, _is_password_column
-from app.auth import check_auth, get_authorized_tables
+from app.utils import render_template, quote_ident, add_security_headers, resolve_lookup_type, safe_cast_pk, get_approval_workflow_info, get_approval_setup, workflow_status_column, _is_password_column, audit_column_kind, find_audit_column
+from app.auth import check_auth
 from app.database import get_pk_column, get_table_columns, get_dropdown_options, SCHEMA_CACHE, clear_schema_cache, get_all_lookups, resolve_fk_details, get_fk_display_dict
 from app.routes.api import get_company_scope, company_clause
 from app.query import parse_list_args, build_list_query
@@ -88,8 +88,6 @@ async def show_table(request, table_name):
     table_modules = getattr(request.ctx, 'table_modules', None)
 
     async with request.app.ctx.pool.acquire() as conn:
-        if auth_tables is None or table_modules is None:
-            auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
 
         if table_name not in auth_tables:
             raise NotFound("Table not found or unauthorized")
@@ -122,20 +120,13 @@ async def show_table(request, table_name):
                     company_col_def = {"raw": cname, "column_name": cname, "label": clean_label, "data_type": c.get('data_type', 'varchar')}
                 continue
             
-            # 1. Audit "By" columns (Created By / Modified By)
-            if 'created' in cname_low and 'by' in cname_low:
-                audit_by_columns.append({"raw": cname, "column_name": cname, "label": "Created By", "data_type": c.get('data_type', 'varchar')})
-                continue
-            elif ('modified' in cname_low or 'edited' in cname_low or 'updated' in cname_low) and 'by' in cname_low:
-                audit_by_columns.append({"raw": cname, "column_name": cname, "label": "Modified By", "data_type": c.get('data_type', 'varchar')})
-                continue
-            
-            # 2. Audit "Date" columns (Created Date / Modified Date)
-            elif 'created' in cname_low and ('date' in c['data_type'] or 'timestamp' in c['data_type'] or 'date' in cname_low):
-                audit_date_columns.append({"raw": cname, "column_name": cname, "label": "Created Date", "data_type": c.get('data_type', 'varchar')})
-                continue
-            elif ('modified' in cname_low or 'edited' in cname_low or 'updated' in cname_low) and ('date' in c['data_type'] or 'timestamp' in c['data_type'] or 'date' in cname_low):
-                audit_date_columns.append({"raw": cname, "column_name": cname, "label": "Modified Date", "data_type": c.get('data_type', 'varchar')})
+            # 1. Audit columns (Created/Modified By, then Created/Modified Date) go last
+            kind = audit_column_kind(cname)
+            if kind:
+                label = {"created_by": "Created By", "modified_by": "Modified By",
+                         "created_at": "Created Date", "modified_at": "Modified Date"}[kind]
+                (audit_by_columns if kind.endswith('_by') else audit_date_columns).append(
+                    {"raw": cname, "column_name": cname, "label": label, "data_type": c.get('data_type', 'varchar')})
                 continue
 
             clean_label = cname.split('_', 1)[-1].replace('_', ' ').title()
@@ -289,8 +280,6 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
     table_modules = getattr(request.ctx, 'table_modules', None)
 
     async with request.app.ctx.pool.acquire() as conn:
-        if auth_tables is None or table_modules is None:
-            auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
 
         if table_name not in auth_tables:
             raise NotFound("Table not found or unauthorized")
@@ -327,7 +316,7 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         company_form_def = None
         for c in columns_data:
             cname = c['column_name']
-            if 'created' in cname.lower() or 'modified' in cname.lower() or 'edited' in cname.lower() or cname == wf_status_col:
+            if audit_column_kind(cname) or cname == wf_status_col:
                 continue
                 
             is_company_col = 'company_id' in cname.lower()
@@ -370,11 +359,9 @@ async def render_form(request, table_name, is_update=False, pk_val=None):
         audit_info = {}
         workflow_info = None
         if is_update and row_data:
-            created_by_col = next((c for c in row_data.keys() if 'created' in c.lower() and 'by' in c.lower()), None)
-            created_at_col = next((c for c in row_data.keys() if 'created' in c.lower() and 'by' not in c.lower()), None)
-            modified_by_col = next((c for c in row_data.keys() if ('modified' in c.lower() or 'edited' in c.lower() or 'updated' in c.lower()) and 'by' in c.lower()), None)
-            modified_at_col = next((c for c in row_data.keys() if ('modified' in c.lower() or 'edited' in c.lower() or 'updated' in c.lower()) and 'by' not in c.lower()), None)
-            
+            created_by_col, created_at_col, modified_by_col, modified_at_col = (
+                find_audit_column(row_data.keys(), k) for k in ('created_by', 'created_at', 'modified_by', 'modified_at'))
+
             audit_info = {
                 "created_by": row_data.get(created_by_col) if created_by_col else None,
                 "created_at": row_data.get(created_at_col) if created_at_col else None,
@@ -418,7 +405,7 @@ async def export_table_csv(request, table_name):
     table_name = table_name.lower()
 
     async with request.app.ctx.pool.acquire() as conn:
-        auth_tables, table_modules = await get_authorized_tables(conn, user_id, role)
+        auth_tables, table_modules = request.ctx.all_tables, request.ctx.table_modules
         if table_name not in auth_tables:
             raise NotFound("Table not found or unauthorized")
 

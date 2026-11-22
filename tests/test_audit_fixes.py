@@ -65,3 +65,42 @@ def test_password_column_not_filterable_or_searchable():
     assert "pus_pwd" not in where_sql and "pus_pwd" not in order_sql
     assert "$2b$12$a" not in params
     assert "pus_user_name" in where_sql  # normal search still works
+
+
+# 7. Without the right password, login never says whether the account exists, is locked or inactive.
+from app.routes.auth import login_outcome
+
+def test_login_outcome_hides_account_state_without_password():
+    for inactive in (False, True):
+        for locked in (False, True):
+            assert login_outcome(False, inactive, locked) == "invalid"
+    assert login_outcome(True, False, True) == "locked"
+    assert login_outcome(True, True, False) == "inactive"
+    assert login_outcome(True, False, False) == "ok"
+
+
+# 8. One rule for audit columns; numeric *_by columns get the user id, not the username.
+from datetime import datetime
+from app.utils import audit_column_kind, audit_stamp
+
+def test_audit_column_kind():
+    assert audit_column_kind("pmat_created_by") == "created_by"
+    assert audit_column_kind("pcc_created") == "created_at"
+    assert audit_column_kind("pum_last_updated_by") == "modified_by"
+    assert audit_column_kind("pum_last_updated_date") == "modified_at"
+    assert audit_column_kind("pmd_edited_on") == "modified_at"
+    assert audit_column_kind("pcc_name") is None
+
+def test_audit_stamp_numeric_by_columns_get_user_id():
+    now = datetime(2026, 11, 21, 10, 0)
+    schema = {
+        "pum_name": {"data_type": "character varying"},
+        "pum_created_by": {"data_type": "bigint"},
+        "pum_created": {"data_type": "timestamp without time zone"},
+        "pum_last_updated_by": {"data_type": "character varying", "character_maximum_length": 5},
+        "pum_last_updated_date": {"data_type": "timestamp without time zone"},
+    }
+    assert audit_stamp(schema, 42, "administrator", now, is_insert=True) == {
+        "pum_created_by": 42, "pum_created": now, "pum_last_updated_by": "admin", "pum_last_updated_date": now}
+    assert audit_stamp(schema, 42, "administrator", now, is_insert=False) == {
+        "pum_last_updated_by": "admin", "pum_last_updated_date": now}
